@@ -38,6 +38,8 @@ class Synapse:
     confidence: float = 0.0   # c >= 0, novel
     eligibility: float = 0.0  # e >= 0, novel ("fired together recently")
     age: int = 0              # steps since birth, for the grace period
+    grad_mag: float = 0.0     # EMA of |dL/dw|  - the "currency" magnitude meter
+    grad_signed: float = 0.0  # EMA of  dL/dw   - the signed meter (for consistency)
 
 
 class Network:

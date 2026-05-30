@@ -49,6 +49,20 @@ class Config:
     enable_grow: bool = False
     enable_homeostasis: bool = False
 
+    # --- gradient-as-currency mode (enhancement; replaces eligibility path) ---
+    # When True, confidence/prune/grow read the per-synapse gradient meters
+    # instead of eligibility / |w|*r / activity. See sprout/currency.py.
+    grad_currency: bool = False
+    beta_g: float = 0.99          # gradient-meter EMA memory (~100 samples)
+    gamma_up: float = 0.05        # confidence earn rate (calm + consistent)
+    gamma_dn: float = 0.10        # confidence loss rate (contested hot-spot)
+    c_max: float = 5.0            # confidence ceiling (legible band)
+    m_floor_frac: float = 0.05    # "no real feedback" cutoff for kappa, * Mbar
+    lam_prune: float = 1.0        # gradient weight in prune utility
+    prune_u_floor: float = 0.5    # prune wires with normalised utility below this
+    grow_bar_frac: float = 1.5    # grow ghost wire if virt-grad > this * live ref
+    virt_batch: int = 32          # batch size for scoring ghost wires
+
     # --- initial firing rate seeding ---
     init_firing_rate_at_target: bool = True  # avoids spurious early "underfiring"
 
@@ -113,23 +127,28 @@ class Trainer:
         x, y_true = self.X[i], int(self.y[i])
 
         net.forward(x)                                   # §4.1
-        self._update_firing_rates()                      # §4.2
-        if cfg.enable_eligibility:
-            self._update_eligibility()                   # §4.3
-        loss, grad_w, grad_b = net.backward(y_true)      # §4.4
-        if cfg.enable_confidence:
-            self._update_confidence(loss)                # §4.5
-        apply_gated_update(net, grad_w, grad_b, cfg.eta_base)  # §4.6
-        self._increment_ages()
+        self._update_firing_rates()                      # §4.2 (kept for viz)
 
-        n_pruned = n_grown = 0
-        if (cfg.enable_prune or cfg.enable_grow) and self.step_idx % cfg.t_struct == 0:
-            if cfg.enable_prune and self.step_idx >= cfg.prune_warmup:
-                n_pruned = self._prune()
-            if cfg.enable_grow:
-                n_grown = self._grow()
-        if cfg.enable_homeostasis and self.step_idx % cfg.t_homeo == 0:
-            self._homeostasis()
+        if cfg.grad_currency:
+            loss, grad_w, grad_b = net.backward(y_true)
+            n_pruned, n_grown = self._step_currency(grad_w, grad_b)
+        else:
+            if cfg.enable_eligibility:
+                self._update_eligibility()               # §4.3
+            loss, grad_w, grad_b = net.backward(y_true)  # §4.4
+            if cfg.enable_confidence:
+                self._update_confidence(loss)            # §4.5
+            apply_gated_update(net, grad_w, grad_b, cfg.eta_base)  # §4.6
+            self._increment_ages()
+
+            n_pruned = n_grown = 0
+            if (cfg.enable_prune or cfg.enable_grow) and self.step_idx % cfg.t_struct == 0:
+                if cfg.enable_prune and self.step_idx >= cfg.prune_warmup:
+                    n_pruned = self._prune()
+                if cfg.enable_grow:
+                    n_grown = self._grow()
+            if cfg.enable_homeostasis and self.step_idx % cfg.t_homeo == 0:
+                self._homeostasis()
 
         # every-step bookkeeping
         self.history["step"].append(self.step_idx)
@@ -190,3 +209,42 @@ class Trainer:
     def _homeostasis(self):
         from sprout.plasticity import homeostasis
         homeostasis(self.net, self.cfg.r_target, self.cfg.rho, self.cfg.eps)
+
+    # -- gradient-as-currency path (enhancement) ----------------------------
+    def _step_currency(self, grad_w, grad_b):
+        """One step in currency mode: meter the gradient, then read it three
+        ways (confidence, prune, grow). Returns (n_pruned, n_grown)."""
+        from sprout.currency import update_gradient_meters, update_confidence_currency
+        cfg, net = self.cfg, self.net
+
+        update_gradient_meters(net, grad_w, cfg.beta_g)             # §1 currency
+        if cfg.enable_confidence:                                   # Readout A
+            update_confidence_currency(net, cfg.gamma_dec, cfg.gamma_up,
+                                       cfg.gamma_dn, cfg.c_max, cfg.m_floor_frac)
+        apply_gated_update(net, grad_w, grad_b, cfg.eta_base)       # gated SGD
+        self._increment_ages()
+
+        n_pruned = n_grown = 0
+        if (cfg.enable_prune or cfg.enable_grow) and self.step_idx % cfg.t_struct == 0:
+            n_pruned, n_grown = self._rewire_currency()
+        return n_pruned, n_grown
+
+    def _rewire_currency(self):
+        from sprout.currency import prune_currency, grow_currency, batch_edge_scores
+        cfg, net = self.cfg, self.net
+        n_pruned = n_grown = 0
+        if cfg.enable_prune:                                        # Readout B
+            pruned = prune_currency(net, cfg.t_grace, cfg.max_prune,
+                                    cfg.prune_u_floor, cfg.lam_prune)
+            for edge in pruned:
+                self.events.append({"step": self.step_idx, "type": "prune", "edge": edge})
+            n_pruned = len(pruned)
+        if cfg.enable_grow:                                         # Readout C
+            b = min(cfg.virt_batch, len(self.X))
+            idx = self.rng.choice(len(self.X), size=b, replace=False)
+            ghost, ref = batch_edge_scores(net, self.X[idx], self.y[idx])
+            grown = grow_currency(net, ghost, ref, cfg.max_grow, cfg.grow_bar_frac)
+            for edge in grown:
+                self.events.append({"step": self.step_idx, "type": "grow", "edge": edge})
+            n_grown = len(grown)
+        return n_pruned, n_grown
