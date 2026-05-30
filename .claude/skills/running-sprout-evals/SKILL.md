@@ -33,7 +33,9 @@ remembering to copy files.
 
 3. **Write the chat reply** with ALL of:
    - the **key-metrics table** (curated headline rows with ▲/▼/≈), NOT the full
-     ~35-row dump
+     ~35-row dump. **Include the "What it means" description column** (the
+     `build_highlight_table` output already has it) — TEMPORARY at the user's
+     request while they learn the schema; drop the column only when they say so.
    - a 2–3 sentence plain-language verdict
    - the path `docs/eval-runs/<name>/README.md` so it opens on phone
    - honest **wins AND losses** — never bury a regression

@@ -14,7 +14,7 @@ import subprocess
 import time
 
 from evals import report
-from evals.metrics import METRIC_DIRECTIONS  # noqa: F401  (kept for parity/use)
+from evals.metrics import METRIC_DESCRIPTIONS
 
 
 # the curated headline metrics shown at the top of each run + in chat replies
@@ -29,19 +29,24 @@ _DATA_FILES = ("scorecard.csv", "metrics.json", "summary.txt")
 
 
 def build_highlight_table(agg, keys=KEY_METRICS) -> str:
-    """A compact markdown table of just the headline metrics (present ones)."""
+    """A compact markdown table of just the headline metrics (present ones).
+
+    Includes a plain-language "What it means" column to help while learning the
+    schema.
+    """
     variants = agg["variants"]
     baseline = agg["baseline"]
-    head = ["Metric"] + [v + (" (baseline)" if v == baseline else "")
-                         for v in variants]
+    head = ["Metric", "What it means"] + [
+        v + (" (baseline)" if v == baseline else "") for v in variants]
     lines = ["| " + " | ".join(head) + " |",
-             "|" + "---|" * (len(variants) + 1)]
+             "|" + "---|" * (len(variants) + 2)]
     for k in keys:
         if k not in agg["metrics"]:
             continue
+        desc = METRIC_DESCRIPTIONS.get(k, "")
         cells = [report._cell_text(k, agg["metrics"][k].get(v), v == baseline)
                  for v in variants]
-        lines.append(f"| {report._label(k)} | " + " | ".join(cells) + " |")
+        lines.append(f"| {report._label(k)} | {desc} | " + " | ".join(cells) + " |")
     return "\n".join(lines) + "\n"
 
 

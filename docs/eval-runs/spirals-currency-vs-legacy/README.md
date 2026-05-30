@@ -1,24 +1,24 @@
 # Evaluation run: spirals-currency-vs-legacy
 
-- **Date:** 2026-05-30 18:05:11
+- **Date:** 2026-05-30 18:52:28
 - **Variants:** currency, legacy-full  (baseline: legacy-full)
 - **Seeds:** 5  |  **Dataset:** spirals  |  **Steps:** 30000 (+6000 shift)
-- **Commit:** 7910612
+- **Commit:** 96d6d77
 - **Command:** `python evaluate.py --variants currency,legacy-full --seeds 5 --dataset spirals --steps 30000 --shift 6000 --baseline legacy-full --jobs 6 --no-cache --publish --run-name spirals-currency-vs-legacy --out output/eval/spirals-currency-vs-legacy`
 
 ## Key metrics
 
-| Metric | currency | legacy-full (baseline) |
-|---|---|---|
-| final_test_acc ↑ | 0.967 ± 0.019 ▲ | 0.647 ± 0.086 |
-| pre_shift_test_acc ↑ | 0.993 ± 0.004 ▲ | 0.843 ± 0.089 |
-| recovered_test_acc ↑ | 0.967 ± 0.019 ▲ | 0.647 ± 0.086 |
-| auc_test_acc ↑ | 0.926 ± 0.013 ▲ | 0.773 ± 0.054 |
-| max_grows_into_one_neuron ↓ | 29.800 ± 3.970 ▼ | 6 ± 0 |
-| oscillation_frac ↓ | 0.333 ± 0.052 ▼ | 0.196 ± 0.032 |
-| freeloader_frac ↓ | 0.023 ± 0.016 ▲ | 0.411 ± 0.160 |
-| conf_utility_corr ↑ | -0.172 ± 0.054 ▼ | 0.685 ± 0.135 |
-| dead_unit_count ↓ | 4.400 ± 1.020 ▲ | 15.200 ± 4.308 |
+| Metric | What it means | currency | legacy-full (baseline) |
+|---|---|---|---|
+| final_test_acc ↑ | held-out accuracy at the end of the run | 0.967 ± 0.019 ▲ | 0.647 ± 0.086 |
+| pre_shift_test_acc ↑ | test accuracy just before the concept shift | 0.993 ± 0.004 ▲ | 0.843 ± 0.089 |
+| recovered_test_acc ↑ | test accuracy at the end, after the label swap | 0.967 ± 0.019 ▲ | 0.647 ± 0.086 |
+| auc_test_acc ↑ | area under the test-accuracy curve (speed + level) | 0.926 ± 0.013 ▲ | 0.773 ± 0.054 |
+| max_grows_into_one_neuron ↓ | most times one neuron was grown into (churn) | 29.800 ± 3.970 ▼ | 6 ± 0 |
+| oscillation_frac ↓ | fraction of grown edges grown ≥2× (thrash) | 0.333 ± 0.052 ▼ | 0.196 ± 0.032 |
+| freeloader_frac ↓ | fraction of synapses below the prune-utility floor | 0.023 ± 0.016 ▲ | 0.411 ± 0.160 |
+| conf_utility_corr ↑ | corr of confidence with real utility (calibration) | -0.172 ± 0.054 ▼ | 0.685 ± 0.135 |
+| dead_unit_count ↓ | hidden neurons that never fire on test data | 4.400 ± 1.020 ▲ | 15.200 ± 4.308 |
 
 ## Full scorecard
 

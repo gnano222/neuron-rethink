@@ -43,6 +43,17 @@ def test_highlight_table_only_includes_key_metrics():
     assert "▲" in table and "▼" in table          # verdict markers carried
 
 
+def test_highlight_table_includes_metric_descriptions():
+    from evals.metrics import METRIC_DESCRIPTIONS
+    table = publish.build_highlight_table(_synth_agg())
+    assert "What it means" in table                       # description column
+    assert METRIC_DESCRIPTIONS["final_test_acc"] in table  # the actual text
+    # every key metric must have a description so the column is never blank
+    from evals.publish import KEY_METRICS
+    for k in KEY_METRICS:
+        assert k in METRIC_DESCRIPTIONS and METRIC_DESCRIPTIONS[k]
+
+
 def test_build_run_readme_has_metadata_table_and_images():
     md = publish.build_run_readme(
         _synth_agg(),

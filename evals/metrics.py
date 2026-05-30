@@ -359,6 +359,52 @@ METRIC_DIRECTIONS: dict[str, str] = {
     "meter_fidelity": "higher",
 }
 
+# one-line plain-language description per metric (shown in the key-metrics
+# table while the reader is still learning the schema)
+METRIC_DESCRIPTIONS: dict[str, str] = {
+    # A. prediction performance
+    "final_test_acc": "held-out accuracy at the end of the run",
+    "max_test_acc": "best held-out accuracy reached at any point",
+    "final_train_acc": "training-set accuracy at the end",
+    "final_test_loss": "held-out cross-entropy at the end (lower=better)",
+    # B. training efficacy
+    "steps_to_90": "steps to first reach 90% test accuracy",
+    "steps_to_95": "steps to first reach 95% test accuracy",
+    "auc_test_acc": "area under the test-accuracy curve (speed + level)",
+    "final_acc_stability": "jitter (std) of test accuracy over the last records",
+    "pre_shift_test_acc": "test accuracy just before the concept shift",
+    "recovered_test_acc": "test accuracy at the end, after the label swap",
+    "recovery_gap": "accuracy lost vs pre-shift and not yet regained",
+    "recovery_steps": "steps after the shift to return to pre-shift accuracy",
+    # C. synapse structure
+    "synapse_count_start": "live synapses at initialization",
+    "synapse_count_peak": "max live synapses during the run",
+    "synapse_count_end": "live synapses at the end",
+    "n_grow_events": "total synapses grown over the run",
+    "n_prune_events": "total synapses pruned over the run",
+    "distinct_neurons_grown": "how many neurons received grown wires",
+    "turnover": "(grows + prunes) per average synapse — rewiring rate",
+    "max_grows_into_one_neuron": "most times one neuron was grown into (churn)",
+    "mean_fan_in": "avg incoming connections per non-input neuron",
+    "mean_fan_out": "avg outgoing connections per non-output neuron",
+    "effective_density": "live edges as a fraction of fully-connected",
+    # D. synapse quality
+    "p10_utility": "10th-percentile synapse utility (weak-wire floor)",
+    "freeloader_frac": "fraction of synapses below the prune-utility floor",
+    "mean_survivor_age": "avg steps the surviving synapses have lived",
+    "median_survivor_age": "median age of surviving synapses",
+    "mean_pruned_lifespan": "avg steps a pruned synapse lived before being cut",
+    "oscillation_frac": "fraction of grown edges grown ≥2× (thrash)",
+    "max_regrow": "most times one edge was regrown after a prune",
+    "conf_utility_corr": "corr of confidence with real utility (calibration)",
+    "frozen_freeloader_frac": "high-confidence but low-utility synapses",
+    "dead_unit_count": "hidden neurons that never fire on test data",
+    "inert_synapse_frac": "fraction of synapses with ~zero weight",
+    "used_vs_allocated": "live edges vs edges present at init",
+    # sanity
+    "meter_fidelity": "corr of metered vs fresh gradient (currency only)",
+}
+
 # which metric belongs to which family, for grouped scorecard rendering
 METRIC_FAMILIES: dict[str, tuple[str, ...]] = {
     "Prediction performance": (
