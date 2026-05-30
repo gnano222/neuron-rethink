@@ -1,0 +1,270 @@
+"""Tests for the pure metric functions.
+
+Every expected value here is hand-computed or built from a deterministic tiny
+network / synthetic event log, so a regression points at a real arithmetic bug.
+"""
+
+from __future__ import annotations
+
+import math
+
+import numpy as np
+import pytest
+
+from sprout.network import Network
+from evals import metrics
+
+
+# -- helpers -----------------------------------------------------------------
+
+def _net_2_2_2():
+    """[2,2,2]: inputs 0,1 ; hidden 2,3 ; outputs 4,5. Fully connected."""
+    net = Network([2, 2, 2])
+    for pre in (0, 1):
+        for post in (2, 3):
+            net.add_synapse(pre, post, weight=0.5)
+    for pre in (2, 3):
+        for post in (4, 5):
+            net.add_synapse(pre, post, weight=0.5)
+    return net
+
+
+# -- prediction performance --------------------------------------------------
+
+def test_test_loss_matches_negative_log_prob_of_true_class():
+    net = _net_2_2_2()
+    x = np.array([0.3, -0.7])
+    probs = net.forward(x)            # run forward to know the probabilities
+    for y in (0, 1):
+        expected = -math.log(probs[y] + 1e-12)
+        assert metrics.test_loss(net, [x], [y]) == pytest.approx(expected, rel=1e-9)
+
+
+def test_test_loss_averages_over_samples():
+    net = _net_2_2_2()
+    X = [np.array([0.2, 0.4]), np.array([-0.1, 0.9])]
+    y = [0, 1]
+    per = [metrics.test_loss(net, [X[i]], [y[i]]) for i in range(2)]
+    assert metrics.test_loss(net, X, y) == pytest.approx(sum(per) / 2, rel=1e-9)
+
+
+# -- effective capacity ------------------------------------------------------
+
+def test_dead_unit_count_flags_permanently_silent_neuron():
+    net = _net_2_2_2()
+    net.neurons[2].bias = -1e6          # neuron 2 can never fire (always z<0)
+    net.neurons[3].bias = 1.0           # neuron 3 always fires
+    X = [np.array([0.5, 0.5]), np.array([-0.3, 0.8]), np.array([0.9, -0.2])]
+    assert metrics.dead_unit_count(net, X) == 1
+
+
+def test_dead_unit_count_zero_when_all_fire():
+    net = _net_2_2_2()
+    net.neurons[2].bias = 1.0
+    net.neurons[3].bias = 1.0
+    X = [np.array([0.5, 0.5])]
+    assert metrics.dead_unit_count(net, X) == 0
+
+
+# -- utility -----------------------------------------------------------------
+
+def test_synapse_utilities_combine_weight_and_demand():
+    net = Network([2, 2])               # inputs 0,1 ; outputs 2,3
+    net.add_synapse(0, 2, weight=2.0)
+    net.add_synapse(1, 3, weight=4.0)
+    demand = {(0, 2): 1.0, (1, 3): 3.0}
+    # mean|w| = 3, mean demand = 2, lambda = 1
+    u = metrics.synapse_utilities(net, demand, lam=1.0)
+    assert u[(0, 2)] == pytest.approx(2 / 3 + 1 / 2)
+    assert u[(1, 3)] == pytest.approx(4 / 3 + 3 / 2)
+
+
+def test_utility_stats_freeloader_fraction():
+    utilities = {("a",): 0.1, ("b",): 0.2, ("c",): 1.0, ("d",): 2.0}
+    s = metrics.utility_stats(utilities, prune_u_floor=0.5)
+    assert s["freeloader_frac"] == pytest.approx(0.5)   # 2 of 4 below 0.5
+    assert s["mean_utility"] == pytest.approx((0.1 + 0.2 + 1.0 + 2.0) / 4)
+
+
+# -- confidence calibration --------------------------------------------------
+
+def test_confidence_calibration_perfect_correlation():
+    net = Network([1, 3])               # input 0 ; outputs 1,2,3
+    for i, post in enumerate((1, 2, 3)):
+        syn = net.add_synapse(0, post, weight=1.0)
+        syn.confidence = float(i + 1)   # 1, 2, 3
+    utilities = {(0, 1): 2.0, (0, 2): 4.0, (0, 3): 6.0}  # u = 2*confidence
+    cal = metrics.confidence_calibration(net, utilities)
+    assert cal["conf_utility_corr"] == pytest.approx(1.0, abs=1e-9)
+    assert cal["frozen_freeloader_frac"] == pytest.approx(0.0)
+
+
+def test_confidence_calibration_counts_frozen_freeloaders():
+    net = Network([1, 2])
+    s1 = net.add_synapse(0, 1, weight=1.0); s1.confidence = 3.0   # frozen
+    s2 = net.add_synapse(0, 2, weight=1.0); s2.confidence = 0.0
+    utilities = {(0, 1): 0.1, (0, 2): 5.0}   # frozen one is a freeloader
+    cal = metrics.confidence_calibration(net, utilities,
+                                         conf_threshold=1.0, prune_u_floor=0.5)
+    assert cal["frozen_freeloader_frac"] == pytest.approx(0.5)
+
+
+# -- structural churn (from the event log) -----------------------------------
+
+def test_max_grows_into_one_neuron():
+    events = [
+        {"step": 10, "type": "grow", "edge": (0, 5)},
+        {"step": 20, "type": "grow", "edge": (1, 5)},
+        {"step": 30, "type": "grow", "edge": (2, 6)},
+        {"step": 40, "type": "prune", "edge": (0, 5)},
+    ]
+    s = metrics.structural_metrics(events)
+    assert s["max_grows_into_one_neuron"] == 2   # neuron 5 grown into twice
+    assert s["n_grow_events"] == 3
+    assert s["n_prune_events"] == 1
+
+
+# -- lifespan & oscillation (the open problem this harness must surface) ------
+
+def test_oscillation_and_lifespan_from_grow_prune_regrow():
+    # the spec's worked example: an edge grown, pruned, then regrown
+    events = [
+        {"step": 100, "type": "grow", "edge": (3, 7)},
+        {"step": 150, "type": "prune", "edge": (3, 7)},
+        {"step": 300, "type": "grow", "edge": (3, 7)},
+    ]
+    osc = metrics.oscillation_metrics(events)
+    assert osc["max_regrow"] == 1            # grown twice => regrown once
+    assert osc["oscillation_frac"] == pytest.approx(1.0)  # 1 of 1 grown edges
+
+    lifespans = metrics.pruned_lifespans(events, initial_edges=set())
+    assert lifespans == [50]                 # 150 - 100
+
+
+def test_pruned_lifespan_of_initial_edge_counts_from_zero():
+    events = [{"step": 80, "type": "prune", "edge": (0, 4)}]
+    lifespans = metrics.pruned_lifespans(events, initial_edges={(0, 4)})
+    assert lifespans == [80]                 # born at step 0
+
+
+def test_oscillation_frac_zero_when_no_edge_grown_twice():
+    events = [
+        {"step": 10, "type": "grow", "edge": (0, 5)},
+        {"step": 20, "type": "grow", "edge": (1, 6)},
+    ]
+    osc = metrics.oscillation_metrics(events)
+    assert osc["oscillation_frac"] == pytest.approx(0.0)
+    assert osc["max_regrow"] == 0
+
+
+# -- training efficacy (pure over the recorded series) -----------------------
+
+def test_steps_to_threshold():
+    rec = [0, 100, 200, 300]
+    acc = [0.5, 0.8, 0.92, 0.96]
+    assert metrics.steps_to_threshold(rec, acc, 0.90) == 200
+    assert metrics.steps_to_threshold(rec, acc, 0.95) == 300
+    assert metrics.steps_to_threshold(rec, acc, 0.99) == math.inf
+
+
+def test_auc_of_accuracy_curve():
+    # straight line 0 -> 1 over [0,100] has normalised area 0.5
+    assert metrics.auc([0, 100], [0.0, 1.0]) == pytest.approx(0.5)
+    # flat 0.9 line has normalised area 0.9
+    assert metrics.auc([0, 100, 200], [0.9, 0.9, 0.9]) == pytest.approx(0.9)
+
+
+def test_stability_is_std_of_tail():
+    acc = [0.1, 0.2, 0.90, 0.92, 0.94]
+    assert metrics.stability(acc, k=3) == pytest.approx(np.std([0.90, 0.92, 0.94]))
+
+
+# -- structure: fan / density ------------------------------------------------
+
+def test_fan_stats_fully_connected():
+    net = _net_2_2_2()                  # fully connected => fan 2 each way
+    s = metrics.fan_stats(net)
+    assert s["mean_fan_in"] == pytest.approx(2.0)
+    assert s["mean_fan_out"] == pytest.approx(2.0)
+    assert s["effective_density"] == pytest.approx(1.0)   # 8 live / 8 possible
+
+
+def test_effective_density_drops_when_edge_removed():
+    net = _net_2_2_2()
+    net.remove_synapse(0, 2)
+    assert metrics.fan_stats(net)["effective_density"] == pytest.approx(7 / 8)
+
+
+# -- quality: survivor age ---------------------------------------------------
+
+def test_survivor_age_stats():
+    net = Network([1, 3])
+    for i, post in enumerate((1, 2, 3)):
+        syn = net.add_synapse(0, post)
+        syn.age = (i + 1) * 10           # 10, 20, 30
+    s = metrics.survivor_age_stats(net)
+    assert s["mean_survivor_age"] == pytest.approx(20.0)
+    assert s["median_survivor_age"] == pytest.approx(20.0)
+
+
+# -- capacity ----------------------------------------------------------------
+
+def test_capacity_metrics():
+    net = _net_2_2_2()
+    net.neurons[2].bias = -1e6           # one dead hidden unit
+    net.neurons[3].bias = 1.0
+    net.synapses[(0, 2)].weight = 0.0    # one inert (zero-weight) synapse of 8
+    X = [np.array([0.5, 0.5]), np.array([0.9, 0.1])]
+    s = metrics.capacity_metrics(net, X, initial_count=10)
+    assert s["dead_unit_count"] == 1
+    assert s["inert_synapse_frac"] == pytest.approx(1 / 8)
+    assert s["used_vs_allocated"] == pytest.approx(8 / 10)
+
+
+# -- meter fidelity (currency sanity) ----------------------------------------
+
+def test_meter_fidelity_perfect_correlation():
+    net = Network([1, 3])
+    grad = [1.0, 2.0, 3.0]
+    for i, post in enumerate((1, 2, 3)):
+        syn = net.add_synapse(0, post)
+        syn.grad_mag = grad[i]
+    demand = {(0, 1): 0.5, (0, 2): 1.0, (0, 3): 1.5}   # = 0.5 * grad_mag
+    assert metrics.meter_fidelity(net, demand) == pytest.approx(1.0, abs=1e-9)
+
+
+def test_meter_fidelity_nan_with_too_few_edges():
+    net = Network([1, 1])
+    net.add_synapse(0, 1).grad_mag = 1.0
+    assert math.isnan(metrics.meter_fidelity(net, {(0, 1): 1.0}))
+
+
+# -- fresh demand ------------------------------------------------------------
+
+def test_fresh_demand_covers_all_synapses_and_is_nonnegative():
+    net = _net_2_2_2()
+    X = [np.array([0.3, -0.2]), np.array([0.7, 0.1])]
+    y = [0, 1]
+    d = metrics.fresh_demand(net, X, y)
+    assert set(d) == set(net.synapses)
+    assert all(v >= 0.0 for v in d.values())
+    assert d == metrics.fresh_demand(net, X, y)   # deterministic / no mutation
+
+
+# -- training efficacy: concept-shift recovery -------------------------------
+
+def test_recovery_metrics():
+    rec = [0, 100, 200, 300, 400, 500]
+    acc = [0.5, 0.9, 0.95, 0.4, 0.7, 0.96]
+    r = metrics.recovery_metrics(rec, acc, shift_start_index=3)
+    assert r["pre_shift_acc"] == pytest.approx(0.95)
+    assert r["recovered_acc"] == pytest.approx(0.96)
+    assert r["recovery_gap"] == pytest.approx(-0.01)
+    assert r["recovery_steps"] == pytest.approx(200.0)   # 500 - 300
+
+
+def test_recovery_steps_inf_when_never_regained():
+    rec = [0, 100, 200, 300, 400]
+    acc = [0.5, 0.9, 0.95, 0.4, 0.6]     # never back to 0.95
+    r = metrics.recovery_metrics(rec, acc, shift_start_index=3)
+    assert r["recovery_steps"] == math.inf

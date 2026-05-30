@@ -37,8 +37,11 @@ gradient-aware signal.
 
 ## Honest comparison: is currency actually *better*?
 
-Not yet — it's a **lateral move that's more elegant, not an upgrade**. Run
-`python compare.py` (identical net/data/seed; 20k steps + a 6k concept-shift):
+Not yet — it's a **lateral move that's more elegant, not an upgrade**. The
+figures below are the original *single-seed* run; regenerate them as a
+multi-seed scorecard (mean ± std + bootstrap verdicts vs the baseline) with
+`python evaluate.py --variants legacy-full,currency,currency-grace --shift 6000`
+(identical net/data/seed; 30k steps + a 6k concept-shift):
 
 | metric | legacy (eligibility) | currency | currency + longer grace |
 |---|--:|--:|--:|
@@ -83,11 +86,14 @@ pytest -q                                   # 88 unit + integration tests
 python run.py --preset currency --dataset spirals --steps 30000 --density 0.4
 python validate.py                          # currency, all 7 criteria + plots
 python validate.py --legacy                 # the v1 eligibility system instead
-python compare.py                           # head-to-head table + compare.png
+
+python evaluate.py --variants currency,legacy-full --seeds 5 --shift 6000
+                                            # multi-seed comparative scorecard
 ```
 
 Artifacts land in `output/<preset>_<dataset>/` (`animation.gif`, frames,
-`metrics.json`).
+`metrics.json`); the evaluation harness writes its scorecard + plots to
+`output/eval/<dataset>_<timestamp>/`.
 
 ## Presets (`run.py --preset`)
 
@@ -151,8 +157,9 @@ sprout/
   train.py       Config (both stacks behind flags) + Trainer (grad_currency branch)
 run.py           experiment driver / CLI (currency default, legacy-* presets)
 validate.py      validation harness (currency default; --legacy for v1)
-compare.py       head-to-head: legacy vs currency vs currency+grace
-tests/           TDD suite (data, network, learning, plasticity, train, currency, infra)
+evaluate.py      comparative eval entry: multi-seed scorecard + diagnostic plots
+evals/           eval harness package (spec, runner, metrics, aggregate, report, cli)
+tests/           TDD suite (data, network, learning, plasticity, train, currency, infra, eval)
 ```
 
 Pure NumPy; forward/backward are hand-rolled over adjacency lists so the
