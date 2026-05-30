@@ -72,23 +72,34 @@ def _draw_network(ax, net, edge_norm, edge_cmap, edge_attr):
     ax.set_aspect("equal")
 
 
+def _edge_style(edge_mode, net, conf_vmax=3.0):
+    """Map an edge-colouring mode to ``(norm, cmap, synapse-attr, label)``.
+
+      * ``"confidence"`` (default) - blue=fast/unsure -> red=confident/frozen.
+      * ``"demand"``     - gradient-as-currency view: how hard the loss is still
+        pushing each wire (``grad_mag``); dark=settled -> bright=being pushed.
+      * ``"eligibility"`` - legacy v1 three-factor "glow" on co-active wires.
+
+    Inferno-coloured modes use an adaptive max so the signal is always visible.
+    """
+    if edge_mode == "demand":
+        m_max = max((s.grad_mag for s in net.synapses.values()), default=0.0)
+        return (Normalize(0.0, max(m_max, 1e-9)), plt.get_cmap("inferno"),
+                "grad_mag", "gradient demand (dark=settled → bright=being pushed)")
+    if edge_mode == "eligibility":
+        e_max = max((s.eligibility for s in net.synapses.values()), default=0.0)
+        return (Normalize(0.0, max(e_max, 1e-6)), plt.get_cmap("inferno"),
+                "eligibility", "eligibility (dark=quiet → bright=co-active)")
+    return (Normalize(0.0, conf_vmax), _CONF_CMAP,
+            "confidence", "confidence (blue=fast → red=frozen)")
+
+
 def render_frame(net, trainer, X, y, path, step=None, conf_vmax=3.0,
                  edge_mode="confidence"):
     fig = plt.figure(figsize=(13, 7))
     gs = fig.add_gridspec(2, 3, width_ratios=[1.5, 1, 1], height_ratios=[1, 1])
 
-    if edge_mode == "eligibility":
-        # adaptive scale so the co-activation "glow" is always visible
-        e_max = max((s.eligibility for s in net.synapses.values()), default=0.0)
-        edge_norm = Normalize(vmin=0.0, vmax=max(e_max, 1e-6))
-        edge_cmap = plt.get_cmap("inferno")
-        edge_attr = "eligibility"
-        cb_label = "eligibility (dark=quiet → bright=co-active)"
-    else:
-        edge_norm = Normalize(vmin=0.0, vmax=conf_vmax)
-        edge_cmap = _CONF_CMAP
-        edge_attr = "confidence"
-        cb_label = "confidence (blue=fast → red=frozen)"
+    edge_norm, edge_cmap, edge_attr, cb_label = _edge_style(edge_mode, net, conf_vmax)
 
     ax_net = fig.add_subplot(gs[:, 0])
     _draw_network(ax_net, net, edge_norm, edge_cmap, edge_attr)

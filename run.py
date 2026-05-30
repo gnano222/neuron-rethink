@@ -26,21 +26,40 @@ from sprout.train import Config, Trainer, accuracy
 from sprout import viz
 
 
-# cumulative build-order presets (§10)
+# Presets. The gradient-as-currency stack is now the DEFAULT architecture: one
+# metered signal (the per-synapse backprop gradient) drives confidence, pruning
+# and growth (see sprout/currency.py). The v1 eligibility build-order is kept
+# verbatim as the ``legacy-*`` presets - it is still the better-tuned system on
+# spirals today (see the honest comparison in README), and the step-by-step
+# legacy presets remain the most legible way to watch each mechanism in turn.
 PRESETS = {
-    "step1": dict(),
-    "step2": dict(enable_eligibility=True),
-    "step3": dict(enable_eligibility=True, enable_confidence=True),
-    "step4": dict(enable_eligibility=True, enable_confidence=True, enable_prune=True),
-    "step5": dict(enable_eligibility=True, enable_confidence=True, enable_prune=True,
-                  enable_grow=True),
+    # --- current architecture: gradient-as-currency ---
+    "core": dict(),                          # plain sparse backprop (all off)
+    "currency-conf": dict(grad_currency=True, enable_confidence=True),
+    "currency": dict(grad_currency=True, enable_confidence=True,
+                     enable_prune=True, enable_grow=True),
+
+    # --- legacy v1: eligibility / three-factor build-order (§10) ---
+    "legacy-step1": dict(),
+    "legacy-step2": dict(enable_eligibility=True),
+    "legacy-step3": dict(enable_eligibility=True, enable_confidence=True),
+    "legacy-step4": dict(enable_eligibility=True, enable_confidence=True,
+                         enable_prune=True),
+    "legacy-step5": dict(enable_eligibility=True, enable_confidence=True,
+                         enable_prune=True, enable_grow=True),
     # homeostasis is opt-in: the spec's weight-rescaling form is unstable with
-    # ReLU and the net is stable without it, so "full" leaves it off.
-    "step6": dict(enable_eligibility=True, enable_confidence=True, enable_prune=True,
-                  enable_grow=True, enable_homeostasis=True),
-    "full": dict(enable_eligibility=True, enable_confidence=True, enable_prune=True,
-                 enable_grow=True),
+    # ReLU and the net is stable without it, so the full legacy stack omits it.
+    "legacy-step6": dict(enable_eligibility=True, enable_confidence=True,
+                         enable_prune=True, enable_grow=True, enable_homeostasis=True),
+    "legacy-full": dict(enable_eligibility=True, enable_confidence=True,
+                        enable_prune=True, enable_grow=True),
 }
+
+DEFAULT_PRESET = "currency"
+
+# presets that use the legacy eligibility pruner (need theta_prune + warmup
+# tuning on spirals); the currency pruner is gradient-aware and needs neither.
+_LEGACY_PRUNE_PRESETS = ("legacy-step4", "legacy-step5", "legacy-step6", "legacy-full")
 
 
 def make_config(preset, **overrides):
@@ -50,14 +69,18 @@ def make_config(preset, **overrides):
     return cfg
 
 
-def run(preset="step1", dataset="blobs", steps=4000, seed=0,
+def run(preset=DEFAULT_PRESET, dataset="blobs", steps=4000, seed=0,
         layers=(2, 8, 8, 6, 2), density=0.5,
         record_every=100, draw_every=400, out=None, n_points=600,
         cfg_overrides=None, render=True, edge_mode=None,
         turns=1.0, noise=0.10):
-    # step2 has no confidence signal yet, so colour edges by eligibility
+    # pick the most informative edge colouring per preset:
+    #   legacy-step2 has no confidence yet  -> eligibility "glow"
+    #   currency-conf isolates the meter     -> gradient "demand"
+    #   everything else                      -> confidence (blue->red)
     if edge_mode is None:
-        edge_mode = "eligibility" if preset == "step2" else "confidence"
+        edge_mode = {"legacy-step2": "eligibility",
+                     "currency-conf": "demand"}.get(preset, "confidence")
     out = out or os.path.join("output", f"{preset}_{dataset}")
     os.makedirs(out, exist_ok=True)
 
@@ -127,7 +150,7 @@ def _parse_layers(s):
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
-    ap.add_argument("--preset", default="step1", choices=list(PRESETS))
+    ap.add_argument("--preset", default=DEFAULT_PRESET, choices=list(PRESETS))
     ap.add_argument("--dataset", default="blobs", choices=["blobs", "spirals"])
     ap.add_argument("--steps", type=int, default=4000)
     ap.add_argument("--seed", type=int, default=0)
@@ -151,13 +174,15 @@ if __name__ == "__main__":
     layers = args.layers or ((2, 10, 10, 8, 2) if spirals else (2, 8, 8, 6, 2))
     overrides = {}
     overrides["eta_base"] = args.eta if args.eta is not None else (0.02 if spirals else 0.05)
+    # theta_prune + prune_warmup only matter for the legacy eligibility pruner;
+    # the currency pruner is gradient-aware and ignores both.
     if args.theta_prune is not None:
         overrides["theta_prune"] = args.theta_prune
-    elif spirals:
+    elif spirals and args.preset in _LEGACY_PRUNE_PRESETS:
         overrides["theta_prune"] = 0.001
     if args.prune_warmup is not None:
         overrides["prune_warmup"] = args.prune_warmup
-    elif spirals and args.preset in ("step4", "step5", "step6", "full"):
+    elif spirals and args.preset in _LEGACY_PRUNE_PRESETS:
         overrides["prune_warmup"] = 6000
 
     _, _, metrics, out = run(
