@@ -48,6 +48,13 @@ def test_default_config_has_advanced_mechanisms_off():
     assert cfg.enable_homeostasis is False
 
 
+def test_default_config_softened_cliff_knobs():
+    # the 2D confidence rule leads with the smooth (sigmoid) settled cliff
+    cfg = Config()
+    assert cfg.settled_mode == "sigmoid"
+    assert cfg.conf_k == 3.0
+
+
 def test_prune_warmup_delays_pruning():
     # No synapse should be pruned before prune_warmup, even with prune enabled.
     net = build_graph([2, 8, 8, 6, 2], density=0.5, seed=0)

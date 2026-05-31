@@ -13,6 +13,10 @@ from sprout.train import Config, Trainer, accuracy
 from sprout.currency import (
     update_gradient_meters,
     mean_grad_mag,
+    network_scales,
+    load,
+    demand,
+    settledness,
     update_confidence_currency,
     update_confidence_2d,
     prune_currency,
@@ -87,6 +91,62 @@ def test_confidence_is_capped_at_c_max():
     assert s.confidence <= 5.0
 
 
+# -- shared state: load / demand (one source of truth for both lenses) -------
+
+def test_network_scales_returns_mean_weight_and_mean_grad_mag():
+    net = Network([2, 2])
+    a = net.add_synapse(0, 2)
+    b = net.add_synapse(1, 2)
+    a.weight, b.weight = -1.0, 3.0       # abs -> wbar = (1+3)/2 = 2.0
+    a.grad_mag, b.grad_mag = 0.2, 0.4    # Mbar = 0.3
+    wbar, mbar = network_scales(net)
+    assert abs(wbar - 2.0) < 1e-12
+    assert abs(mbar - 0.3) < 1e-12       # == mean_grad_mag
+    assert abs(mbar - mean_grad_mag(net)) < 1e-12
+
+
+def test_load_and_demand_are_normalized_coordinates():
+    net = Network([2, 2])
+    a = net.add_synapse(0, 2)
+    b = net.add_synapse(1, 2)
+    a.weight, b.weight = -1.0, 3.0        # wbar = 2.0
+    a.grad_mag, b.grad_mag = 0.2, 0.4     # Mbar = 0.3
+    wbar, mbar = network_scales(net)
+    assert abs(load(a, wbar) - 0.5) < 1e-9       # |-1|/2
+    assert abs(demand(b, mbar) - (0.4 / 0.3)) < 1e-9
+
+
+# -- the softened settled cliff: settledness(d, mode, k) ---------------------
+
+def test_settledness_hard_matches_relu_cliff():
+    assert settledness(0.0, "hard") == 1.0
+    assert settledness(0.5, "hard") == 0.5
+    assert settledness(1.0, "hard") == 0.0
+    assert settledness(2.0, "hard") == 0.0       # slams to zero past average demand
+
+
+def test_settledness_sigmoid_is_smooth_with_pivot_at_average():
+    assert abs(settledness(1.0, "sigmoid", k=3.0) - 0.5) < 1e-9   # pivot @ avg demand
+    assert settledness(2.0, "sigmoid", k=3.0) > 0.0               # never a hard zero
+    assert settledness(0.0, "sigmoid", k=3.0) > settledness(1.0, "sigmoid", k=3.0)
+
+
+def test_settledness_exp_is_one_at_zero_and_strictly_positive():
+    assert abs(settledness(0.0, "exp", k=1.0) - 1.0) < 1e-9
+    assert settledness(5.0, "exp", k=1.0) > 0.0
+
+
+def test_settledness_rational_has_fatter_tail_than_exp():
+    # at high demand the rational keeps more settledness (slower decay) than exp
+    assert settledness(5.0, "rational", k=1.0) > settledness(5.0, "exp", k=1.0)
+
+
+def test_settledness_all_modes_monotone_decreasing_in_demand():
+    for mode in ("hard", "sigmoid", "exp", "rational"):
+        vals = [settledness(d, mode, k=3.0) for d in (0.0, 0.5, 1.0, 1.5, 2.0)]
+        assert all(vals[i] >= vals[i + 1] - 1e-12 for i in range(len(vals) - 1)), mode
+
+
 # -- Readout A (2D): confidence from importance x settledness ----------------
 
 def test_2d_confidence_freezes_heavy_settled_wire():
@@ -142,7 +202,7 @@ def test_2d_confidence_ema_moves_fraction_toward_target():
     w.weight, w.grad_mag, w.confidence = 3.0, 0.0, 0.0
     other.weight, other.grad_mag = 1.0, 0.4
     # wbar=2.0 -> imp=0.5 ; Mbar=0.2 -> settled=1.0 ; target=2.0*0.5*1.0=1.0
-    update_confidence_2d(net, gain=2.0, alpha=0.1, c_max=5.0)
+    update_confidence_2d(net, gain=2.0, alpha=0.1, c_max=5.0, settled_mode="hard")
     assert abs(w.confidence - 0.1) < 1e-9    # 0.9*0 + 0.1*1.0
 
 
@@ -154,6 +214,54 @@ def test_2d_confidence_clips_result_to_c_max():
     other.weight, other.grad_mag = 1.0, 0.4
     update_confidence_2d(net, gain=2.0, alpha=0.1, c_max=5.0)
     assert w.confidence <= 5.0
+
+
+def test_2d_confidence_soft_cliff_lifts_contested_loadbearer_off_zero():
+    # The TAIL: a heavy, ABOVE-average-demand wire scores settled=0 under the
+    # hard cliff -> zero confidence regardless of load. A softened cliff gives it
+    # a small but NONZERO (load-proportional) rigidity instead.
+    def fresh():
+        net = Network([2, 2])
+        heavy = net.add_synapse(0, 2)
+        other = net.add_synapse(1, 2)
+        # wbar=1.25 -> imp(heavy)=0.6>0 ; Mbar=0.5 -> d(heavy)=1.8 (>average)
+        heavy.weight, heavy.grad_mag, heavy.confidence = 2.0, 0.9, 0.0
+        other.weight, other.grad_mag = 0.5, 0.1
+        return net, heavy
+
+    net_h, heavy_h = fresh()
+    update_confidence_2d(net_h, gain=2.0, alpha=0.5, c_max=5.0, settled_mode="hard")
+    assert heavy_h.confidence == 0.0          # the tail under today's cliff
+
+    for mode in ("sigmoid", "exp", "rational"):
+        net_s, heavy_s = fresh()
+        update_confidence_2d(net_s, gain=2.0, alpha=0.5, c_max=5.0, settled_mode=mode)
+        assert heavy_s.confidence > 0.0, mode  # lifted off zero
+
+
+def test_2d_confidence_soft_cliff_still_ignores_freeloaders():
+    # The imp floor is untouched: a below-average-weight wire never freezes under
+    # ANY cliff mode (this is what guards frozen_freeloader_frac == 0).
+    for mode in ("hard", "sigmoid", "exp", "rational"):
+        net = Network([2, 2])
+        light = net.add_synapse(0, 2)
+        heavy = net.add_synapse(1, 2)
+        light.weight, light.grad_mag, light.confidence = 0.2, 0.05, 0.0
+        heavy.weight, heavy.grad_mag = 2.0, 0.35
+        update_confidence_2d(net, gain=2.0, alpha=0.5, c_max=5.0, settled_mode=mode)
+        assert light.confidence == 0.0, mode
+
+
+def test_2d_confidence_defaults_to_sigmoid_not_hard():
+    # With no settled_mode given, the rule uses the softened (sigmoid) cliff, so a
+    # contested load-bearer is NOT slammed to zero the way the hard cliff does.
+    net = Network([2, 2])
+    heavy = net.add_synapse(0, 2)
+    other = net.add_synapse(1, 2)
+    heavy.weight, heavy.grad_mag, heavy.confidence = 2.0, 0.9, 0.0
+    other.weight, other.grad_mag = 0.5, 0.1
+    update_confidence_2d(net, gain=2.0, alpha=0.5, c_max=5.0)   # no settled_mode
+    assert heavy.confidence > 0.0
 
 
 def test_trainer_twod_confidence_mode_is_wired_and_differs():

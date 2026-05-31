@@ -29,12 +29,21 @@ VARIANTS: dict[str, Callable[[], Config]] = {
         enable_prune=True, enable_grow=True,
         gamma_dec=0.001, t_struct=200,
     ),
-    # currency with the 2D (importance x settledness) confidence rule — the
-    # calibration redesign; A/B against "currency" on conf_utility_corr.
+    # currency with the 2D (importance x settledness) confidence rule, HARD cliff
+    # — the original calibration redesign; the A/B baseline for the softened cliff.
     "currency-2dconf": lambda: Config(
         eta_base=0.02, grad_currency=True, enable_confidence=True,
         enable_prune=True, enable_grow=True,
+        gamma_dec=0.001, t_struct=200, confidence_mode="twod", settled_mode="hard",
+    ),
+    # 2D confidence with the SOFTENED settled cliff (sigmoid): a contested
+    # load-bearer keeps some consolidation instead of collapsing to zero. A/B
+    # against "currency-2dconf" on conf_utility_corr / oscillation_frac.
+    "currency-2dsoft": lambda: Config(
+        eta_base=0.02, grad_currency=True, enable_confidence=True,
+        enable_prune=True, enable_grow=True,
         gamma_dec=0.001, t_struct=200, confidence_mode="twod",
+        settled_mode="sigmoid", conf_k=3.0,
     ),
     # currency with a longer grace + higher grow bar (the grow_budget replacement)
     "currency-grace": lambda: Config(

@@ -24,6 +24,7 @@ Notation matches the design notes:
 
 from __future__ import annotations
 
+import math
 from collections import defaultdict
 
 _EPS = 1e-12
@@ -48,6 +49,68 @@ def mean_grad_mag(net):
     if not net.synapses:
         return 0.0
     return sum(s.grad_mag for s in net.synapses.values()) / len(net.synapses)
+
+
+# -- shared state: the two coordinates both lenses read ----------------------
+
+def network_scales(net):
+    """The two adaptive scales every wire is normalised against:
+
+        (w-bar = mean |weight|,  M-bar = mean grad_mag)  over live wires.
+
+    Both the confidence (plasticity) lens and the prune (value) lens read the
+    wire's load and demand relative to these, so they share one definition of
+    "the network" rather than each recomputing its own.
+    """
+    n = len(net.synapses)
+    if n == 0:
+        return 0.0, 0.0
+    wbar = sum(abs(s.weight) for s in net.synapses.values()) / n
+    return wbar, mean_grad_mag(net)
+
+
+def load(syn, wbar, eps=_EPS):
+    """``ℓ = |w| / w-bar`` — the wire's weight relative to the network average."""
+    return abs(syn.weight) / (wbar + eps)
+
+
+def demand(syn, Mbar, eps=_EPS):
+    """``d = M / M-bar`` — how hard the loss still pushes this wire vs average."""
+    return syn.grad_mag / (Mbar + eps)
+
+
+def _sigmoid(z):
+    """Numerically stable logistic (no overflow for large |z|)."""
+    if z >= 0.0:
+        return 1.0 / (1.0 + math.exp(-z))
+    e = math.exp(z)
+    return e / (1.0 + e)
+
+
+def settledness(d, mode="sigmoid", k=3.0):
+    """Map relative demand ``d = M/M-bar`` to settledness in (0, 1]: high when the
+    loss has stopped pushing this wire.
+
+      * ``hard``     -> ``max(1 - d, 0)``         the original ReLU cliff: slams to
+                        exactly zero for *every* wire with above-average demand.
+      * ``sigmoid``  -> ``σ(k·(1 - d))``          smooth version of the cliff; still
+                        pivots at average demand (``d=1`` -> 0.5).
+      * ``exp``      -> ``exp(-k·d)``             decays from the quietest wire.
+      * ``rational`` -> ``1 / (1 + k·d)``         fattest tail (slowest decay).
+
+    The smooth modes are strictly positive, so a *load-bearing* wire that is
+    briefly contested keeps a small, weight-proportional consolidation instead of
+    collapsing to zero confidence — lifting the high-demand tail off the axis.
+    """
+    if mode == "hard":
+        return max(1.0 - d, 0.0)
+    if mode == "sigmoid":
+        return _sigmoid(k * (1.0 - d))
+    if mode == "exp":
+        return math.exp(-k * d)
+    if mode == "rational":
+        return 1.0 / (1.0 + k * d)
+    raise ValueError(f"unknown settled_mode {mode!r}")
 
 
 # -- Readout A: confidence ---------------------------------------------------
@@ -82,30 +145,33 @@ def update_confidence_currency(net, gamma_dec, gamma_up, gamma_dn, c_max,
 
 # -- Readout A (2D): confidence from importance x settledness ----------------
 
-def update_confidence_2d(net, gain, alpha, c_max, eps=_EPS):
+def update_confidence_2d(net, gain, alpha, c_max, settled_mode="sigmoid",
+                         conf_k=3.0, eps=_EPS):
     """Confidence as the shared 2D state prune reads: *important* AND *settled*.
 
-        imp     = max(|w_ij|/wbar - 1, 0)     "above-average weight" (importance)
-        settled = max(1 - M_ij/Mbar, 0)       "below-average demand" (settledness)
+        imp     = max(load(syn) - 1, 0)            "above-average weight" (importance)
+        settled = settledness(demand(syn), mode)   "the loss has stopped pushing"
         target  = min(gain * imp * settled, c_max)
         c_ij   <- (1 - alpha) * c_ij + alpha * target     (EMA toward target)
 
-    Unlike the tug-of-war rule this reads *weight* (the term prune utility uses),
-    so confidence tracks utility instead of anti-correlating with it: a wire is
-    frozen only when it carries above-average load AND the loss has stopped
-    pushing it. Freeloaders (below-average weight) score ``imp = 0`` and never
-    freeze; a contested wire (``M >= Mbar``) has ``settled = 0`` so its target
-    collapses and confidence decays - it releases, by design. No ``m_floor`` /
-    consistency gate is needed: the weight gate already excludes dead freeloaders
-    while (correctly) freezing dead-but-load-bearing wires.
+    Reads the *same* ``load``/``demand`` coordinates the prune lens reads (one
+    shared state), so confidence tracks utility instead of anti-correlating with
+    it: a wire is frozen only when it carries above-average load AND the loss has
+    stopped pushing it. Freeloaders (below-average weight) score ``imp = 0`` and
+    never freeze — the ``imp`` floor is deliberately kept hard.
+
+    ``settled`` is pluggable (``settled_mode``): the original hard cliff slams a
+    contested wire's confidence to zero the instant demand crosses the average;
+    the softened cliffs (sigmoid/exp/rational) leave a load-bearing-but-contested
+    wire a small, weight-proportional consolidation instead, so confidence varies
+    smoothly with demand rather than dropping off a corner.
     """
     if not net.synapses:
         return
-    wbar = sum(abs(s.weight) for s in net.synapses.values()) / len(net.synapses)
-    mbar = mean_grad_mag(net)
+    wbar, mbar = network_scales(net)
     for syn in net.synapses.values():
-        imp = max(abs(syn.weight) / (wbar + eps) - 1.0, 0.0)
-        settled = max(1.0 - syn.grad_mag / (mbar + eps), 0.0)
+        imp = max(load(syn, wbar, eps) - 1.0, 0.0)
+        settled = settledness(demand(syn, mbar, eps), settled_mode, conf_k)
         target = min(gain * imp * settled, c_max)
         c = (1.0 - alpha) * syn.confidence + alpha * target
         syn.confidence = min(max(c, 0.0), c_max)
@@ -128,14 +194,13 @@ def prune_currency(net, t_grace, max_prune, prune_u_floor=0.5, lam=1.0, eps=1e-9
     """
     if not net.synapses:
         return []
-    wbar = sum(abs(s.weight) for s in net.synapses.values()) / len(net.synapses)
-    mbar = mean_grad_mag(net)
+    wbar, mbar = network_scales(net)               # same shared state confidence reads
 
     candidates = []
     for (pre, post), syn in net.synapses.items():
         if syn.age <= t_grace:
             continue
-        u = abs(syn.weight) / (wbar + eps) + lam * syn.grad_mag / (mbar + eps)
+        u = load(syn, wbar, eps) + lam * demand(syn, mbar, eps)
         if u < prune_u_floor:
             candidates.append((u, pre, post))
 

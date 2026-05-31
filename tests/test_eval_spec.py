@@ -31,6 +31,16 @@ def test_currency_2dconf_variant_uses_twod_confidence():
     assert cfg.grad_currency is True
     assert cfg.enable_confidence is True
     assert cfg.confidence_mode == "twod"
+    # pinned to the HARD cliff so it stays the regression control / A-B baseline
+    assert cfg.settled_mode == "hard"
+
+
+def test_currency_2dsoft_variant_uses_softened_sigmoid_cliff():
+    cfg = make_config("currency-2dsoft")
+    assert cfg.grad_currency is True
+    assert cfg.confidence_mode == "twod"
+    assert cfg.settled_mode == "sigmoid"
+    assert cfg.conf_k == 3.0
 
 
 def test_currency_grace_extends_currency():

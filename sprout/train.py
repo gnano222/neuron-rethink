@@ -67,6 +67,11 @@ class Config:
     confidence_mode: str = "tugofwar"
     conf_gain: float = 2.0        # 2D confidence: above-average-weight -> confidence
     conf_alpha: float = 0.01      # 2D confidence: EMA rate toward the target
+    # 2D confidence: how settledness reads relative demand d = M/Mbar. "hard" is
+    # the original ReLU cliff (zero past average demand); the smooth modes keep a
+    # contested load-bearer off zero. "sigmoid" leads (smooth version of the cliff).
+    settled_mode: str = "sigmoid"  # "hard" | "sigmoid" | "exp" | "rational"
+    conf_k: float = 3.0            # settled-cliff steepness
 
     # --- initial firing rate seeding ---
     init_firing_rate_at_target: bool = True  # avoids spurious early "underfiring"
@@ -227,7 +232,8 @@ class Trainer:
         update_gradient_meters(net, grad_w, cfg.beta_g)             # §1 currency
         if cfg.enable_confidence:                                   # Readout A
             if cfg.confidence_mode == "twod":
-                update_confidence_2d(net, cfg.conf_gain, cfg.conf_alpha, cfg.c_max)
+                update_confidence_2d(net, cfg.conf_gain, cfg.conf_alpha, cfg.c_max,
+                                     cfg.settled_mode, cfg.conf_k)
             else:
                 update_confidence_currency(net, cfg.gamma_dec, cfg.gamma_up,
                                            cfg.gamma_dn, cfg.c_max, cfg.m_floor_frac)
