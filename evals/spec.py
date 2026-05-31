@@ -23,11 +23,20 @@ VARIANTS: dict[str, Callable[[], Config]] = {
         enable_prune=True, enable_grow=True,
         theta_prune=0.001, prune_warmup=6000,
     ),
-    # the current default architecture: gradient-as-currency, out of the box
+    # the current default architecture: gradient-as-currency. Confidence is the
+    # calibrated 2D (importance x settledness) rule with the softened sigmoid
+    # cliff — inherited from Config defaults. This is the promoted BASELINE.
     "currency": lambda: Config(
         eta_base=0.02, grad_currency=True, enable_confidence=True,
         enable_prune=True, enable_grow=True,
         gamma_dec=0.001, t_struct=200,
+    ),
+    # currency with the prior tug-of-war confidence rule (calm+consistent earn/
+    # lose), kept for comparison now that 2D+softened-cliff is the default.
+    "currency-tugofwar": lambda: Config(
+        eta_base=0.02, grad_currency=True, enable_confidence=True,
+        enable_prune=True, enable_grow=True,
+        gamma_dec=0.001, t_struct=200, confidence_mode="tugofwar",
     ),
     # currency with the 2D (importance x settledness) confidence rule, HARD cliff
     # — the original calibration redesign; the A/B baseline for the softened cliff.
@@ -37,8 +46,9 @@ VARIANTS: dict[str, Callable[[], Config]] = {
         gamma_dec=0.001, t_struct=200, confidence_mode="twod", settled_mode="hard",
     ),
     # 2D confidence with the SOFTENED settled cliff (sigmoid): a contested
-    # load-bearer keeps some consolidation instead of collapsing to zero. A/B
-    # against "currency-2dconf" on conf_utility_corr / oscillation_frac.
+    # load-bearer keeps some consolidation instead of collapsing to zero. NOTE:
+    # now config-identical to the default "currency"; kept as an explicit alias
+    # for reproducing the 2dsoft-vs-2dconf published runs.
     "currency-2dsoft": lambda: Config(
         eta_base=0.02, grad_currency=True, enable_confidence=True,
         enable_prune=True, enable_grow=True,
@@ -74,7 +84,7 @@ class SuiteSpec:
     steps: int = 30000
     shift_steps: int = 0          # > 0 enables a mid-training label-swap phase
     record_every: int = 200
-    baseline: str = "legacy-full"
+    baseline: str = "currency"     # softened-cliff 2D-confidence currency = the reference
     layers: tuple[int, ...] = (2, 10, 10, 8, 2)
     density: float = 0.4
     n_points: int = 600

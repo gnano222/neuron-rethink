@@ -62,9 +62,10 @@ class Config:
     prune_u_floor: float = 0.5    # prune wires with normalised utility below this
     grow_bar_frac: float = 1.5    # grow ghost wire if virt-grad > this * live ref
     virt_batch: int = 32          # batch size for scoring ghost wires
-    # confidence rule (currency mode): "tugofwar" (calm+consistent earn/lose) or
-    # "twod" (importance x settledness, calibrated to prune utility). See currency.py.
-    confidence_mode: str = "tugofwar"
+    # confidence rule (currency mode): "twod" (importance x settledness,
+    # calibrated to prune utility — the DEFAULT / baseline) or "tugofwar" (the
+    # prior calm+consistent earn/lose rule, kept for comparison). See currency.py.
+    confidence_mode: str = "twod"
     conf_gain: float = 2.0        # 2D confidence: above-average-weight -> confidence
     conf_alpha: float = 0.01      # 2D confidence: EMA rate toward the target
     # 2D confidence: how settledness reads relative demand d = M/Mbar. "hard" is

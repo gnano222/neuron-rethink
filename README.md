@@ -10,17 +10,19 @@ The project has two architectures, both live and both tested:
 1. **Gradient-as-currency** *(current default)* — one metered signal drives
    everything. Backprop already computes a per-synapse gradient
    `g_ij = δ_j·a_i` ("how hard, and which way, the loss wants this wire to
-   change"). We meter that once and read it three ways: **confidence** (calm +
-   consistent ⇒ consolidate), **pruning** (small weight *and* ignored by the
-   loss), **growth** (the missing wire the loss most wishes existed — RigL-style).
-   See [sprout/currency.py](sprout/currency.py).
+   change"). We meter that once into one shared per-wire state — **load**
+   `|w|/w̄` and **demand** `M/M̄` — and read it through three lenses:
+   **confidence** (freeze a wire that is *important and settled*), **pruning**
+   (delete a wire weak in *both* load and demand), **growth** (add the missing
+   wire the loss most wishes existed — RigL-style). See
+   [sprout/currency.py](sprout/currency.py).
 
 2. **Legacy v1 — eligibility / three-factor** — the original spec
    ([docs/v1_implementation.MD](docs/v1_implementation.MD)): a Hebbian
    "fired-together-recently" eligibility trace gates a global low-error signal to
    drive confidence; growth chases under-firing neurons; pruning uses `|w|·r`.
    Kept verbatim under the `legacy-*` presets — it is more *biologically* flavoured
-   and, today, still the better-tuned system on spirals (see results below).
+   and a lateral move on accuracy, with cleaner churn on spirals (see results below).
 
 ## Headline result
 
@@ -35,45 +37,40 @@ gradient-aware signal.
 | ![step 0](docs/assets/spirals_step0.png) | ![final](docs/assets/spirals_final.png) |
 | acc ≈ 0.5, every synapse blue (c=0) | acc ≈ 1.0, working pathways red (frozen) |
 
-## Honest comparison: is currency actually *better*?
+## Honest comparison: where currency stands
 
-Not yet — it's a **lateral move that's more elegant, not an upgrade**. The
-figures below are the original *single-seed* run; regenerate them as a
-multi-seed scorecard (mean ± std + bootstrap verdicts vs the baseline) with
-`python evaluate.py --variants legacy-full,currency,currency-grace --shift 6000`
-(identical net/data/seed; 30k steps + a 6k concept-shift):
+Currency is the **default architecture and the baseline** other variants are
+measured against. Three honest truths, all multi-seed (full scorecards under
+[docs/eval-runs/](docs/eval-runs/)):
 
-| metric | legacy (eligibility) | currency | currency + longer grace |
-|---|--:|--:|--:|
-| final accuracy | **0.998** | 0.992 | 0.993 |
-| max accuracy | 0.998 | 0.997 | 0.997 |
-| recovered acc (after label-swap) | 0.918 | 0.922 | 0.913 |
-| synapse count (start→peak→end) | 102→139→**94** | 104→143→138 | 104→139→134 |
-| max grows into ONE neuron *(churn)* | **6** | 19 | 17 |
-| max confidence | 3.90 | 5.00 (capped) | 5.00 |
+**Accuracy vs legacy is a lateral move, not an upgrade.** Currency matches
+legacy's ~0.97–0.99 on spirals from a *single* signal and deletes three tuned
+knobs (`theta_prune`, `prune_warmup`, `grow_budget`) — elegance, not a higher
+ceiling. The dead-ReLU growth churn that forced `grow_budget` is gone *for free*:
+a dead neuron has zero gradient, so candidate wires into it score ~0 and are
+never grown. Re-run with
+`python evaluate.py --variants legacy-full,currency --baseline currency --seeds 5 --shift 6000`.
 
-![comparison](docs/assets/compare.png)
+**Confidence calibration is a genuine, measured win.** The original tug-of-war
+rule *anti-correlated* with real wire utility (`conf_utility_corr ≈ −0.17`): it
+froze wires by settledness alone, so it froze *freeloaders*. Re-deriving
+confidence as the **2D (importance × settledness)** rule on the *same*
+`(load, demand)` state prune reads — with a **softened sigmoid cliff** so a
+contested load-bearer keeps some consolidation instead of collapsing to zero —
+fixed the sign and made it a significant **+0.31** (15 seeds, no-shift), at **no
+accuracy cost** and **zero frozen freeloaders**. Measure calibration on a
+*no-shift* run: a mid-run label swap makes the slow confidence EMA lag the
+instantaneous post-swap demand, which understates the correlation. See
+[docs/eval-runs/2dsoft-vs-2dconf-noshift-15seeds/](docs/eval-runs/2dsoft-vs-2dconf-noshift-15seeds/).
 
-**What currency wins:** it matches accuracy from a *single* signal and deletes
-the three tuned knobs. The dead-ReLU growth churn that forced `grow_budget` in v1
-is gone *for free* — a dead neuron has zero gradient, so its candidate wires
-score ~0 and are simply never grown.
-
-**What it loses / open issues (honest):**
-- **Churn regressed.** v1's clean "6" was just the `grow_budget` cap. Removing it
-  exposed a **grow↔prune oscillation**: a wire is grown (high virtual gradient),
-  pruned before it matures, then re-requested because the same virtual gradient
-  is still there. A longer grace barely dents it (19→17).
-- **Slower to settle.** At 20k steps the count is still inflated (138). It *does*
-  settle by 30k (peak 143 → **end 127**, which is why `validate.py`'s longer run
-  passes "grows-then-stabilizes") — but v1 settles below its start much sooner.
-- **The predicted concept-shift win didn't materialise** — recovery is a tie
-  (~0.92). Confidence *does* fall correctly after the swap (4.80 → 0.49), the
-  re-adaptation just isn't faster end-to-end on this task.
-
-The fix that should turn this into a real win: **grow/prune hysteresis** (a
-just-grown wire is prune-locked for a window, a just-pruned pair grow-locked) or
-a short virtual-gradient memory to stop re-requesting the wire it just cut.
+**The one open issue (honest): grow↔prune oscillation.** Removing v1's
+`grow_budget` cap exposed thrash — a wire is grown (high virtual gradient),
+pruned before it matures, then re-requested because the same virtual gradient is
+still there. The softened cliff nudges it the right way (point estimate down) but
+not significantly. The likely fix is still **grow/prune hysteresis**: lock a
+just-grown wire from pruning for a window (and a just-pruned pair from regrowth),
+or give the virtual gradient a short memory so it stops re-requesting the wire it
+just cut.
 
 ## Quick start
 
@@ -81,7 +78,7 @@ a short virtual-gradient memory to stop re-requesting the wire it just cut.
 python3 -m venv .venv && source .venv/bin/activate
 pip install numpy matplotlib pytest pillow
 
-pytest -q                                   # 88 unit + integration tests
+pytest -q                                   # 189 unit + integration tests
 
 python run.py --preset currency --dataset spirals --steps 30000 --density 0.4
 python validate.py                          # currency, all 7 criteria + plots
@@ -101,7 +98,7 @@ Artifacts land in `output/<preset>_<dataset>/` (`animation.gif`, frames,
 |---|---|---|
 | `core` | plain sparse backprop | all mechanisms off |
 | `currency-conf` | currency: + confidence | edges auto-coloured by gradient **demand** |
-| **`currency`** *(default)* | currency: confidence + prune + grow | the current architecture |
+| **`currency`** *(default)* | currency: confidence + prune + grow | the current architecture (2D calibrated confidence, softened cliff) |
 | `legacy-step1…step5` | v1 build-order, one mechanism at a time | the most legible way to watch each part |
 | `legacy-step6` | + homeostasis | opt-in; unstable with ReLU (see deviations) |
 | `legacy-full` | full v1 eligibility system | the tuned baseline in the table above |
@@ -127,14 +124,24 @@ Two EMAs per wire are the whole currency:
 ```
 M_ij ← β·M_ij + (1−β)·|g_ij|     # magnitude meter — "how hard am I pushed"
 S_ij ← β·S_ij + (1−β)· g_ij      # signed meter    — "which way, on net"
-demand      d = M_ij / mean(M)            # vs the rest of the network
-consistency κ = |S_ij| / (M_ij + ε)       # 1 = always same direction, 0 = contested
+load        ℓ = |w_ij| / mean(|w|)        # weight vs the network (carries load now?)
+demand      d = M_ij / mean(M)            # gradient vs the network (still wanted?)
+consistency κ = |S_ij| / (M_ij + ε)       # tug-of-war variant: 1 = same dir, 0 = contested
 ```
 
-- **Confidence** (`update_confidence_currency`): `c ← (1−γ_dec)·c +
-  γ_up·κ·(1−d)₊ − γ_dn·(d−1)₊`, clipped to `[0, c_max]`. Earn when *calm and
-  consistent*; lose when a *contested hot-spot*. `κ` stops dead wires (no
-  feedback) gaining false confidence. `γ_dn > γ_up`: hard to earn, easy to lose.
+`load` and `demand` are the shared 2D state; confidence and pruning are two
+lenses on it (one source of truth, [sprout/currency.py](sprout/currency.py)'s
+`network_scales`/`load`/`demand`).
+
+- **Confidence / plasticity** (`update_confidence_2d`, default): freeze a wire
+  only when it is **important *and* settled**. `imp = (ℓ−1)₊` (above-average
+  load), `settled = σ(k·(1−d))` (a *softened* cliff — demand below average ⇒
+  settled, smoothly), `c ← EMA toward gain·imp·settled` clipped to `[0, c_max]`;
+  effective LR is `η/(1+c)`. Reading the *same* `(load, demand)` state prune
+  reads is what makes confidence *track* utility instead of fighting it, and the
+  hard `imp` floor means freeloaders (below-average load) never freeze. The prior
+  tug-of-war rule (`update_confidence_currency`, `confidence_mode="tugofwar"`)
+  earned from `κ·(1−d)₊` and lost from `(d−1)₊` — kept as a variant for comparison.
 - **Pruning** (`prune_currency`): utility `|w|/w̄ + λ·M/M̄`; cut only wires weak in
   **both** senses. Protects small-but-wanted newborns ⇒ no warmup needed.
 - **Growth** (`batch_edge_scores` + `grow_currency`): score missing wires by
@@ -190,8 +197,11 @@ weight, or a bias nudge for chronically-dead units.
 
 ## Next steps
 
-1. **Grow/prune hysteresis** — kill the oscillation; the most likely path to
-   currency genuinely beating v1.
+Confidence **calibration is resolved** (the 2D + softened-cliff redesign above —
+the default). Remaining:
+
+1. **Grow/prune hysteresis** — kill the oscillation (the one open plasticity
+   issue; the softened cliff helps but not significantly).
 2. **Dead-unit revival** — small non-zero birth weight or bias nudge.
 3. **Stable homeostasis** — a per-neuron trained gain instead of multiplicative
    weight rescaling.

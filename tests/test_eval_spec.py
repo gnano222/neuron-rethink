@@ -24,6 +24,18 @@ def test_currency_variant_uses_gradient_currency():
     assert cfg.grad_currency is True
     assert cfg.enable_eligibility is False
     assert cfg.enable_confidence and cfg.enable_prune and cfg.enable_grow
+    # the promoted baseline: default currency now uses the calibrated 2D
+    # confidence with the softened (sigmoid) settled cliff
+    assert cfg.confidence_mode == "twod"
+    assert cfg.settled_mode == "sigmoid"
+
+
+def test_currency_tugofwar_variant_preserves_old_rule():
+    # the prior tug-of-war confidence rule is kept as an explicit variant for
+    # comparison even though it is no longer the default
+    cfg = make_config("currency-tugofwar")
+    assert cfg.grad_currency is True
+    assert cfg.confidence_mode == "tugofwar"
 
 
 def test_currency_2dconf_variant_uses_twod_confidence():
@@ -80,7 +92,7 @@ def test_suitespec_defaults():
     assert spec.dataset == "spirals"
     assert spec.steps == 30000
     assert spec.shift_steps == 0
-    assert spec.baseline == "legacy-full"
+    assert spec.baseline == "currency"   # promoted: softened-cliff currency is the reference
     assert spec.record_every == 200
     assert spec.test_seed_offset == 10000
 

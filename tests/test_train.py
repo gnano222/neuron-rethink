@@ -49,8 +49,10 @@ def test_default_config_has_advanced_mechanisms_off():
 
 
 def test_default_config_softened_cliff_knobs():
-    # the 2D confidence rule leads with the smooth (sigmoid) settled cliff
+    # the calibrated 2D confidence rule with the smooth (sigmoid) settled cliff is
+    # the DEFAULT currency confidence — the promoted baseline architecture
     cfg = Config()
+    assert cfg.confidence_mode == "twod"
     assert cfg.settled_mode == "sigmoid"
     assert cfg.conf_k == 3.0
 
