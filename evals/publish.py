@@ -17,9 +17,13 @@ from evals import report
 from evals.metrics import METRIC_DESCRIPTIONS
 
 
-# the curated headline metrics shown at the top of each run + in chat replies
+# the curated headline metrics shown at the top of each run + in chat replies.
+# Continual-only and shift-only metrics are listed too; build_highlight_table
+# silently skips any that a given run didn't produce.
 KEY_METRICS = (
-    "final_test_acc", "pre_shift_test_acc", "recovered_test_acc",
+    "final_test_acc",
+    "forgetting", "consolidation", "b_learned", "a_peak",   # continual regime
+    "pre_shift_test_acc", "recovered_test_acc",             # label-swap regime
     "auc_test_acc", "max_grows_into_one_neuron", "oscillation_frac",
     "freeloader_frac", "conf_utility_corr", "dead_unit_count",
 )

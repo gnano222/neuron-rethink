@@ -14,6 +14,7 @@ from sprout.currency import (
     update_gradient_meters,
     mean_grad_mag,
     update_confidence_currency,
+    update_confidence_2d,
     prune_currency,
     grow_currency,
     batch_edge_scores,
@@ -84,6 +85,96 @@ def test_confidence_is_capped_at_c_max():
     update_confidence_currency(net, gamma_dec=0.001, gamma_up=0.05,
                                gamma_dn=0.10, c_max=5.0, m_floor_frac=0.05)
     assert s.confidence <= 5.0
+
+
+# -- Readout A (2D): confidence from importance x settledness ----------------
+
+def test_2d_confidence_freezes_heavy_settled_wire():
+    # A wire that is above-average weight AND settled (low demand) earns confidence.
+    net = Network([2, 2])
+    heavy = net.add_synapse(0, 2)     # above-average weight, low demand
+    other = net.add_synapse(1, 2)     # keeps wbar / Mbar up
+    heavy.weight, heavy.grad_mag, heavy.confidence = 2.0, 0.05, 0.0
+    other.weight, other.grad_mag = 0.5, 0.35
+    update_confidence_2d(net, gain=2.0, alpha=0.1, c_max=5.0)
+    assert heavy.confidence > 0.0
+
+
+def test_2d_confidence_ignores_below_average_weight_wire():
+    # A settled but light (below-average weight) wire is a freeloader -> no freeze.
+    net = Network([2, 2])
+    light = net.add_synapse(0, 2)     # settled but below-average weight
+    heavy = net.add_synapse(1, 2)
+    light.weight, light.grad_mag, light.confidence = 0.2, 0.05, 0.0
+    heavy.weight, heavy.grad_mag = 2.0, 0.35
+    update_confidence_2d(net, gain=2.0, alpha=0.1, c_max=5.0)
+    assert light.confidence == 0.0
+
+
+def test_2d_confidence_releases_under_contention():
+    # A previously-frozen heavy wire that is now contested (high demand) decays.
+    net = Network([2, 2])
+    contested = net.add_synapse(0, 2)
+    other = net.add_synapse(1, 2)
+    contested.weight, contested.grad_mag, contested.confidence = 2.0, 0.9, 3.0
+    other.weight, other.grad_mag = 0.5, 0.1
+    update_confidence_2d(net, gain=2.0, alpha=0.1, c_max=5.0)
+    assert contested.confidence < 3.0     # settled=0 -> target 0 -> decays
+
+
+def test_2d_confidence_dead_heavy_freezes_dead_light_does_not():
+    net = Network([3, 1])
+    dead_heavy = net.add_synapse(0, 3)    # no gradient, big weight -> settled+important
+    dead_light = net.add_synapse(1, 3)    # no gradient, tiny weight -> freeloader
+    live = net.add_synapse(2, 3)          # keeps Mbar > 0
+    dead_heavy.weight, dead_heavy.grad_mag, dead_heavy.confidence = 2.0, 0.0, 0.0
+    dead_light.weight, dead_light.grad_mag, dead_light.confidence = 0.1, 0.0, 0.0
+    live.weight, live.grad_mag = 0.5, 0.9
+    update_confidence_2d(net, gain=2.0, alpha=0.1, c_max=5.0)
+    assert dead_heavy.confidence > 0.0
+    assert dead_light.confidence == 0.0
+
+
+def test_2d_confidence_ema_moves_fraction_toward_target():
+    net = Network([2, 2])
+    w = net.add_synapse(0, 2)
+    other = net.add_synapse(1, 2)
+    w.weight, w.grad_mag, w.confidence = 3.0, 0.0, 0.0
+    other.weight, other.grad_mag = 1.0, 0.4
+    # wbar=2.0 -> imp=0.5 ; Mbar=0.2 -> settled=1.0 ; target=2.0*0.5*1.0=1.0
+    update_confidence_2d(net, gain=2.0, alpha=0.1, c_max=5.0)
+    assert abs(w.confidence - 0.1) < 1e-9    # 0.9*0 + 0.1*1.0
+
+
+def test_2d_confidence_clips_result_to_c_max():
+    net = Network([2, 2])
+    w = net.add_synapse(0, 2)
+    other = net.add_synapse(1, 2)
+    w.weight, w.grad_mag, w.confidence = 3.0, 0.0, 100.0   # absurd start
+    other.weight, other.grad_mag = 1.0, 0.4
+    update_confidence_2d(net, gain=2.0, alpha=0.1, c_max=5.0)
+    assert w.confidence <= 5.0
+
+
+def test_trainer_twod_confidence_mode_is_wired_and_differs():
+    # The Trainer's currency path dispatches to the 2D rule when selected, and it
+    # yields different (valid) confidences than the tug-of-war rule.
+    X, y = generate_blobs(n=120, seed=0)
+
+    def run(mode):
+        net = build_graph([2, 4, 4, 2], density=0.6, seed=1)
+        init_weights(net, seed=1)
+        cfg = Config(grad_currency=True, enable_confidence=True,
+                     confidence_mode=mode, eta_base=0.05)
+        tr = Trainer(cfg, net, X, y, seed=1)
+        for _ in range(300):
+            tr.step()
+        return {k: s.confidence for k, s in net.synapses.items()}
+
+    tug = run("tugofwar")
+    twod = run("twod")
+    assert all(0.0 <= c <= 5.0 for c in twod.values())   # valid band
+    assert tug != twod                                    # branch actually taken
 
 
 # -- Readout B: pruning ------------------------------------------------------

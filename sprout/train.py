@@ -62,6 +62,11 @@ class Config:
     prune_u_floor: float = 0.5    # prune wires with normalised utility below this
     grow_bar_frac: float = 1.5    # grow ghost wire if virt-grad > this * live ref
     virt_batch: int = 32          # batch size for scoring ghost wires
+    # confidence rule (currency mode): "tugofwar" (calm+consistent earn/lose) or
+    # "twod" (importance x settledness, calibrated to prune utility). See currency.py.
+    confidence_mode: str = "tugofwar"
+    conf_gain: float = 2.0        # 2D confidence: above-average-weight -> confidence
+    conf_alpha: float = 0.01      # 2D confidence: EMA rate toward the target
 
     # --- initial firing rate seeding ---
     init_firing_rate_at_target: bool = True  # avoids spurious early "underfiring"
@@ -214,13 +219,18 @@ class Trainer:
     def _step_currency(self, grad_w, grad_b):
         """One step in currency mode: meter the gradient, then read it three
         ways (confidence, prune, grow). Returns (n_pruned, n_grown)."""
-        from sprout.currency import update_gradient_meters, update_confidence_currency
+        from sprout.currency import (update_gradient_meters,
+                                      update_confidence_currency,
+                                      update_confidence_2d)
         cfg, net = self.cfg, self.net
 
         update_gradient_meters(net, grad_w, cfg.beta_g)             # §1 currency
         if cfg.enable_confidence:                                   # Readout A
-            update_confidence_currency(net, cfg.gamma_dec, cfg.gamma_up,
-                                       cfg.gamma_dn, cfg.c_max, cfg.m_floor_frac)
+            if cfg.confidence_mode == "twod":
+                update_confidence_2d(net, cfg.conf_gain, cfg.conf_alpha, cfg.c_max)
+            else:
+                update_confidence_currency(net, cfg.gamma_dec, cfg.gamma_up,
+                                           cfg.gamma_dn, cfg.c_max, cfg.m_floor_frac)
         apply_gated_update(net, grad_w, grad_b, cfg.eta_base)       # gated SGD
         self._increment_ages()
 

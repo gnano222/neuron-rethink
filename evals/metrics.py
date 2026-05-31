@@ -246,6 +246,49 @@ def recovery_metrics(rec_step, acc_series, shift_start_index: int) -> dict:
             "recovery_gap": pre - recovered, "recovery_steps": rec_steps}
 
 
+def continual_metrics(series) -> dict:
+    """Forgetting / consolidation from a continual run's dual-task series.
+
+    Reads the per-snapshot ``phase`` label ("A"/"B"/"AB") and the two held-out
+    accuracy tracks. Measured at phase boundaries so each signal stays clean:
+    ``forgetting`` is read at the A->B boundary, *before* any consolidation.
+
+        a_peak        = A accuracy at the end of phase A
+        b_learned     = B accuracy at the end of phase B (forward learning)
+        forgetting    = a_peak - A accuracy at the end of phase B   (lower=better)
+        consolidation = min(A, B) at the end of phase A+B           (can it hold both)
+        relearn_gap   = a_peak - A accuracy at the end of phase A+B
+    """
+    nan = float("nan")
+    phase = series.get("phase", [])
+    a = series.get("test_accuracy_A", [])
+    b = series.get("test_accuracy_B", [])
+
+    def last_in(ph, track):
+        vals = [track[i] for i in range(min(len(phase), len(track)))
+                if phase[i] == ph]
+        return float(vals[-1]) if vals else nan
+
+    def diff(x, y):
+        return (x - y) if not (math.isnan(x) or math.isnan(y)) else nan
+
+    a_peak = last_in("A", a)
+    a_after_b = last_in("B", a)
+    b_learned = last_in("B", b)
+    cons_a = last_in("AB", a)
+    cons_b = last_in("AB", b)
+    consolidation = (min(cons_a, cons_b)
+                     if not (math.isnan(cons_a) or math.isnan(cons_b)) else nan)
+
+    return {
+        "a_peak": a_peak,
+        "b_learned": b_learned,
+        "forgetting": diff(a_peak, a_after_b),
+        "consolidation": consolidation,
+        "relearn_gap": diff(a_peak, cons_a),
+    }
+
+
 # ---------------------------------------------------------------------------
 # C. synapse structure — fan / density (end state)
 # ---------------------------------------------------------------------------
@@ -328,6 +371,12 @@ METRIC_DIRECTIONS: dict[str, str] = {
     "recovered_test_acc": "higher",
     "recovery_gap": "lower",
     "recovery_steps": "lower",
+    # B. continual learning (forgetting regime)
+    "a_peak": "higher",
+    "b_learned": "higher",
+    "forgetting": "lower",
+    "consolidation": "higher",
+    "relearn_gap": "lower",
     # C. synapse structure
     "synapse_count_start": "neutral",
     "synapse_count_peak": "neutral",
@@ -376,6 +425,12 @@ METRIC_DESCRIPTIONS: dict[str, str] = {
     "recovered_test_acc": "test accuracy at the end, after the label swap",
     "recovery_gap": "accuracy lost vs pre-shift and not yet regained",
     "recovery_steps": "steps after the shift to return to pre-shift accuracy",
+    # B. continual learning (forgetting regime)
+    "a_peak": "accuracy on task A at the end of phase A (its peak)",
+    "b_learned": "accuracy on task B at the end of phase B (forward learning)",
+    "forgetting": "task A accuracy lost while learning B (lower=better)",
+    "consolidation": "min(A, B) accuracy after interleaved A+B (holds both?)",
+    "relearn_gap": "task A accuracy not restored by the A+B phase",
     # C. synapse structure
     "synapse_count_start": "live synapses at initialization",
     "synapse_count_peak": "max live synapses during the run",
@@ -413,6 +468,8 @@ METRIC_FAMILIES: dict[str, tuple[str, ...]] = {
         "steps_to_90", "steps_to_95", "auc_test_acc", "final_acc_stability",
         "pre_shift_test_acc", "recovered_test_acc", "recovery_gap",
         "recovery_steps"),
+    "Continual learning": (
+        "a_peak", "b_learned", "forgetting", "consolidation", "relearn_gap"),
     "Synapse structure": (
         "synapse_count_start", "synapse_count_peak", "synapse_count_end",
         "n_grow_events", "n_prune_events", "distinct_neurons_grown", "turnover",

@@ -26,6 +26,13 @@ def test_currency_variant_uses_gradient_currency():
     assert cfg.enable_confidence and cfg.enable_prune and cfg.enable_grow
 
 
+def test_currency_2dconf_variant_uses_twod_confidence():
+    cfg = make_config("currency-2dconf")
+    assert cfg.grad_currency is True
+    assert cfg.enable_confidence is True
+    assert cfg.confidence_mode == "twod"
+
+
 def test_currency_grace_extends_currency():
     cfg = make_config("currency-grace")
     assert cfg.grad_currency is True
@@ -71,3 +78,22 @@ def test_suitespec_defaults():
 def test_suitespec_seed_list_is_deterministic_range():
     spec = SuiteSpec(seeds=3)
     assert list(spec.seed_list()) == [0, 1, 2]
+
+
+def test_suitespec_continual_defaults():
+    spec = SuiteSpec()
+    assert spec.regime == "single"      # existing single-task + label-swap path
+    assert spec.steps_a == 15000
+    assert spec.steps_b == 15000
+    assert spec.steps_ab == 10000
+    # concentric geometry: gentler spirals so the union is learnable, an inner
+    # annular spiral (A) and a disjoint outer one (B), both origin-centred.
+    assert spec.continual_turns == 0.6
+    assert (spec.inner_r_lo, spec.inner_r_hi) == (0.15, 0.55)
+    assert (spec.outer_r_lo, spec.outer_r_hi) == (0.65, 1.05)
+
+
+def test_suitespec_continual_regime_opt_in():
+    spec = SuiteSpec(regime="continual", steps_a=100, steps_b=100, steps_ab=50)
+    assert spec.regime == "continual"
+    assert spec.steps_a == 100

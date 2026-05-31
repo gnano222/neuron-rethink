@@ -36,6 +36,18 @@ def parse_args(argv=None):
     ap.add_argument("--steps", type=int, default=30000)
     ap.add_argument("--shift", type=int, default=0,
                     help="concept-shift (label-swap) steps after the main run")
+    ap.add_argument("--regime", default="single", choices=["single", "continual"],
+                    help="single (task + optional label-swap) or continual "
+                         "(A->B->A+B forgetting benchmark, two offset spirals)")
+    ap.add_argument("--steps-a", type=int, default=15000,
+                    help="continual phase A steps (learn the left spiral)")
+    ap.add_argument("--steps-b", type=int, default=15000,
+                    help="continual phase B steps (right spiral only; A erodes)")
+    ap.add_argument("--steps-ab", type=int, default=10000,
+                    help="continual phase A+B steps (interleaved consolidation)")
+    ap.add_argument("--continual-turns", type=float, default=0.6,
+                    help="continual: spiral turns (gentler => the 4-arm union "
+                         "stays learnable, so consolidation has headroom)")
     ap.add_argument("--baseline", default="legacy-full")
     ap.add_argument("--jobs", type=int, default=None,
                     help="parallel workers (default: cpu count)")
@@ -65,6 +77,8 @@ def build_spec(args) -> SuiteSpec:
         steps=args.steps, shift_steps=args.shift,
         record_every=args.record_every, baseline=args.baseline,
         layers=layers, density=args.density, n_points=args.points,
+        regime=args.regime, steps_a=args.steps_a, steps_b=args.steps_b,
+        steps_ab=args.steps_ab, continual_turns=args.continual_turns,
     )
 
 
@@ -84,9 +98,12 @@ def main(argv=None):
         "output", "eval", f"{spec.dataset}_{time.strftime('%Y%m%d_%H%M%S')}")
     cache_dir = None if args.no_cache else CACHE_DIR
 
+    if spec.regime == "continual":
+        steps_desc = f"A->B->A+B {spec.steps_a}+{spec.steps_b}+{spec.steps_ab} steps"
+    else:
+        steps_desc = f"{spec.steps}+{spec.shift_steps} steps"
     print(f"running {len(spec.variants)} variant(s) x {spec.seeds} seed(s) "
-          f"= {len(spec.variants) * spec.seeds} runs "
-          f"({spec.steps}+{spec.shift_steps} steps each) ...")
+          f"= {len(spec.variants) * spec.seeds} runs ({steps_desc} each) ...")
     results = run_suite(spec, jobs=args.jobs, cache_dir=cache_dir,
                         use_cache=not args.no_cache)
     agg = aggregate_suite(results, baseline=spec.baseline,

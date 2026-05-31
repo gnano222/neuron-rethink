@@ -29,6 +29,13 @@ VARIANTS: dict[str, Callable[[], Config]] = {
         enable_prune=True, enable_grow=True,
         gamma_dec=0.001, t_struct=200,
     ),
+    # currency with the 2D (importance x settledness) confidence rule — the
+    # calibration redesign; A/B against "currency" on conf_utility_corr.
+    "currency-2dconf": lambda: Config(
+        eta_base=0.02, grad_currency=True, enable_confidence=True,
+        enable_prune=True, enable_grow=True,
+        gamma_dec=0.001, t_struct=200, confidence_mode="twod",
+    ),
     # currency with a longer grace + higher grow bar (the grow_budget replacement)
     "currency-grace": lambda: Config(
         eta_base=0.02, grad_currency=True, enable_confidence=True,
@@ -65,6 +72,20 @@ class SuiteSpec:
     turns: float = 1.0
     noise: float = 0.10
     test_seed_offset: int = 10000  # held-out test set drawn at seed + this
+
+    # continual-learning (forgetting) regime: two CONCENTRIC spirals, A->B->A+B.
+    # Both tasks are origin-centred (zero-mean => learnable by the tiny net) but
+    # disjoint by radius (jointly valid): inner annular spiral = A, outer = B.
+    # regime="single" keeps the existing single-task + optional label-swap path.
+    regime: str = "single"         # "single" | "continual"
+    steps_a: int = 15000           # phase A: learn the inner spiral
+    steps_b: int = 15000           # phase B: learn the outer spiral only (A erodes)
+    steps_ab: int = 10000          # phase A+B: interleaved consolidation
+    continual_turns: float = 0.6   # gentler spirals so the 4-arm union is learnable
+    inner_r_lo: float = 0.15       # task A: inner annular spiral radial band
+    inner_r_hi: float = 0.55
+    outer_r_lo: float = 0.65       # task B: disjoint outer ring (gap at ~0.6)
+    outer_r_hi: float = 1.05
 
     def seed_list(self) -> range:
         return range(self.seeds)

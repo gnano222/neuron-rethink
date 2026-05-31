@@ -176,6 +176,34 @@ def _plot_curves(by_variant, key, title, ylabel, path):
     plt.close(fig)
 
 
+def _plot_continual_curves(by_variant, path):
+    """The forgetting curve: per-task A (solid) vs B (dashed) held-out accuracy,
+    with vertical lines at each phase change. Task A visibly decays during phase
+    B, then both recover during the A+B consolidation phase.
+    """
+    fig, ax = plt.subplots(figsize=(7, 4))
+    for variant, runs in by_variant.items():
+        A, n = _stack(runs, "test_accuracy_A")
+        B, _ = _stack(runs, "test_accuracy_B")
+        rec = np.asarray(runs[0]["series"]["rec_step"], dtype=float)[:n]
+        line, = ax.plot(rec, A.mean(0), label=f"{variant} · A")
+        ax.plot(rec, B.mean(0), ls="--", color=line.get_color(),
+                label=f"{variant} · B")
+    runs0 = next(iter(by_variant.values()))
+    phase = runs0[0]["series"].get("phase", [])
+    rec0 = runs0[0]["series"]["rec_step"]
+    for i in range(1, min(len(phase), len(rec0))):
+        if phase[i] != phase[i - 1]:
+            ax.axvline(rec0[i], color="k", ls=":", lw=1, alpha=0.4)
+    ax.set_title("continual: task A (solid) vs B (dashed); dotted = phase change")
+    ax.set_xlabel("step")
+    ax.set_ylabel("held-out accuracy")
+    ax.legend(fontsize=7)
+    fig.tight_layout()
+    fig.savefig(path, dpi=90)
+    plt.close(fig)
+
+
 def _plot_churn(by_variant, path):
     fig, ax = plt.subplots(figsize=(7, 4))
     for variant, runs in by_variant.items():
@@ -269,8 +297,12 @@ def write_report(agg, results, out_dir) -> dict:
                   f, indent=2)
 
     by_variant = _by_variant(results)
-    _plot_curves(by_variant, "test_accuracy", "test accuracy (dotted = shift)",
-                 "accuracy", os.path.join(out_dir, "acc_curves.png"))
+    if results and results[0].get("regime") == "continual":
+        _plot_continual_curves(
+            by_variant, os.path.join(out_dir, "continual_curves.png"))
+    else:
+        _plot_curves(by_variant, "test_accuracy", "test accuracy (dotted = shift)",
+                     "accuracy", os.path.join(out_dir, "acc_curves.png"))
     _plot_curves(by_variant, "synapse_count", "synapse count", "synapses",
                  os.path.join(out_dir, "count_curves.png"))
     _plot_churn(by_variant, os.path.join(out_dir, "churn_curves.png"))

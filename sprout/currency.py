@@ -80,6 +80,37 @@ def update_confidence_currency(net, gamma_dec, gamma_up, gamma_dn, c_max,
         syn.confidence = min(max(c, 0.0), c_max)
 
 
+# -- Readout A (2D): confidence from importance x settledness ----------------
+
+def update_confidence_2d(net, gain, alpha, c_max, eps=_EPS):
+    """Confidence as the shared 2D state prune reads: *important* AND *settled*.
+
+        imp     = max(|w_ij|/wbar - 1, 0)     "above-average weight" (importance)
+        settled = max(1 - M_ij/Mbar, 0)       "below-average demand" (settledness)
+        target  = min(gain * imp * settled, c_max)
+        c_ij   <- (1 - alpha) * c_ij + alpha * target     (EMA toward target)
+
+    Unlike the tug-of-war rule this reads *weight* (the term prune utility uses),
+    so confidence tracks utility instead of anti-correlating with it: a wire is
+    frozen only when it carries above-average load AND the loss has stopped
+    pushing it. Freeloaders (below-average weight) score ``imp = 0`` and never
+    freeze; a contested wire (``M >= Mbar``) has ``settled = 0`` so its target
+    collapses and confidence decays - it releases, by design. No ``m_floor`` /
+    consistency gate is needed: the weight gate already excludes dead freeloaders
+    while (correctly) freezing dead-but-load-bearing wires.
+    """
+    if not net.synapses:
+        return
+    wbar = sum(abs(s.weight) for s in net.synapses.values()) / len(net.synapses)
+    mbar = mean_grad_mag(net)
+    for syn in net.synapses.values():
+        imp = max(abs(syn.weight) / (wbar + eps) - 1.0, 0.0)
+        settled = max(1.0 - syn.grad_mag / (mbar + eps), 0.0)
+        target = min(gain * imp * settled, c_max)
+        c = (1.0 - alpha) * syn.confidence + alpha * target
+        syn.confidence = min(max(c, 0.0), c_max)
+
+
 # -- Readout B: pruning ------------------------------------------------------
 
 def prune_currency(net, t_grace, max_prune, prune_u_floor=0.5, lam=1.0, eps=1e-9):

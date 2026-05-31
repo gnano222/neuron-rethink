@@ -268,3 +268,36 @@ def test_recovery_steps_inf_when_never_regained():
     acc = [0.5, 0.9, 0.95, 0.4, 0.6]     # never back to 0.95
     r = metrics.recovery_metrics(rec, acc, shift_start_index=3)
     assert r["recovery_steps"] == math.inf
+
+
+# -- continual-learning (forgetting) metrics ---------------------------------
+
+def _continual_series():
+    # phase A learns A to 0.95; phase B trains only B, so A erodes to 0.40 while
+    # B climbs to 0.95; phase A+B consolidates both back up.
+    return {
+        "phase":           ["A",  "A",  "B",  "B",  "AB", "AB"],
+        "test_accuracy_A": [0.50, 0.95, 0.60, 0.40, 0.70, 0.92],
+        "test_accuracy_B": [0.50, 0.50, 0.70, 0.95, 0.80, 0.90],
+    }
+
+
+def test_continual_metrics_forgetting_and_consolidation():
+    m = metrics.continual_metrics(_continual_series())
+    assert m["a_peak"] == pytest.approx(0.95)            # A at end of phase A
+    assert m["b_learned"] == pytest.approx(0.95)         # B at end of phase B
+    assert m["forgetting"] == pytest.approx(0.95 - 0.40)  # A's drop during B
+    assert m["consolidation"] == pytest.approx(0.90)     # min(A,B) at end of A+B
+    assert m["relearn_gap"] == pytest.approx(0.95 - 0.92)  # A not fully restored
+
+
+def test_continual_metrics_nan_when_phase_missing():
+    # No A+B phase recorded -> consolidation/relearn are nan, not a crash.
+    series = {
+        "phase":           ["A",  "A",  "B",  "B"],
+        "test_accuracy_A": [0.50, 0.95, 0.60, 0.40],
+        "test_accuracy_B": [0.50, 0.50, 0.70, 0.95],
+    }
+    m = metrics.continual_metrics(series)
+    assert m["forgetting"] == pytest.approx(0.55)
+    assert math.isnan(m["consolidation"])

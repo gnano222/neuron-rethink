@@ -52,6 +52,33 @@ def test_main_end_to_end_tiny(tmp_path):
     assert os.path.exists(os.path.join(str(tmp_path), "summary.txt"))
 
 
+def test_parse_args_continual_defaults_to_single():
+    args = cli.parse_args([])
+    assert args.regime == "single"
+
+
+def test_build_spec_passes_continual_fields():
+    args = cli.parse_args(["--regime", "continual", "--steps-a", "120",
+                           "--steps-b", "110", "--steps-ab", "70",
+                           "--continual-turns", "0.7"])
+    spec = cli.build_spec(args)
+    assert spec.regime == "continual"
+    assert spec.steps_a == 120 and spec.steps_b == 110 and spec.steps_ab == 70
+    assert spec.continual_turns == 0.7
+
+
+def test_main_end_to_end_continual_tiny(tmp_path):
+    agg = cli.main([
+        "--variants", "currency,core", "--baseline", "core",
+        "--regime", "continual", "--steps-a", "120", "--steps-b", "120",
+        "--steps-ab", "80", "--seeds", "2", "--record-every", "40",
+        "--points", "60", "--layers", "2,4,4,2",
+        "--jobs", "1", "--out", str(tmp_path), "--no-cache", "--n-boot", "200",
+    ])
+    assert "forgetting" in agg["metrics"]
+    assert os.path.exists(os.path.join(str(tmp_path), "continual_curves.png"))
+
+
 def test_main_publish_creates_run_folder(tmp_path):
     out = tmp_path / "out"
     pub = tmp_path / "pub"

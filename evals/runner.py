@@ -35,6 +35,13 @@ SERIES_KEYS = ("rec_step", "train_accuracy", "train_loss", "test_accuracy",
                "test_loss", "synapse_count", "mean_confidence",
                "cum_grow", "cum_prune")
 
+# continual regime tracks both tasks; "test_accuracy"/"test_loss" hold the union
+# (over A and B test sets) so final_snapshot's perf/structure metrics reuse cleanly.
+CONTINUAL_SERIES_KEYS = ("rec_step", "phase", "train_accuracy", "train_loss",
+                         "test_accuracy_A", "test_accuracy_B", "test_accuracy",
+                         "test_loss", "synapse_count", "mean_confidence",
+                         "cum_grow", "cum_prune")
+
 
 def _gen(dataset, n, seed, turns, noise):
     if dataset == "blobs":
@@ -54,6 +61,92 @@ def _snapshot(series, net, tr, X_tr, y_tr, X_te, y_te):
     series["mean_confidence"].append(float(np.mean(confs)) if confs else 0.0)
     series["cum_grow"].append(sum(1 for e in tr.events if e["type"] == "grow"))
     series["cum_prune"].append(sum(1 for e in tr.events if e["type"] == "prune"))
+
+
+def _snapshot_continual(series, net, tr, phase, X_tr, y_tr,
+                        Xa_te, ya_te, Xb_te, yb_te, X_te_both, y_te_both):
+    """One continual timepoint: per-phase train + per-task and union test acc."""
+    series["rec_step"].append(tr.step_idx)
+    series["phase"].append(phase)
+    series["train_accuracy"].append(accuracy(net, X_tr, y_tr))
+    series["train_loss"].append(metrics.test_loss(net, X_tr, y_tr))
+    series["test_accuracy_A"].append(accuracy(net, Xa_te, ya_te))
+    series["test_accuracy_B"].append(accuracy(net, Xb_te, yb_te))
+    series["test_accuracy"].append(accuracy(net, X_te_both, y_te_both))
+    series["test_loss"].append(metrics.test_loss(net, X_te_both, y_te_both))
+    series["synapse_count"].append(len(net.synapses))
+    confs = [s.confidence for s in net.synapses.values()]
+    series["mean_confidence"].append(float(np.mean(confs)) if confs else 0.0)
+    series["cum_grow"].append(sum(1 for e in tr.events if e["type"] == "grow"))
+    series["cum_prune"].append(sum(1 for e in tr.events if e["type"] == "prune"))
+
+
+def run_one_continual(variant_name, seed, spec):
+    """Train one (variant, seed) through the continual regime: A -> B -> A+B.
+
+    Two CONCENTRIC spirals share the plane: an inner annular spiral (task A) and
+    a disjoint outer one (task B). Both are origin-centred (zero-mean, so the
+    tiny net can learn them) yet occupy separate radial bands (jointly valid).
+    Phase A learns the inner spiral, phase B trains on the outer spiral *only*
+    (A may erode), phase A+B trains on the interleaved union (Trainer samples
+    uniformly at random, so the union is naturally interleaved). Both spirals'
+    held-out accuracy is snapshotted throughout, giving the forgetting +
+    consolidation curves and metrics. The single-task path is untouched.
+    """
+    cfg = make_config(variant_name)
+
+    def spiral(s, r_lo, r_hi):
+        return generate_spirals(n=spec.n_points, seed=s, turns=spec.continual_turns,
+                                noise=spec.noise, r_lo=r_lo, r_hi=r_hi)
+
+    Xa_tr, ya_tr = spiral(seed, spec.inner_r_lo, spec.inner_r_hi)
+    Xa_te, ya_te = spiral(seed + spec.test_seed_offset,
+                          spec.inner_r_lo, spec.inner_r_hi)
+    bseed = seed + 20000                       # B's own seed stream (not a mirror)
+    Xb_tr, yb_tr = spiral(bseed, spec.outer_r_lo, spec.outer_r_hi)
+    Xb_te, yb_te = spiral(bseed + spec.test_seed_offset,
+                          spec.outer_r_lo, spec.outer_r_hi)
+    X_te_both = np.vstack([Xa_te, Xb_te])
+    y_te_both = np.concatenate([ya_te, yb_te])
+
+    net = build_graph(list(spec.layers), density=spec.density, seed=seed)
+    init_weights(net, seed=seed)
+    tr = Trainer(cfg, net, Xa_tr, ya_tr, seed=seed)
+    initial_edges = set(net.synapses)
+    series = {k: [] for k in CONTINUAL_SERIES_KEYS}
+
+    def loop(n_steps, phase, X_tr, y_tr):
+        for s in range(n_steps):
+            record = (s % spec.record_every == 0) or (s == n_steps - 1)
+            tr.step(record=False)
+            if record:
+                _snapshot_continual(series, net, tr, phase, X_tr, y_tr,
+                                    Xa_te, ya_te, Xb_te, yb_te,
+                                    X_te_both, y_te_both)
+
+    loop(spec.steps_a, "A", Xa_tr, ya_tr)
+    tr.X, tr.y = Xb_tr, yb_tr
+    loop(spec.steps_b, "B", Xb_tr, yb_tr)
+    Xab = np.vstack([Xa_tr, Xb_tr])
+    yab = np.concatenate([ya_tr, yb_tr])
+    tr.X, tr.y = Xab, yab
+    loop(spec.steps_ab, "AB", Xab, yab)
+
+    final, dist = metrics.final_snapshot(
+        net, X_te_both, y_te_both, tr.events, initial_edges, series, None, cfg)
+    final.update(metrics.continual_metrics(series))
+
+    return {
+        "variant": variant_name,
+        "seed": seed,
+        "config": asdict(cfg),
+        "series": series,
+        "final": final,
+        "dist": dist,
+        "shift_start_index": None,
+        "regime": "continual",
+        "initial_edge_count": len(initial_edges),
+    }
 
 
 def run_one(variant_name, seed, spec):
@@ -98,6 +191,7 @@ def run_one(variant_name, seed, spec):
         "final": final,
         "dist": dist,
         "shift_start_index": shift_start_index,
+        "regime": "single",
         "initial_edge_count": len(initial_edges),
     }
 
@@ -119,6 +213,15 @@ def _cache_key(variant_name, seed, spec) -> str:
         "turns": spec.turns,
         "noise": spec.noise,
         "test_seed_offset": spec.test_seed_offset,
+        "regime": spec.regime,
+        "steps_a": spec.steps_a,
+        "steps_b": spec.steps_b,
+        "steps_ab": spec.steps_ab,
+        "continual_turns": spec.continual_turns,
+        "inner_r_lo": spec.inner_r_lo,
+        "inner_r_hi": spec.inner_r_hi,
+        "outer_r_lo": spec.outer_r_lo,
+        "outer_r_hi": spec.outer_r_hi,
     }
     blob = json.dumps(payload, sort_keys=True).encode()
     return hashlib.sha1(blob).hexdigest()[:16]
@@ -131,7 +234,8 @@ def _run_one_cached(variant_name, seed, spec, cache_dir, use_cache):
         if use_cache and os.path.exists(path):
             with open(path) as f:
                 return json.load(f)
-    res = run_one(variant_name, seed, spec)
+    runner_fn = run_one_continual if spec.regime == "continual" else run_one
+    res = runner_fn(variant_name, seed, spec)
     if path:
         os.makedirs(cache_dir, exist_ok=True)
         with open(path, "w") as f:

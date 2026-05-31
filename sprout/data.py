@@ -29,11 +29,18 @@ def generate_blobs(n: int = 800, seed: int = 0, spread: float = 0.5):
     return X[perm], y[perm]
 
 
-def generate_spirals(n: int = 800, seed: int = 0, noise: float = 0.18, turns: float = 1.5):
+def generate_spirals(n: int = 800, seed: int = 0, noise: float = 0.18, turns: float = 1.5,
+                     r_lo: float = 0.2, r_hi: float = 1.0):
     """Two interleaving spirals (one per class), offset by pi radians.
 
-    Radius grows linearly with the spiral parameter, so each arm is a genuine
-    spiral and the two classes are not linearly separable.
+    The radius sweeps the band ``[r_lo, r_hi]`` linearly with the spiral
+    parameter, so each arm is a genuine spiral and the two classes are not
+    linearly separable. The default band ``(0.2, 1.0)`` reproduces the original
+    unit-scale spiral byte-for-byte (it is pure arithmetic around the unchanged
+    RNG draws). The continual-learning regime uses two *concentric* bands - an
+    inner annular spiral (task A) and a disjoint outer one (task B) - so both
+    tasks stay centred on the origin (zero-mean, learnable by the tiny net) yet
+    occupy separate regions of the plane (jointly valid).
     """
     rng = np.random.default_rng(seed)
     n0 = n // 2
@@ -41,7 +48,7 @@ def generate_spirals(n: int = 800, seed: int = 0, noise: float = 0.18, turns: fl
 
     def arm(count, phase):
         t = np.linspace(0.0, 1.0, count)
-        r = 0.2 + 0.8 * t                      # radius grows with t
+        r = r_lo + (r_hi - r_lo) * t           # radius sweeps the band
         theta = turns * 2.0 * np.pi * t + phase
         x = r * np.cos(theta)
         y = r * np.sin(theta)

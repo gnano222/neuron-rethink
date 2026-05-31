@@ -81,3 +81,37 @@ def test_data_is_normalised_ish():
     # Inputs should be on a sane scale for a tiny net (roughly unit-ish).
     X, _ = generate_spirals(n=400, seed=5)
     assert np.abs(X).max() < 5.0
+
+
+# -- radial-band spirals (concentric continual-learning regime) --------------
+
+def test_spirals_always_centred_on_origin():
+    # Two arms offset by pi are point-symmetric, so the cloud mean is the origin.
+    X, _ = generate_spirals(n=600, seed=5)
+    assert np.allclose(X.mean(axis=0), [0.0, 0.0], atol=0.2)
+
+
+def test_spirals_inner_band_stays_near_origin():
+    # The inner task: a small annular spiral whose points all sit at small radius.
+    X, _ = generate_spirals(n=600, seed=6, r_lo=0.15, r_hi=0.55, noise=0.05)
+    r = np.linalg.norm(X, axis=1)
+    assert r.max() < 0.7          # radius 0.55 + a little noise
+    assert r.min() < 0.25         # reaches in toward the centre
+
+
+def test_spirals_outer_band_is_an_annulus():
+    # The outer task: every point sits in a ring well away from the origin, so
+    # the inner and outer tasks are disjoint by radius.
+    X, _ = generate_spirals(n=600, seed=7, r_lo=0.65, r_hi=1.05, noise=0.05)
+    r = np.linalg.norm(X, axis=1)
+    assert r.min() > 0.5          # never enters the inner region (gap at ~0.6)
+    assert r.max() < 1.2
+
+
+def test_spirals_default_call_unchanged():
+    # Backward compat: explicit default band equals the bare call (the new
+    # params must not perturb the RNG draw order).
+    a, ya = generate_spirals(n=300, seed=8)
+    b, yb = generate_spirals(n=300, seed=8, r_lo=0.2, r_hi=1.0)
+    assert np.allclose(a, b)
+    assert np.array_equal(ya, yb)

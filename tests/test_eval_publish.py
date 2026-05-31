@@ -43,6 +43,14 @@ def test_highlight_table_only_includes_key_metrics():
     assert "▲" in table and "▼" in table          # verdict markers carried
 
 
+def test_continual_metrics_are_key_metrics():
+    # forgetting / consolidation must be headline metrics so a continual run's
+    # README leads with them.
+    from evals.publish import KEY_METRICS
+    assert "forgetting" in KEY_METRICS
+    assert "consolidation" in KEY_METRICS
+
+
 def test_highlight_table_includes_metric_descriptions():
     from evals.metrics import METRIC_DESCRIPTIONS
     table = publish.build_highlight_table(_synth_agg())

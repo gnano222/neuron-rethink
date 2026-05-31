@@ -102,3 +102,18 @@ def test_write_report_creates_files(tmp_path):
     # one quality figure per variant
     assert os.path.exists(os.path.join(str(tmp_path), "quality_currency.png"))
     assert os.path.exists(os.path.join(str(tmp_path), "quality_core.png"))
+
+
+def test_write_report_continual_emits_dual_task_curve(tmp_path):
+    spec = SuiteSpec(variants=("currency", "core"), seeds=2, dataset="spirals",
+                     regime="continual", steps_a=120, steps_b=120, steps_ab=80,
+                     record_every=40, layers=(2, 4, 4, 2), density=0.5,
+                     n_points=60, baseline="core")
+    results = runner.run_suite(spec, jobs=1, cache_dir=None, use_cache=False)
+    agg = aggregate.aggregate_suite(results, baseline="core",
+                                    directions=metrics.METRIC_DIRECTIONS,
+                                    n_boot=200, rng=np.random.default_rng(0))
+    report.write_report(agg, results, str(tmp_path))
+    # the money chart: per-task A vs B accuracy with phase boundaries
+    p = os.path.join(str(tmp_path), "continual_curves.png")
+    assert os.path.exists(p) and os.path.getsize(p) > 0
