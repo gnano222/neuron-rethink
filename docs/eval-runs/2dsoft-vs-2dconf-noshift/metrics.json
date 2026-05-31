@@ -1,0 +1,1076 @@
+{
+  "aggregate": {
+    "variants": [
+      "currency-2dconf",
+      "currency-2dsoft"
+    ],
+    "baseline": "currency-2dconf",
+    "directions": {
+      "final_test_acc": "higher",
+      "max_test_acc": "higher",
+      "final_train_acc": "higher",
+      "final_test_loss": "lower",
+      "steps_to_90": "lower",
+      "steps_to_95": "lower",
+      "auc_test_acc": "higher",
+      "final_acc_stability": "lower",
+      "pre_shift_test_acc": "higher",
+      "recovered_test_acc": "higher",
+      "recovery_gap": "lower",
+      "recovery_steps": "lower",
+      "a_peak": "higher",
+      "b_learned": "higher",
+      "forgetting": "lower",
+      "consolidation": "higher",
+      "relearn_gap": "lower",
+      "synapse_count_start": "neutral",
+      "synapse_count_peak": "neutral",
+      "synapse_count_end": "neutral",
+      "n_grow_events": "neutral",
+      "n_prune_events": "neutral",
+      "distinct_neurons_grown": "neutral",
+      "turnover": "lower",
+      "max_grows_into_one_neuron": "lower",
+      "mean_fan_in": "neutral",
+      "mean_fan_out": "neutral",
+      "effective_density": "neutral",
+      "p10_utility": "higher",
+      "freeloader_frac": "lower",
+      "mean_survivor_age": "higher",
+      "median_survivor_age": "higher",
+      "mean_pruned_lifespan": "neutral",
+      "oscillation_frac": "lower",
+      "max_regrow": "lower",
+      "conf_utility_corr": "higher",
+      "frozen_freeloader_frac": "lower",
+      "dead_unit_count": "lower",
+      "inert_synapse_frac": "lower",
+      "used_vs_allocated": "neutral",
+      "meter_fidelity": "higher"
+    },
+    "metrics": {
+      "final_test_acc": {
+        "currency-2dconf": {
+          "mean": 0.9946666666666666,
+          "std": 0.0038586123009300686,
+          "ci_low": 0.9913333333333334,
+          "ci_high": 0.998,
+          "n": 5
+        },
+        "currency-2dsoft": {
+          "mean": 0.994,
+          "std": 0.0032659863237109116,
+          "ci_low": 0.991,
+          "ci_high": 0.9966666666666665,
+          "n": 5,
+          "diff_mean": -0.0006666666666665932,
+          "diff_ci_low": -0.00533333333333319,
+          "diff_ci_high": 0.003666666666666485,
+          "verdict": "\u2248"
+        }
+      },
+      "max_test_acc": {
+        "currency-2dconf": {
+          "mean": 0.998,
+          "std": 0.0016329931618554354,
+          "ci_low": 0.9966666666666667,
+          "ci_high": 0.9993333333333334,
+          "n": 5
+        },
+        "currency-2dsoft": {
+          "mean": 0.9973333333333334,
+          "std": 0.0024944382578493043,
+          "ci_low": 0.9953333333333333,
+          "ci_high": 0.9993333333333332,
+          "n": 5,
+          "diff_mean": -0.0006666666666665932,
+          "diff_ci_low": -0.0033333333333332993,
+          "diff_ci_high": 0.0019999999999998908,
+          "verdict": "\u2248"
+        }
+      },
+      "final_train_acc": {
+        "currency-2dconf": {
+          "mean": 0.9976666666666667,
+          "std": 0.0030912061651652196,
+          "ci_low": 0.9946666666666666,
+          "ci_high": 0.9996666666666666,
+          "n": 5
+        },
+        "currency-2dsoft": {
+          "mean": 0.999,
+          "std": 0.0020000000000000018,
+          "ci_low": 0.9970000000000001,
+          "ci_high": 1.0,
+          "n": 5,
+          "diff_mean": 0.0013333333333332975,
+          "diff_ci_low": -0.0016666666666665941,
+          "diff_ci_high": 0.004666666666666708,
+          "verdict": "\u2248"
+        }
+      },
+      "final_test_loss": {
+        "currency-2dconf": {
+          "mean": 0.018887898274395742,
+          "std": 0.01301078730381643,
+          "ci_low": 0.007670854220895068,
+          "ci_high": 0.03010494232789641,
+          "n": 5
+        },
+        "currency-2dsoft": {
+          "mean": 0.016433371652170868,
+          "std": 0.010804780390725511,
+          "ci_low": 0.007437276967868639,
+          "ci_high": 0.025751043906455023,
+          "n": 5,
+          "diff_mean": -0.0024545266222248743,
+          "diff_ci_low": -0.016986441559593283,
+          "diff_ci_high": 0.012755571078686138,
+          "verdict": "\u2248"
+        }
+      },
+      "steps_to_90": {
+        "currency-2dconf": {
+          "mean": 3121.0,
+          "std": 411.82520563948003,
+          "ci_low": 2761.0,
+          "ci_high": 3481.0,
+          "n": 5
+        },
+        "currency-2dsoft": {
+          "mean": 3521.0,
+          "std": 652.3802572120036,
+          "ci_low": 3121.0,
+          "ci_high": 4161.0,
+          "n": 5,
+          "diff_mean": 400.0,
+          "diff_ci_low": -200.0,
+          "diff_ci_high": 1120.0,
+          "verdict": "\u2248"
+        }
+      },
+      "steps_to_95": {
+        "currency-2dconf": {
+          "mean": 4641.0,
+          "std": 941.4881836751856,
+          "ci_low": 3921.0,
+          "ci_high": 5561.0,
+          "n": 5
+        },
+        "currency-2dsoft": {
+          "mean": 4401.0,
+          "std": 1003.9920318408906,
+          "ci_low": 3561.0,
+          "ci_high": 5321.0,
+          "n": 5,
+          "diff_mean": -240.0,
+          "diff_ci_low": -1440.0,
+          "diff_ci_high": 920.0,
+          "verdict": "\u2248"
+        }
+      },
+      "auc_test_acc": {
+        "currency-2dconf": {
+          "mean": 0.9511285765081059,
+          "std": 0.005574110677228915,
+          "ci_low": 0.9457207629143193,
+          "ci_high": 0.955535251175039,
+          "n": 5
+        },
+        "currency-2dsoft": {
+          "mean": 0.9477195795415403,
+          "std": 0.007833434851257747,
+          "ci_low": 0.9405127448692733,
+          "ci_high": 0.9535896863228774,
+          "n": 5,
+          "diff_mean": -0.003408996966565603,
+          "diff_ci_low": -0.01200037348467176,
+          "diff_ci_high": 0.004801082258297784,
+          "verdict": "\u2248"
+        }
+      },
+      "final_acc_stability": {
+        "currency-2dconf": {
+          "mean": 0.005877594371006871,
+          "std": 0.008568903467313111,
+          "ci_low": 0.0009871482297394807,
+          "ci_high": 0.014484294666111236,
+          "n": 5
+        },
+        "currency-2dsoft": {
+          "mean": 0.0033458719740147845,
+          "std": 0.0024266178246348732,
+          "ci_low": 0.001353861691143977,
+          "ci_high": 0.005570367915094201,
+          "n": 5,
+          "diff_mean": -0.0025317223969920865,
+          "diff_ci_low": -0.011524432677612056,
+          "diff_ci_high": 0.0034840134508249735,
+          "verdict": "\u2248"
+        }
+      },
+      "synapse_count_start": {
+        "currency-2dconf": {
+          "mean": 104.0,
+          "std": 1.4142135623730951,
+          "ci_low": 102.8,
+          "ci_high": 105.2,
+          "n": 5
+        },
+        "currency-2dsoft": {
+          "mean": 104.0,
+          "std": 1.4142135623730951,
+          "ci_low": 102.8,
+          "ci_high": 105.2,
+          "n": 5,
+          "diff_mean": 0.0,
+          "diff_ci_low": -1.7999999999999972,
+          "diff_ci_high": 1.7999999999999972,
+          "verdict": "\u2248"
+        }
+      },
+      "synapse_count_peak": {
+        "currency-2dconf": {
+          "mean": 143.8,
+          "std": 8.423775875461075,
+          "ci_low": 137.0,
+          "ci_high": 151.6,
+          "n": 5
+        },
+        "currency-2dsoft": {
+          "mean": 139.4,
+          "std": 6.621178142898739,
+          "ci_low": 133.0,
+          "ci_high": 144.0,
+          "n": 5,
+          "diff_mean": -4.400000000000006,
+          "diff_ci_low": -14.199999999999989,
+          "diff_ci_high": 4.400000000000006,
+          "verdict": "\u2248"
+        }
+      },
+      "synapse_count_end": {
+        "currency-2dconf": {
+          "mean": 132.6,
+          "std": 8.73155198117723,
+          "ci_low": 125.0,
+          "ci_high": 140.2,
+          "n": 5
+        },
+        "currency-2dsoft": {
+          "mean": 128.2,
+          "std": 5.381449618829484,
+          "ci_low": 123.6,
+          "ci_high": 132.8,
+          "n": 5,
+          "diff_mean": -4.400000000000006,
+          "diff_ci_low": -13.199999999999989,
+          "diff_ci_high": 4.6000000000000085,
+          "verdict": "\u2248"
+        }
+      },
+      "n_grow_events": {
+        "currency-2dconf": {
+          "mean": 221.0,
+          "std": 21.18490028298458,
+          "ci_low": 203.6,
+          "ci_high": 241.8,
+          "n": 5
+        },
+        "currency-2dsoft": {
+          "mean": 209.6,
+          "std": 10.61319932913728,
+          "ci_low": 200.0,
+          "ci_high": 217.6,
+          "n": 5,
+          "diff_mean": -11.400000000000006,
+          "diff_ci_low": -33.80000000000001,
+          "diff_ci_high": 7.799999999999983,
+          "verdict": "\u2248"
+        }
+      },
+      "n_prune_events": {
+        "currency-2dconf": {
+          "mean": 190.4,
+          "std": 15.944905142395799,
+          "ci_low": 177.0,
+          "ci_high": 204.4,
+          "n": 5
+        },
+        "currency-2dsoft": {
+          "mean": 183.4,
+          "std": 12.690153663372245,
+          "ci_low": 171.4,
+          "ci_high": 193.8,
+          "n": 5,
+          "diff_mean": -7.0,
+          "diff_ci_low": -25.599999999999994,
+          "diff_ci_high": 10.399999999999977,
+          "verdict": "\u2248"
+        }
+      },
+      "distinct_neurons_grown": {
+        "currency-2dconf": {
+          "mean": 16.6,
+          "std": 0.8,
+          "ci_low": 16.0,
+          "ci_high": 17.4,
+          "n": 5
+        },
+        "currency-2dsoft": {
+          "mean": 15.4,
+          "std": 2.0591260281974,
+          "ci_low": 13.6,
+          "ci_high": 17.2,
+          "n": 5,
+          "diff_mean": -1.200000000000001,
+          "diff_ci_low": -3.1999999999999993,
+          "diff_ci_high": 0.6000000000000014,
+          "verdict": "\u2248"
+        }
+      },
+      "turnover": {
+        "currency-2dconf": {
+          "mean": 3.1401714671303997,
+          "std": 0.19686129354249376,
+          "ci_low": 2.9791691510196663,
+          "ci_high": 3.329456312424553,
+          "n": 5
+        },
+        "currency-2dsoft": {
+          "mean": 3.0634191391885017,
+          "std": 0.207080798192984,
+          "ci_low": 2.8646989864716965,
+          "ci_high": 3.2351336881670356,
+          "n": 5,
+          "diff_mean": -0.07675232794189801,
+          "diff_ci_low": -0.33514061376237536,
+          "diff_ci_high": 0.16489889311097783,
+          "verdict": "\u2248"
+        }
+      },
+      "max_grows_into_one_neuron": {
+        "currency-2dconf": {
+          "mean": 34.4,
+          "std": 8.777243302996675,
+          "ci_low": 27.6,
+          "ci_high": 43.0,
+          "n": 5
+        },
+        "currency-2dsoft": {
+          "mean": 36.0,
+          "std": 5.513619500836088,
+          "ci_low": 31.2,
+          "ci_high": 40.8,
+          "n": 5,
+          "diff_mean": 1.6000000000000014,
+          "diff_ci_low": -7.800000000000001,
+          "diff_ci_high": 10.2,
+          "verdict": "\u2248"
+        }
+      },
+      "mean_fan_in": {
+        "currency-2dconf": {
+          "mean": 4.42,
+          "std": 0.29105173270590784,
+          "ci_low": 4.166666666666667,
+          "ci_high": 4.673333333333334,
+          "n": 5
+        },
+        "currency-2dsoft": {
+          "mean": 4.273333333333333,
+          "std": 0.17938165396098277,
+          "ci_low": 4.12,
+          "ci_high": 4.426666666666667,
+          "n": 5,
+          "diff_mean": -0.1466666666666665,
+          "diff_ci_low": -0.4466666666666663,
+          "diff_ci_high": 0.15333333333333335,
+          "verdict": "\u2248"
+        }
+      },
+      "mean_fan_out": {
+        "currency-2dconf": {
+          "mean": 4.42,
+          "std": 0.29105173270590784,
+          "ci_low": 4.166666666666667,
+          "ci_high": 4.673333333333334,
+          "n": 5
+        },
+        "currency-2dsoft": {
+          "mean": 4.273333333333333,
+          "std": 0.17938165396098277,
+          "ci_low": 4.12,
+          "ci_high": 4.426666666666667,
+          "n": 5,
+          "diff_mean": -0.1466666666666665,
+          "diff_ci_low": -0.4466666666666663,
+          "diff_ci_high": 0.15333333333333332,
+          "verdict": "\u2248"
+        }
+      },
+      "effective_density": {
+        "currency-2dconf": {
+          "mean": 0.6138888888888888,
+          "std": 0.0404238517647094,
+          "ci_low": 0.5787037037037036,
+          "ci_high": 0.649074074074074,
+          "n": 5
+        },
+        "currency-2dsoft": {
+          "mean": 0.5935185185185186,
+          "std": 0.024914118605692058,
+          "ci_low": 0.5722222222222222,
+          "ci_high": 0.6148148148148149,
+          "n": 5,
+          "diff_mean": -0.02037037037037026,
+          "diff_ci_low": -0.061111111111111116,
+          "diff_ci_high": 0.02129629629629637,
+          "verdict": "\u2248"
+        }
+      },
+      "p10_utility": {
+        "currency-2dconf": {
+          "mean": 0.6383975409141744,
+          "std": 0.13463229260979168,
+          "ci_low": 0.5070085699617263,
+          "ci_high": 0.7389169453919759,
+          "n": 5
+        },
+        "currency-2dsoft": {
+          "mean": 0.6564234863556396,
+          "std": 0.07478362968406378,
+          "ci_low": 0.5832724417075947,
+          "ci_high": 0.7101731011694967,
+          "n": 5,
+          "diff_mean": 0.018025945441465185,
+          "diff_ci_low": -0.11051378648835655,
+          "diff_ci_high": 0.16049684803321787,
+          "verdict": "\u2248"
+        }
+      },
+      "freeloader_frac": {
+        "currency-2dconf": {
+          "mean": 0.04090054226111314,
+          "std": 0.04027959554188346,
+          "ci_low": 0.011435425829668134,
+          "ci_high": 0.07878697042366108,
+          "n": 5
+        },
+        "currency-2dsoft": {
+          "mean": 0.03791824631078771,
+          "std": 0.03354945734260388,
+          "ci_low": 0.01914696767136607,
+          "ci_high": 0.07186044505778852,
+          "n": 5,
+          "diff_mean": -0.0029822959503254323,
+          "diff_ci_low": -0.04865241336332738,
+          "diff_ci_high": 0.042545417036738864,
+          "verdict": "\u2248"
+        }
+      },
+      "mean_survivor_age": {
+        "currency-2dconf": {
+          "mean": 25747.854477588397,
+          "std": 787.4758642080998,
+          "ci_low": 25053.30161924119,
+          "ci_high": 26367.136709168182,
+          "n": 5
+        },
+        "currency-2dsoft": {
+          "mean": 26340.5058670384,
+          "std": 426.74948921220715,
+          "ci_low": 25987.96268953279,
+          "ci_high": 26692.320638368983,
+          "n": 5,
+          "diff_mean": 592.6513894500022,
+          "diff_ci_low": -144.63206214848552,
+          "diff_ci_high": 1403.0537599231611,
+          "verdict": "\u2248"
+        }
+      },
+      "median_survivor_age": {
+        "currency-2dconf": {
+          "mean": 30000.0,
+          "std": 0.0,
+          "ci_low": 30000.0,
+          "ci_high": 30000.0,
+          "n": 5
+        },
+        "currency-2dsoft": {
+          "mean": 29999.8,
+          "std": 0.39999999999999997,
+          "ci_low": 29999.4,
+          "ci_high": 30000.0,
+          "n": 5,
+          "diff_mean": -0.2000000000007276,
+          "diff_ci_low": -0.5999999999985448,
+          "diff_ci_high": 0.0,
+          "verdict": "\u2248"
+        }
+      },
+      "mean_pruned_lifespan": {
+        "currency-2dconf": {
+          "mean": 2735.580409802015,
+          "std": 626.8071151795828,
+          "ci_low": 2216.4302780071566,
+          "ci_high": 3308.8629494845545,
+          "n": 5
+        },
+        "currency-2dsoft": {
+          "mean": 2591.0990988551093,
+          "std": 532.861604054079,
+          "ci_low": 2136.5005327153667,
+          "ci_high": 3083.228485069917,
+          "n": 5,
+          "diff_mean": -144.48131094690552,
+          "diff_ci_low": -877.3823529414118,
+          "diff_ci_high": 572.8996993123721,
+          "verdict": "\u2248"
+        }
+      },
+      "oscillation_frac": {
+        "currency-2dconf": {
+          "mean": 0.3822270748072496,
+          "std": 0.05512784621754572,
+          "ci_low": 0.328768963038626,
+          "ci_high": 0.42254055192753315,
+          "n": 5
+        },
+        "currency-2dsoft": {
+          "mean": 0.3313121779691416,
+          "std": 0.038156612505281885,
+          "ci_low": 0.29644695804494575,
+          "ci_high": 0.3614457831325301,
+          "n": 5,
+          "diff_mean": -0.050914896838108015,
+          "diff_ci_low": -0.10698153770203496,
+          "diff_ci_high": 0.00987956158290384,
+          "verdict": "\u2248"
+        }
+      },
+      "max_regrow": {
+        "currency-2dconf": {
+          "mean": 10.6,
+          "std": 0.8,
+          "ci_low": 10.0,
+          "ci_high": 11.4,
+          "n": 5
+        },
+        "currency-2dsoft": {
+          "mean": 12.6,
+          "std": 1.9595917942265424,
+          "ci_low": 11.0,
+          "ci_high": 14.4,
+          "n": 5,
+          "diff_mean": 2.0,
+          "diff_ci_low": 0.3999999999999986,
+          "diff_ci_high": 4.0,
+          "verdict": "worse"
+        }
+      },
+      "conf_utility_corr": {
+        "currency-2dconf": {
+          "mean": 0.23491539356080376,
+          "std": 0.14334766981484007,
+          "ci_low": 0.11269173824213441,
+          "ci_high": 0.3689333225337505,
+          "n": 5
+        },
+        "currency-2dsoft": {
+          "mean": 0.295862935401618,
+          "std": 0.0894360767970485,
+          "ci_low": 0.22371395976454886,
+          "ci_high": 0.3827664680091936,
+          "n": 5,
+          "diff_mean": 0.060947541840814246,
+          "diff_ci_low": -0.08373037359970387,
+          "diff_ci_high": 0.2046322014731464,
+          "verdict": "\u2248"
+        }
+      },
+      "frozen_freeloader_frac": {
+        "currency-2dconf": {
+          "mean": 0.0,
+          "std": 0.0,
+          "ci_low": 0.0,
+          "ci_high": 0.0,
+          "n": 5
+        },
+        "currency-2dsoft": {
+          "mean": 0.0,
+          "std": 0.0,
+          "ci_low": 0.0,
+          "ci_high": 0.0,
+          "n": 5,
+          "diff_mean": 0.0,
+          "diff_ci_low": 0.0,
+          "diff_ci_high": 0.0,
+          "verdict": "\u2248"
+        }
+      },
+      "dead_unit_count": {
+        "currency-2dconf": {
+          "mean": 2.2,
+          "std": 1.32664991614216,
+          "ci_low": 1.0,
+          "ci_high": 3.2,
+          "n": 5
+        },
+        "currency-2dsoft": {
+          "mean": 2.8,
+          "std": 2.2271057451320084,
+          "ci_low": 1.2,
+          "ci_high": 5.0,
+          "n": 5,
+          "diff_mean": 0.5999999999999996,
+          "diff_ci_low": -1.4000000000000001,
+          "diff_ci_high": 3.0,
+          "verdict": "\u2248"
+        }
+      },
+      "inert_synapse_frac": {
+        "currency-2dconf": {
+          "mean": 0.0,
+          "std": 0.0,
+          "ci_low": 0.0,
+          "ci_high": 0.0,
+          "n": 5
+        },
+        "currency-2dsoft": {
+          "mean": 0.0,
+          "std": 0.0,
+          "ci_low": 0.0,
+          "ci_high": 0.0,
+          "n": 5,
+          "diff_mean": 0.0,
+          "diff_ci_low": 0.0,
+          "diff_ci_high": 0.0,
+          "verdict": "\u2248"
+        }
+      },
+      "used_vs_allocated": {
+        "currency-2dconf": {
+          "mean": 1.300378473752133,
+          "std": 0.08908647533110421,
+          "ci_low": 1.2211995430312261,
+          "ci_high": 1.3746087949743004,
+          "n": 5
+        },
+        "currency-2dsoft": {
+          "mean": 1.2569833504635004,
+          "std": 0.05298729441008638,
+          "ci_low": 1.2117072442120986,
+          "ci_high": 1.3022594567149022,
+          "n": 5,
+          "diff_mean": -0.04339512328863249,
+          "diff_ci_low": -0.13448570917804337,
+          "diff_ci_high": 0.04942362427649844,
+          "verdict": "\u2248"
+        }
+      },
+      "meter_fidelity": {
+        "currency-2dconf": {
+          "mean": 0.7603186222364243,
+          "std": 0.13545998572268803,
+          "ci_low": 0.6348257764427211,
+          "ci_high": 0.8647426655029011,
+          "n": 5
+        },
+        "currency-2dsoft": {
+          "mean": 0.7803141250948945,
+          "std": 0.17268109275104357,
+          "ci_low": 0.6057169952802217,
+          "ci_high": 0.8796591222347192,
+          "n": 5,
+          "diff_mean": 0.019995502858470182,
+          "diff_ci_low": -0.18399927902379998,
+          "diff_ci_high": 0.19475163171998738,
+          "verdict": "\u2248"
+        }
+      }
+    }
+  },
+  "runs": [
+    {
+      "variant": "currency-2dconf",
+      "seed": 0,
+      "final": {
+        "final_test_acc": 0.9933333333333333,
+        "max_test_acc": 0.9966666666666667,
+        "final_train_acc": 0.9983333333333333,
+        "final_test_loss": 0.024676129456449328,
+        "steps_to_90": 3801.0,
+        "steps_to_95": 4601.0,
+        "auc_test_acc": 0.9535709523650789,
+        "final_acc_stability": 0.003144660377352207,
+        "synapse_count_start": 104.0,
+        "synapse_count_peak": 147.0,
+        "synapse_count_end": 144.0,
+        "n_grow_events": 258,
+        "n_prune_events": 216,
+        "distinct_neurons_grown": 16,
+        "turnover": 3.4621970686402554,
+        "max_grows_into_one_neuron": 27,
+        "mean_fan_in": 4.8,
+        "mean_fan_out": 4.8,
+        "effective_density": 0.6666666666666666,
+        "p10_utility": 0.6392820175838286,
+        "freeloader_frac": 0.04861111111111111,
+        "mean_survivor_age": 25612.020833333332,
+        "median_survivor_age": 30000.0,
+        "mean_pruned_lifespan": 1933.3333333333333,
+        "oscillation_frac": 0.37962962962962965,
+        "max_regrow": 11,
+        "conf_utility_corr": 0.2119002840253551,
+        "frozen_freeloader_frac": 0.0,
+        "dead_unit_count": 2,
+        "inert_synapse_frac": 0.0,
+        "used_vs_allocated": 1.411764705882353,
+        "meter_fidelity": 0.8110394668431534
+      }
+    },
+    {
+      "variant": "currency-2dconf",
+      "seed": 1,
+      "final": {
+        "final_test_acc": 0.99,
+        "max_test_acc": 0.9966666666666667,
+        "final_train_acc": 0.9916666666666667,
+        "final_test_loss": 0.02855508747464452,
+        "steps_to_90": 2801.0,
+        "steps_to_95": 6401.0,
+        "auc_test_acc": 0.9414540206895785,
+        "final_acc_stability": 0.022925604317734653,
+        "synapse_count_start": 102.0,
+        "synapse_count_peak": 139.0,
+        "synapse_count_end": 135.0,
+        "n_grow_events": 210,
+        "n_prune_events": 175,
+        "distinct_neurons_grown": 16,
+        "turnover": 3.062476953063267,
+        "max_grows_into_one_neuron": 38,
+        "mean_fan_in": 4.5,
+        "mean_fan_out": 4.5,
+        "effective_density": 0.625,
+        "p10_utility": 0.8002181884055047,
+        "freeloader_frac": 0.0,
+        "mean_survivor_age": 24473.585185185184,
+        "median_survivor_age": 30000.0,
+        "mean_pruned_lifespan": 2660.5714285714284,
+        "oscillation_frac": 0.44680851063829785,
+        "max_regrow": 10,
+        "conf_utility_corr": 0.31372398538928264,
+        "frozen_freeloader_frac": 0.0,
+        "dead_unit_count": 4,
+        "inert_synapse_frac": 0.0,
+        "used_vs_allocated": 1.35,
+        "meter_fidelity": 0.8297765448472094
+      }
+    },
+    {
+      "variant": "currency-2dconf",
+      "seed": 2,
+      "final": {
+        "final_test_acc": 1.0,
+        "max_test_acc": 1.0,
+        "final_train_acc": 1.0,
+        "final_test_loss": 0.0026342171060357916,
+        "steps_to_90": 2601.0,
+        "steps_to_95": 4201.0,
+        "auc_test_acc": 0.9552373968021155,
+        "final_acc_stability": 0.0005000000000000115,
+        "synapse_count_start": 106.0,
+        "synapse_count_peak": 142.0,
+        "synapse_count_end": 123.0,
+        "n_grow_events": 218,
+        "n_prune_events": 199,
+        "distinct_neurons_grown": 17,
+        "turnover": 3.2594989129309453,
+        "max_grows_into_one_neuron": 27,
+        "mean_fan_in": 4.1,
+        "mean_fan_out": 4.1,
+        "effective_density": 0.5694444444444444,
+        "p10_utility": 0.6469650808716827,
+        "freeloader_frac": 0.024390243902439025,
+        "mean_survivor_age": 26233.731707317074,
+        "median_survivor_age": 30000.0,
+        "mean_pruned_lifespan": 3076.381909547739,
+        "oscillation_frac": 0.4157303370786517,
+        "max_regrow": 10,
+        "conf_utility_corr": 0.027851314584701983,
+        "frozen_freeloader_frac": 0.0,
+        "dead_unit_count": 2,
+        "inert_synapse_frac": 0.0,
+        "used_vs_allocated": 1.1826923076923077,
+        "meter_fidelity": 0.9265603854884668
+      }
+    },
+    {
+      "variant": "currency-2dconf",
+      "seed": 3,
+      "final": {
+        "final_test_acc": 0.9983333333333333,
+        "max_test_acc": 1.0,
+        "final_train_acc": 1.0,
+        "final_test_loss": 0.004204853717977211,
+        "steps_to_90": 3201.0,
+        "steps_to_95": 4401.0,
+        "auc_test_acc": 0.9568152549529428,
+        "final_acc_stability": 0.0011180339887498958,
+        "synapse_count_start": 105.0,
+        "synapse_count_peak": 158.0,
+        "synapse_count_end": 139.0,
+        "n_grow_events": 225,
+        "n_prune_events": 189,
+        "distinct_neurons_grown": 16,
+        "turnover": 2.915492957746479,
+        "max_grows_into_one_neuron": 30,
+        "mean_fan_in": 4.633333333333334,
+        "mean_fan_out": 4.633333333333334,
+        "effective_density": 0.6435185185185185,
+        "p10_utility": 0.39511920725747335,
+        "freeloader_frac": 0.11510791366906475,
+        "mean_survivor_age": 25579.410071942446,
+        "median_survivor_age": 30000.0,
+        "mean_pruned_lifespan": 3730.15873015873,
+        "oscillation_frac": 0.38613861386138615,
+        "max_regrow": 10,
+        "conf_utility_corr": 0.16618076206728333,
+        "frozen_freeloader_frac": 0.0,
+        "dead_unit_count": 0,
+        "inert_synapse_frac": 0.0,
+        "used_vs_allocated": 1.3495145631067962,
+        "meter_fidelity": 0.5285212597962707
+      }
+    },
+    {
+      "variant": "currency-2dconf",
+      "seed": 4,
+      "final": {
+        "final_test_acc": 0.9916666666666667,
+        "max_test_acc": 0.9966666666666667,
+        "final_train_acc": 0.9983333333333333,
+        "final_test_loss": 0.034369203616871846,
+        "steps_to_90": 3201.0,
+        "steps_to_95": 3601.0,
+        "auc_test_acc": 0.9485652577308131,
+        "final_acc_stability": 0.0016996731711975885,
+        "synapse_count_start": 103.0,
+        "synapse_count_peak": 133.0,
+        "synapse_count_end": 122.0,
+        "n_grow_events": 194,
+        "n_prune_events": 173,
+        "distinct_neurons_grown": 18,
+        "turnover": 3.001191443271053,
+        "max_grows_into_one_neuron": 50,
+        "mean_fan_in": 4.066666666666666,
+        "mean_fan_out": 4.066666666666666,
+        "effective_density": 0.5648148148148148,
+        "p10_utility": 0.7104032104523824,
+        "freeloader_frac": 0.01639344262295082,
+        "mean_survivor_age": 26840.524590163935,
+        "median_survivor_age": 30000.0,
+        "mean_pruned_lifespan": 2277.456647398844,
+        "oscillation_frac": 0.2828282828282828,
+        "max_regrow": 12,
+        "conf_utility_corr": 0.4549206217373955,
+        "frozen_freeloader_frac": 0.0,
+        "dead_unit_count": 3,
+        "inert_synapse_frac": 0.0,
+        "used_vs_allocated": 1.2079207920792079,
+        "meter_fidelity": 0.7056954542070214
+      }
+    },
+    {
+      "variant": "currency-2dsoft",
+      "seed": 0,
+      "final": {
+        "final_test_acc": 0.995,
+        "max_test_acc": 0.9966666666666667,
+        "final_train_acc": 1.0,
+        "final_test_loss": 0.017536328130122205,
+        "steps_to_90": 4801.0,
+        "steps_to_95": 5001.0,
+        "auc_test_acc": 0.9506986343989243,
+        "final_acc_stability": 0.004475240527365854,
+        "synapse_count_start": 104.0,
+        "synapse_count_peak": 144.0,
+        "synapse_count_end": 136.0,
+        "n_grow_events": 216,
+        "n_prune_events": 182,
+        "distinct_neurons_grown": 15,
+        "turnover": 2.9716178797468356,
+        "max_grows_into_one_neuron": 30,
+        "mean_fan_in": 4.533333333333333,
+        "mean_fan_out": 4.533333333333333,
+        "effective_density": 0.6296296296296297,
+        "p10_utility": 0.6779343432790257,
+        "freeloader_frac": 0.022058823529411766,
+        "mean_survivor_age": 26821.617647058825,
+        "median_survivor_age": 30000.0,
+        "mean_pruned_lifespan": 2031.868131868132,
+        "oscillation_frac": 0.32989690721649484,
+        "max_regrow": 12,
+        "conf_utility_corr": 0.342501796680714,
+        "frozen_freeloader_frac": 0.0,
+        "dead_unit_count": 2,
+        "inert_synapse_frac": 0.0,
+        "used_vs_allocated": 1.3333333333333333,
+        "meter_fidelity": 0.8380988086927977
+      }
+    },
+    {
+      "variant": "currency-2dsoft",
+      "seed": 1,
+      "final": {
+        "final_test_acc": 0.9883333333333333,
+        "max_test_acc": 0.9933333333333333,
+        "final_train_acc": 0.995,
+        "final_test_loss": 0.03360174450389902,
+        "steps_to_90": 3001.0,
+        "steps_to_95": 6001.0,
+        "auc_test_acc": 0.9335703412335966,
+        "final_acc_stability": 0.002891558595482914,
+        "synapse_count_start": 102.0,
+        "synapse_count_peak": 127.0,
+        "synapse_count_end": 121.0,
+        "n_grow_events": 208,
+        "n_prune_events": 187,
+        "distinct_neurons_grown": 12,
+        "turnover": 3.343329596412556,
+        "max_grows_into_one_neuron": 40,
+        "mean_fan_in": 4.033333333333333,
+        "mean_fan_out": 4.033333333333333,
+        "effective_density": 0.5601851851851852,
+        "p10_utility": 0.6954094092007973,
+        "freeloader_frac": 0.01652892561983471,
+        "mean_survivor_age": 26173.04958677686,
+        "median_survivor_age": 29999.0,
+        "mean_pruned_lifespan": 2014.9732620320856,
+        "oscillation_frac": 0.3614457831325301,
+        "max_regrow": 13,
+        "conf_utility_corr": 0.26340677442065685,
+        "frozen_freeloader_frac": 0.0,
+        "dead_unit_count": 7,
+        "inert_synapse_frac": 0.0,
+        "used_vs_allocated": 1.21,
+        "meter_fidelity": 0.892453451703962
+      }
+    },
+    {
+      "variant": "currency-2dsoft",
+      "seed": 2,
+      "final": {
+        "final_test_acc": 0.9983333333333333,
+        "max_test_acc": 1.0,
+        "final_train_acc": 1.0,
+        "final_test_loss": 0.003078799606255045,
+        "steps_to_90": 3401.0,
+        "steps_to_95": 4201.0,
+        "auc_test_acc": 0.9524762214296033,
+        "final_acc_stability": 0.0008333333333333526,
+        "synapse_count_start": 106.0,
+        "synapse_count_peak": 146.0,
+        "synapse_count_end": 128.0,
+        "n_grow_events": 224,
+        "n_prune_events": 200,
+        "distinct_neurons_grown": 18,
+        "turnover": 3.1740617718506763,
+        "max_grows_into_one_neuron": 30,
+        "mean_fan_in": 4.266666666666667,
+        "mean_fan_out": 4.266666666666667,
+        "effective_density": 0.5925925925925926,
+        "p10_utility": 0.6621155548231122,
+        "freeloader_frac": 0.0234375,
+        "mean_survivor_age": 26774.5703125,
+        "median_survivor_age": 30000.0,
+        "mean_pruned_lifespan": 2907.0,
+        "oscillation_frac": 0.3229166666666667,
+        "max_regrow": 10,
+        "conf_utility_corr": 0.2338567622482279,
+        "frozen_freeloader_frac": 0.0,
+        "dead_unit_count": 1,
+        "inert_synapse_frac": 0.0,
+        "used_vs_allocated": 1.2307692307692308,
+        "meter_fidelity": 0.8545901098795784
+      }
+    },
+    {
+      "variant": "currency-2dsoft",
+      "seed": 3,
+      "final": {
+        "final_test_acc": 0.995,
+        "max_test_acc": 1.0,
+        "final_train_acc": 1.0,
+        "final_test_loss": 0.006999499785163527,
+        "steps_to_90": 3201.0,
+        "steps_to_95": 3201.0,
+        "auc_test_acc": 0.9561486771781281,
+        "final_acc_stability": 0.0011055415967851322,
+        "synapse_count_start": 105.0,
+        "synapse_count_peak": 140.0,
+        "synapse_count_end": 124.0,
+        "n_grow_events": 208,
+        "n_prune_events": 187,
+        "distinct_neurons_grown": 17,
+        "turnover": 3.1021480210121184,
+        "max_grows_into_one_neuron": 36,
+        "mean_fan_in": 4.133333333333334,
+        "mean_fan_out": 4.133333333333334,
+        "effective_density": 0.5740740740740741,
+        "p10_utility": 0.514339485352717,
+        "freeloader_frac": 0.10483870967741936,
+        "mean_survivor_age": 25664.064516129034,
+        "median_survivor_age": 30000.0,
+        "mean_pruned_lifespan": 3412.8342245989306,
+        "oscillation_frac": 0.3763440860215054,
+        "max_regrow": 12,
+        "conf_utility_corr": 0.19372474995281586,
+        "frozen_freeloader_frac": 0.0,
+        "dead_unit_count": 1,
+        "inert_synapse_frac": 0.0,
+        "used_vs_allocated": 1.203883495145631,
+        "meter_fidelity": 0.4370289562550879
+      }
+    },
+    {
+      "variant": "currency-2dsoft",
+      "seed": 4,
+      "final": {
+        "final_test_acc": 0.9933333333333333,
+        "max_test_acc": 0.9966666666666667,
+        "final_train_acc": 1.0,
+        "final_test_loss": 0.020950486235414532,
+        "steps_to_90": 3201.0,
+        "steps_to_95": 3601.0,
+        "auc_test_acc": 0.9457040234674489,
+        "final_acc_stability": 0.007423685817106672,
+        "synapse_count_start": 103.0,
+        "synapse_count_peak": 140.0,
+        "synapse_count_end": 132.0,
+        "n_grow_events": 192,
+        "n_prune_events": 161,
+        "distinct_neurons_grown": 15,
+        "turnover": 2.7259384269203233,
+        "max_grows_into_one_neuron": 44,
+        "mean_fan_in": 4.4,
+        "mean_fan_out": 4.4,
+        "effective_density": 0.6111111111111112,
+        "p10_utility": 0.7323186391225459,
+        "freeloader_frac": 0.022727272727272728,
+        "mean_survivor_age": 26269.227272727272,
+        "median_survivor_age": 30000.0,
+        "mean_pruned_lifespan": 2588.8198757763976,
+        "oscillation_frac": 0.26595744680851063,
+        "max_regrow": 16,
+        "conf_utility_corr": 0.4458245937056754,
+        "frozen_freeloader_frac": 0.0,
+        "dead_unit_count": 3,
+        "inert_synapse_frac": 0.0,
+        "used_vs_allocated": 1.306930693069307,
+        "meter_fidelity": 0.8793992989430469
+      }
+    }
+  ]
+}
