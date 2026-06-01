@@ -1,0 +1,43 @@
+metric                               currency  fully-connected
+--------------------------------------------------------------
+final_test_acc ↑                        0.895           0.899≈
+max_test_acc ↑                          0.907           0.919≈
+final_train_acc ↑                       0.899           0.899≈
+final_test_loss ↓                       0.213           0.209≈
+steps_to_90 ↓                               ∞               ∞?
+steps_to_95 ↓                               ∞               ∞?
+auc_test_acc ↑                          0.854           0.859≈
+final_acc_stability ↓                   0.010           0.013≈
+a_peak ↑                                0.999           0.999≈
+b_learned ↑                             0.981           0.983≈
+forgetting ↓                            0.293           0.249▲
+consolidation ↑                         0.862           0.868≈
+relearn_gap ↓                           0.125           0.112≈
+a_steps_to_80 ↓                           400         266.667≈
+a_steps_to_90 ↓                          1360         533.333▲
+b_steps_to_80 ↓                           200             200≈
+b_steps_to_90 ↓                       413.333         306.667≈
+synapse_count_start                   103.533             216≈
+synapse_count_peak                    108.867             216≈
+synapse_count_end                     101.467             216≈
+n_grow_events                          79.333               0≈
+n_prune_events                         79.400               0≈
+distinct_neurons_grown                 13.133               0≈
+turnover ↓                              1.640               0▲
+max_grows_into_one_neuron ↓            13.733               0▲
+mean_fan_in                             3.382           7.200≈
+mean_fan_out                            3.382           7.200≈
+effective_density                       0.470               1≈
+p10_utility ↑                           0.720           0.225▼
+freeloader_frac ↓                       0.011           0.239▼
+mean_survivor_age ↑                     33566           40000▲
+median_survivor_age ↑                   40000           40000≈
+mean_pruned_lifespan                     6222               0≈
+oscillation_frac ↓                      0.201               0▲
+max_regrow ↓                            4.267               0▲
+conf_utility_corr ↑                     0.225               —?
+frozen_freeloader_frac ↓                    0               0≈
+dead_unit_count ↓                           4           1.267▲
+inert_synapse_frac ↓                        0               0≈
+used_vs_allocated                       0.999               1≈
+meter_fidelity ↑                        0.962               —?
