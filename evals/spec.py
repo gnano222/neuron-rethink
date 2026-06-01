@@ -25,11 +25,21 @@ VARIANTS: dict[str, Callable[[], Config]] = {
     ),
     # the current default architecture: gradient-as-currency. Confidence is the
     # calibrated 2D (importance x settledness) rule with the softened sigmoid
-    # cliff — inherited from Config defaults. This is the promoted BASELINE.
+    # cliff, and growth uses the selective hiring bar (grow_bar_frac=3.0) — both
+    # inherited from Config defaults. This is the promoted BASELINE.
     "currency": lambda: Config(
         eta_base=0.02, grad_currency=True, enable_confidence=True,
         enable_prune=True, enable_grow=True,
         gamma_dec=0.001, t_struct=200,
+    ),
+    # currency with the PRIOR eager growth bar (grow_bar_frac=1.5), kept for
+    # comparison now that the selective 3.0 bar is the default. The eager bar grew
+    # ~2x as many wires and drove the grow<->prune oscillation (docs/eval-runs/
+    # b1-growbar-sweep). Mirror of currency-tugofwar for the confidence rule.
+    "currency-eager": lambda: Config(
+        eta_base=0.02, grad_currency=True, enable_confidence=True,
+        enable_prune=True, enable_grow=True,
+        gamma_dec=0.001, t_struct=200, grow_bar_frac=1.5,
     ),
     # currency with the prior tug-of-war confidence rule (calm+consistent earn/
     # lose), kept for comparison now that 2D+softened-cliff is the default.
@@ -62,10 +72,19 @@ VARIANTS: dict[str, Callable[[], Config]] = {
         gamma_dec=0.001, t_struct=200, t_grace=1000, grow_bar_frac=2.0,
     ),
 
-    # === anti-oscillation experiments (all branch ONLY from `currency`) ======
+    # === anti-oscillation experiments ========================================
+    # CONCLUDED: the B1 grow-bar sweep promoted grow_bar_frac=3.0 to the Config
+    # default (so `currency` above now IS the selective bar). The C1 (grace) and
+    # A2 (ghost) variants are kept pinned to grow_bar_frac=1.5 — the PRIOR eager
+    # default they were measured against — so each stays a faithful single-knob
+    # sweep and reproduces its published folder (docs/eval-runs/{c1-grace-sweep,
+    # a2-ghost-meter}). The confidence comparators above instead track the current
+    # baseline. See docs/eval-runs/{b1-growbar-sweep,gb3-ghost-combo}.
+    #
     # B1 — raise the hiring bar (Schmitt-trigger gap): only robustly-wanted wires
-    # are born, so once born they clear the prune floor comfortably. Sweeps
-    # grow_bar_frac alone (t_grace stays at the baseline 200).
+    # are born, so once born they clear the prune floor comfortably. gb3 is now
+    # config-identical to `currency` (kept as an explicit alias for the sweep);
+    # gb2 is the intermediate point.
     "currency-gb2": lambda: Config(
         eta_base=0.02, grad_currency=True, enable_confidence=True,
         enable_prune=True, enable_grow=True,
@@ -76,36 +95,40 @@ VARIANTS: dict[str, Callable[[], Config]] = {
         enable_prune=True, enable_grow=True,
         gamma_dec=0.001, t_struct=200, grow_bar_frac=3.0,
     ),
-    # C1 — longer probation: give a newborn wire more time to convert potential
-    # into visible weight before it is prunable. Sweeps t_grace alone
-    # (grow_bar_frac stays at the baseline 1.5).
+    # C1 — longer probation (the LOSS: cut max_regrow only by postponing pruning,
+    # leaving a denser net with more freeloaders; oscillation_frac unmoved).
+    # Pinned to the prior eager bar (grow_bar_frac=1.5) so t_grace is isolated.
     "currency-grace500": lambda: Config(
         eta_base=0.02, grad_currency=True, enable_confidence=True,
         enable_prune=True, enable_grow=True,
-        gamma_dec=0.001, t_struct=200, t_grace=500,
+        gamma_dec=0.001, t_struct=200, t_grace=500, grow_bar_frac=1.5,
     ),
     "currency-grace1k": lambda: Config(
         eta_base=0.02, grad_currency=True, enable_confidence=True,
         enable_prune=True, enable_grow=True,
-        gamma_dec=0.001, t_struct=200, t_grace=1000,
+        gamma_dec=0.001, t_struct=200, t_grace=1000, grow_bar_frac=1.5,
     ),
     "currency-grace2k": lambda: Config(
         eta_base=0.02, grad_currency=True, enable_confidence=True,
         enable_prune=True, enable_grow=True,
-        gamma_dec=0.001, t_struct=200, t_grace=2000,
+        gamma_dec=0.001, t_struct=200, t_grace=2000, grow_bar_frac=1.5,
     ),
     # A2 — ghost-gradient meter: grow on a persistent EMA of the virtual gradient
     # so a just-pruned wire must re-earn growth over several cycles (soft
-    # refractory) instead of being re-requested on the next noisy batch spike.
+    # refractory) instead of being re-requested on the next noisy batch spike. Cut
+    # max_regrow strongly but not oscillation_frac; partly redundant once the bar
+    # is high (gb3-ghost-combo). Pinned to the prior eager bar to isolate the meter.
     "currency-ghost": lambda: Config(
         eta_base=0.02, grad_currency=True, enable_confidence=True,
         enable_prune=True, enable_grow=True,
         gamma_dec=0.001, t_struct=200, ghost_meter=True, beta_ghost=0.8,
+        grow_bar_frac=1.5,
     ),
     "currency-ghost-strong": lambda: Config(
         eta_base=0.02, grad_currency=True, enable_confidence=True,
         enable_prune=True, enable_grow=True,
         gamma_dec=0.001, t_struct=200, ghost_meter=True, beta_ghost=0.9,
+        grow_bar_frac=1.5,
     ),
     # B1 + A2 stacked: pickier hiring (grow_bar_frac=3.0, shrinks how MANY wires
     # thrash) + sustained-signal growth (ghost meter, cuts how HARD the worst one

@@ -60,7 +60,13 @@ class Config:
     m_floor_frac: float = 0.05    # "no real feedback" cutoff for kappa, * Mbar
     lam_prune: float = 1.0        # gradient weight in prune utility
     prune_u_floor: float = 0.5    # prune wires with normalised utility below this
-    grow_bar_frac: float = 1.5    # grow ghost wire if virt-grad > this * live ref
+    # Grow a ghost wire only if its virtual gradient exceeds this * the typical
+    # live wire's gradient. Promoted 1.5 -> 3.0: a *selective* hiring bar (grow
+    # only wires the loss wants much more than a typical live wire) is what fixes
+    # the grow<->prune oscillation at its source — it shrinks how many wires
+    # thrash and ends ~20% sparser, at no accuracy cost (docs/eval-runs/
+    # b1-growbar-sweep). 1.5 was the prior eager default (variant currency-eager).
+    grow_bar_frac: float = 3.0    # grow ghost wire if virt-grad > this * live ref
     virt_batch: int = 32          # batch size for scoring ghost wires
     # A2 anti-oscillation: grow on a persistent EMA of the virtual gradient
     # (a "ghost meter") instead of one noisy batch. A just-pruned wire has no

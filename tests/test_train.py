@@ -65,6 +65,12 @@ def test_default_config_ghost_meter_off():
     assert cfg.beta_ghost == 0.8
 
 
+def test_default_config_uses_selective_grow_bar():
+    # B1 promoted: the selective hiring bar (grow_bar_frac=3.0) is the default,
+    # not the prior eager 1.5 — it fixes the grow<->prune oscillation at source.
+    assert Config().grow_bar_frac == 3.0
+
+
 def test_prune_warmup_delays_pruning():
     # No synapse should be pruned before prune_warmup, even with prune enabled.
     net = build_graph([2, 8, 8, 6, 2], density=0.5, seed=0)

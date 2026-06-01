@@ -28,6 +28,17 @@ def test_currency_variant_uses_gradient_currency():
     # confidence with the softened (sigmoid) settled cliff
     assert cfg.confidence_mode == "twod"
     assert cfg.settled_mode == "sigmoid"
+    # ...and the selective hiring bar (B1 promotion), not the prior eager 1.5
+    assert cfg.grow_bar_frac == 3.0
+
+
+def test_currency_eager_variant_preserves_the_prior_growth_bar():
+    # the prior eager growth default (grow_bar_frac=1.5) is kept as an explicit
+    # variant for comparison even though 3.0 is now the baseline
+    cfg = make_config("currency-eager")
+    assert cfg.grad_currency is True
+    assert cfg.grow_bar_frac == 1.5
+    assert cfg.ghost_meter is False
 
 
 def test_currency_tugofwar_variant_preserves_old_rule():

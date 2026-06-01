@@ -14,8 +14,8 @@ The project has two architectures, both live and both tested:
    `|w|/w̄` and **demand** `M/M̄` — and read it through three lenses:
    **confidence** (freeze a wire that is *important and settled*), **pruning**
    (delete a wire weak in *both* load and demand), **growth** (add the missing
-   wire the loss most wishes existed — RigL-style). See
-   [sprout/currency.py](sprout/currency.py).
+   wire the loss most wishes existed, when it clears a *selective* bar —
+   RigL-style). See [sprout/currency.py](sprout/currency.py).
 
 2. **Legacy v1 — eligibility / three-factor** — the original spec
    ([docs/v1_implementation.MD](docs/v1_implementation.MD)): a Hebbian
@@ -63,14 +63,24 @@ accuracy cost** and **zero frozen freeloaders**. Measure calibration on a
 instantaneous post-swap demand, which understates the correlation. See
 [docs/eval-runs/2dsoft-vs-2dconf-noshift-15seeds/](docs/eval-runs/2dsoft-vs-2dconf-noshift-15seeds/).
 
-**The one open issue (honest): grow↔prune oscillation.** Removing v1's
-`grow_budget` cap exposed thrash — a wire is grown (high virtual gradient),
+**Grow↔prune oscillation is now largely tamed by a selective grow bar.** Removing
+v1's `grow_budget` cap exposed thrash — a wire grown (high virtual gradient),
 pruned before it matures, then re-requested because the same virtual gradient is
-still there. The softened cliff nudges it the right way (point estimate down) but
-not significantly. The likely fix is still **grow/prune hysteresis**: lock a
-just-grown wire from pruning for a window (and a just-pruned pair from regrowth),
-or give the virtual gradient a short memory so it stops re-requesting the wire it
-just cut.
+still there. The fix turned out to be *growth selectivity*, not prune patience:
+raising the grow bar to `grow_bar_frac=3.0` (the new default — grow only a wire
+the loss wants ≫ a typical live wire) cut the oscillating *population*
+(`oscillation_frac` 0.37 → 0.28 ▲), the worst re-grow (`max_regrow` 11 → 6.5 ▲)
+and overall churn, and ended ~20% **sparser** (125 → 99 wires) at no accuracy cost
+with calibration held. A 15-seed sweep isolates it:
+[docs/eval-runs/b1-growbar-sweep/](docs/eval-runs/b1-growbar-sweep/). Two honest
+residuals: (1) ~28% of grown wires are still tried twice — the bar lowers thrash
+*incidence* but doesn't zero it; (2) damping growth nudges post-shift
+`recovered_test_acc` down a little (not significant at 15 seeds, but consistent —
+[oscillation-shift-guardrail](docs/eval-runs/oscillation-shift-guardrail/)). An
+optional second lever, the **ghost-gradient meter** (`ghost_meter=True` — grow on
+a *sustained* EMA so a just-cut wire must re-earn its place), cuts the worst
+re-grow further (to ~4) but proved partly redundant once the bar is high
+([gb3-ghost-combo](docs/eval-runs/gb3-ghost-combo/)).
 
 ## Quick start
 
@@ -98,7 +108,7 @@ Artifacts land in `output/<preset>_<dataset>/` (`animation.gif`, frames,
 |---|---|---|
 | `core` | plain sparse backprop | all mechanisms off |
 | `currency-conf` | currency: + confidence | edges auto-coloured by gradient **demand** |
-| **`currency`** *(default)* | currency: confidence + prune + grow | the current architecture (2D calibrated confidence, softened cliff) |
+| **`currency`** *(default)* | currency: confidence + prune + grow | the current architecture (2D calibrated confidence + softened cliff + selective grow bar) |
 | `legacy-step1…step5` | v1 build-order, one mechanism at a time | the most legible way to watch each part |
 | `legacy-step6` | + homeostasis | opt-in; unstable with ReLU (see deviations) |
 | `legacy-full` | full v1 eligibility system | the tuned baseline in the table above |
@@ -145,8 +155,12 @@ lenses on it (one source of truth, [sprout/currency.py](sprout/currency.py)'s
 - **Pruning** (`prune_currency`): utility `|w|/w̄ + λ·M/M̄`; cut only wires weak in
   **both** senses. Protects small-but-wanted newborns ⇒ no warmup needed.
 - **Growth** (`batch_edge_scores` + `grow_currency`): score missing wires by
-  their *virtual* gradient `δ_j·a_i`; grow the top few, born at weight 0. Dead
-  neurons (`δ_j=0`) score ~0 and are never grown.
+  their *virtual* gradient `δ_j·a_i`; grow only those wanted **far more than a
+  typical live wire** (`grow_bar_frac=3.0` — a *selective* hiring bar that keeps
+  rewiring calm and sparse and tames the grow↔prune oscillation), born at weight
+  0. Dead neurons (`δ_j=0`) score ~0 and are never grown. Optional:
+  `ghost_meter=True` grows on a *sustained* EMA of the virtual gradient so a
+  just-cut wire must re-earn its place (`update_ghost_meter`).
 
 The full design, including the honest trade-off discussion, is the basis for
 [sprout/currency.py](sprout/currency.py)'s module docstring.
@@ -197,11 +211,14 @@ weight, or a bias nudge for chronically-dead units.
 
 ## Next steps
 
-Confidence **calibration is resolved** (the 2D + softened-cliff redesign above —
-the default). Remaining:
+Confidence **calibration is resolved** (the 2D + softened-cliff redesign) and
+grow↔prune **oscillation is largely tamed** by the selective grow bar (the
+default; see "Honest comparison" above). Remaining:
 
-1. **Grow/prune hysteresis** — kill the oscillation (the one open plasticity
-   issue; the softened cliff helps but not significantly).
+1. **Oscillation residuals** — the selective bar lowers thrash *incidence* but
+   ~28% of grown wires are still tried twice, and damping growth nudges post-shift
+   recovery down slightly. The opt-in ghost meter (A2) cuts intensity further; a
+   cleaner *recovery-preserving* lever is still open.
 2. **Dead-unit revival** — small non-zero birth weight or bias nudge.
 3. **Stable homeostasis** — a per-neuron trained gain instead of multiplicative
    weight rescaling.
