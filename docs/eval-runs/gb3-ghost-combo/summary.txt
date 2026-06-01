@@ -1,0 +1,34 @@
+metric                                  currency        currency-gb3  currency-gb3-ghost      currency-ghost
+------------------------------------------------------------------------------------------------------------
+final_test_acc ↑                           0.996              0.994≈              0.996≈              0.994≈
+max_test_acc ↑                             0.998              0.998≈              0.999≈              0.999≈
+final_train_acc ↑                          0.998              0.996≈              0.998≈              0.997≈
+final_test_loss ↓                          0.015              0.019≈              0.017≈              0.022≈
+steps_to_90 ↓                               3174               3374≈               3601≈               3228≈
+steps_to_95 ↓                               3921               4201≈               4668≈               4121≈
+auc_test_acc ↑                             0.953              0.949≈              0.949≈              0.952≈
+final_acc_stability ↓                      0.010              0.007≈              0.007≈              0.007≈
+synapse_count_start                      103.533            103.533≈            102.733≈            103.467≈
+synapse_count_peak                       136.667            110.533≈            114.467≈            134.467≈
+synapse_count_end                        125.467             99.067≈            105.333≈            124.933≈
+n_grow_events                            212.933             98.067≈            108.667≈            176.733≈
+n_prune_events                               189            100.533≈            104.867≈            153.333≈
+distinct_neurons_grown                    14.200             12.333≈             12.933≈             14.333≈
+turnover ↓                                 3.215              1.963▲              2.062▲              2.697▲
+max_grows_into_one_neuron ↓               37.600             18.800▲             16.667▲             25.133▲
+mean_fan_in                                4.182              3.302≈              3.511≈              4.164≈
+mean_fan_out                               4.182              3.302≈              3.511≈              4.164≈
+effective_density                          0.581              0.459≈              0.488≈              0.578≈
+p10_utility ↑                              0.671              0.704≈              0.691≈              0.673≈
+freeloader_frac ↓                          0.032              0.020≈              0.027≈              0.041≈
+mean_survivor_age ↑                        26217              26893▲              26195≈              26055≈
+median_survivor_age ↑                      29986              30000≈              30000≈              30000≈
+mean_pruned_lifespan                        2580               3961≈               3425≈               2882≈
+oscillation_frac ↓                         0.368              0.277▲              0.309▲              0.376≈
+max_regrow ↓                                  11              6.533▲              4.200▲              6.200▲
+conf_utility_corr ↑                        0.314              0.322≈              0.328≈              0.347≈
+frozen_freeloader_frac ↓                       0                  0≈                  0≈                  0≈
+dead_unit_count ↓                          3.600              4.067≈              3.867≈              3.600≈
+inert_synapse_frac ↓                           0                  0≈                  0≈                  0≈
+used_vs_allocated                          1.236              0.976≈              1.037≈              1.230≈
+meter_fidelity ↑                           0.657              0.711≈              0.686≈              0.686≈

@@ -1,0 +1,38 @@
+metric                                  currency        currency-gb3  currency-gb3-ghost      currency-ghost
+------------------------------------------------------------------------------------------------------------
+final_test_acc ↑                           0.972              0.955≈              0.946≈              0.949≈
+max_test_acc ↑                             0.998              0.999≈              0.999≈              0.999≈
+final_train_acc ↑                          0.973              0.958≈              0.949≈              0.950≈
+final_test_loss ↓                          0.088              0.134≈              0.216≈              0.165≈
+steps_to_90 ↓                               3174               3374≈               3601≈               3228≈
+steps_to_95 ↓                               3921               4201≈               4668≈               4121≈
+auc_test_acc ↑                             0.945              0.936≈              0.935≈              0.940≈
+final_acc_stability ↓                      0.025              0.021≈              0.036≈              0.037≈
+pre_shift_test_acc ↑                       0.996              0.994≈              0.996≈              0.994≈
+recovered_test_acc ↑                       0.972              0.955≈              0.946≈              0.949≈
+recovery_gap ↓                             0.023              0.039≈              0.049≈              0.045≈
+recovery_steps ↓                               ∞                  ∞?                  ∞?                  ∞?
+synapse_count_start                      103.533            103.533≈            102.733≈            103.467≈
+synapse_count_peak                       137.133            110.533≈            114.667≈            135.400≈
+synapse_count_end                        120.400             95.933≈            102.267≈            118.800≈
+n_grow_events                            241.733            113.733≈            125.800≈            204.400≈
+n_prune_events                           222.867            119.333≈            125.067≈            187.133≈
+distinct_neurons_grown                        15             13.133≈             13.533≈             15.067≈
+turnover ↓                                 3.733              2.322▲              2.429▲              3.205▲
+max_grows_into_one_neuron ↓               39.067             20.333▲             19.533▲             26.733▲
+mean_fan_in                                4.013              3.198≈              3.409≈              3.960≈
+mean_fan_out                               4.013              3.198≈              3.409≈              3.960≈
+effective_density                          0.557              0.444≈              0.473≈              0.550≈
+p10_utility ↑                              0.679              0.674≈              0.682≈              0.660≈
+freeloader_frac ↓                          0.016              0.021≈              0.022≈              0.019≈
+mean_survivor_age ↑                        29741              31009▲              29995≈              29641≈
+median_survivor_age ↑                      35893              36000▲              36000▲              35940≈
+mean_pruned_lifespan                        4207               5728≈               5448≈               4984≈
+oscillation_frac ↓                         0.381              0.275▲              0.324▲              0.385≈
+max_regrow ↓                              11.333              6.933▲              4.800▲              6.467▲
+conf_utility_corr ↑                        0.125              0.066≈              0.123≈              0.141≈
+frozen_freeloader_frac ↓                       0                  0≈                  0≈                  0≈
+dead_unit_count ↓                          5.400              6.133≈              5.467≈              5.267≈
+inert_synapse_frac ↓                           0                  0≈                  0≈                  0≈
+used_vs_allocated                          1.186              0.945≈              1.007≈              1.169≈
+meter_fidelity ↑                           0.871              0.932≈              0.888≈              0.844≈
