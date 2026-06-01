@@ -246,6 +246,30 @@ def recovery_metrics(rec_step, acc_series, shift_start_index: int) -> dict:
             "recovery_gap": pre - recovered, "recovery_steps": rec_steps}
 
 
+def phase_steps_to_threshold(series, phase_label, track_key,
+                             threshold: float) -> float:
+    """Steps *within a phase* to first reach ``threshold`` on a task's held-out
+    accuracy track, measured from that phase's first recorded step.
+
+    This is the per-task learning *speed*: how quickly a model reaches a given
+    accuracy bar once a task's phase begins. ``inf`` if the bar is never cleared
+    in the phase (or the phase never occurs).
+    """
+    rec = series.get("rec_step", [])
+    phase = series.get("phase", [])
+    track = series.get(track_key, [])
+    n = min(len(rec), len(phase), len(track))
+    t0 = None
+    for i in range(n):
+        if phase[i] != phase_label:
+            continue
+        if t0 is None:
+            t0 = rec[i]                 # this phase's first recorded step
+        if track[i] >= threshold:
+            return float(rec[i] - t0)
+    return math.inf
+
+
 def continual_metrics(series) -> dict:
     """Forgetting / consolidation from a continual run's dual-task series.
 
@@ -258,6 +282,8 @@ def continual_metrics(series) -> dict:
         forgetting    = a_peak - A accuracy at the end of phase B   (lower=better)
         consolidation = min(A, B) at the end of phase A+B           (can it hold both)
         relearn_gap   = a_peak - A accuracy at the end of phase A+B
+        {a,b}_steps_to_{80,90} = steps into each task's phase to reach that bar
+                                 (per-task learning speed; lower=faster)
     """
     nan = float("nan")
     phase = series.get("phase", [])
@@ -280,13 +306,21 @@ def continual_metrics(series) -> dict:
     consolidation = (min(cons_a, cons_b)
                      if not (math.isnan(cons_a) or math.isnan(cons_b)) else nan)
 
-    return {
+    out = {
         "a_peak": a_peak,
         "b_learned": b_learned,
         "forgetting": diff(a_peak, a_after_b),
         "consolidation": consolidation,
         "relearn_gap": diff(a_peak, cons_a),
     }
+    # per-task learning speed: steps into each phase to reach the bar
+    for thr in (0.80, 0.90):
+        tag = f"{int(round(thr * 100))}"
+        out[f"a_steps_to_{tag}"] = phase_steps_to_threshold(
+            series, "A", "test_accuracy_A", thr)
+        out[f"b_steps_to_{tag}"] = phase_steps_to_threshold(
+            series, "B", "test_accuracy_B", thr)
+    return out
 
 
 # ---------------------------------------------------------------------------
@@ -377,6 +411,10 @@ METRIC_DIRECTIONS: dict[str, str] = {
     "forgetting": "lower",
     "consolidation": "higher",
     "relearn_gap": "lower",
+    "a_steps_to_80": "lower",
+    "a_steps_to_90": "lower",
+    "b_steps_to_80": "lower",
+    "b_steps_to_90": "lower",
     # C. synapse structure
     "synapse_count_start": "neutral",
     "synapse_count_peak": "neutral",
@@ -431,6 +469,10 @@ METRIC_DESCRIPTIONS: dict[str, str] = {
     "forgetting": "task A accuracy lost while learning B (lower=better)",
     "consolidation": "min(A, B) accuracy after interleaved A+B (holds both?)",
     "relearn_gap": "task A accuracy not restored by the A+B phase",
+    "a_steps_to_80": "steps into phase A to reach 80% on task A (first-task speed)",
+    "a_steps_to_90": "steps into phase A to reach 90% on task A (first-task speed)",
+    "b_steps_to_80": "steps into phase B to reach 80% on task B (second-task speed)",
+    "b_steps_to_90": "steps into phase B to reach 90% on task B (second-task speed)",
     # C. synapse structure
     "synapse_count_start": "live synapses at initialization",
     "synapse_count_peak": "max live synapses during the run",
@@ -469,7 +511,8 @@ METRIC_FAMILIES: dict[str, tuple[str, ...]] = {
         "pre_shift_test_acc", "recovered_test_acc", "recovery_gap",
         "recovery_steps"),
     "Continual learning": (
-        "a_peak", "b_learned", "forgetting", "consolidation", "relearn_gap"),
+        "a_peak", "b_learned", "forgetting", "consolidation", "relearn_gap",
+        "a_steps_to_80", "a_steps_to_90", "b_steps_to_80", "b_steps_to_90"),
     "Synapse structure": (
         "synapse_count_start", "synapse_count_peak", "synapse_count_end",
         "n_grow_events", "n_prune_events", "distinct_neurons_grown", "turnover",

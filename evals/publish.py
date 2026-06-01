@@ -22,9 +22,13 @@ from evals.metrics import METRIC_DESCRIPTIONS
 # silently skips any that a given run didn't produce.
 KEY_METRICS = (
     "final_test_acc",
-    "forgetting", "consolidation", "b_learned", "a_peak",   # continual regime
+    "steps_to_90", "steps_to_95", "auc_test_acc",           # training speed (single)
+    "a_peak", "a_steps_to_90",                              # continual: task A level+speed
+    "b_learned", "b_steps_to_90",                           # continual: task B level+speed
+    "forgetting", "consolidation",                          # continual: retention
     "pre_shift_test_acc", "recovered_test_acc",             # label-swap regime
-    "auc_test_acc", "max_grows_into_one_neuron", "oscillation_frac",
+    "synapse_count_end", "effective_density",               # sparsity (cost/benefit)
+    "max_grows_into_one_neuron", "oscillation_frac",
     "freeloader_frac", "conf_utility_corr", "dead_unit_count",
 )
 

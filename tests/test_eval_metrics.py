@@ -291,6 +291,51 @@ def test_continual_metrics_forgetting_and_consolidation():
     assert m["relearn_gap"] == pytest.approx(0.95 - 0.92)  # A not fully restored
 
 
+def test_phase_steps_to_threshold_measures_from_phase_start():
+    series = {"phase": ["A", "A", "B", "B"], "rec_step": [0, 100, 200, 300],
+              "test_accuracy_B": [0.4, 0.4, 0.7, 0.95]}
+    # phase B begins at step 200; B first reaches 0.90 at step 300 => 100 steps in
+    assert metrics.phase_steps_to_threshold(
+        series, "B", "test_accuracy_B", 0.90) == pytest.approx(100.0)
+    # threshold never cleared within the phase => inf
+    assert math.isinf(metrics.phase_steps_to_threshold(
+        series, "B", "test_accuracy_B", 0.99))
+    # a phase that never occurs => inf
+    assert math.isinf(metrics.phase_steps_to_threshold(
+        series, "C", "test_accuracy_B", 0.5))
+
+
+def test_continual_metrics_report_per_task_learning_speed():
+    # how quickly each task is learned, measured from the start of its phase.
+    series = {
+        "phase":           ["A",  "A",  "A",  "B",  "B",  "B"],
+        "rec_step":        [0,    100,  200,  300,  400,  500],
+        "test_accuracy_A": [0.50, 0.70, 0.92, 0.92, 0.60, 0.55],
+        "test_accuracy_B": [0.50, 0.50, 0.50, 0.55, 0.85, 0.95],
+    }
+    m = metrics.continual_metrics(series)
+    # task A (first task): >=0.80 and >=0.90 both first hit at step 200, phase A
+    # began at step 0
+    assert m["a_steps_to_80"] == pytest.approx(200.0)
+    assert m["a_steps_to_90"] == pytest.approx(200.0)
+    # task B (the second task): phase B began at step 300; >=0.80 at 400 (=> 100),
+    # >=0.90 at 500 (=> 200)
+    assert m["b_steps_to_80"] == pytest.approx(100.0)
+    assert m["b_steps_to_90"] == pytest.approx(200.0)
+
+
+def test_continual_steps_to_threshold_inf_when_bar_or_phase_missing():
+    series = {
+        "phase":           ["A",  "A"],
+        "rec_step":        [0,    100],
+        "test_accuracy_A": [0.50, 0.60],   # task A never reaches 0.80
+        "test_accuracy_B": [0.50, 0.50],
+    }
+    m = metrics.continual_metrics(series)
+    assert math.isinf(m["a_steps_to_80"])   # bar never cleared in phase A
+    assert math.isinf(m["b_steps_to_80"])   # phase B never occurs
+
+
 def test_continual_metrics_nan_when_phase_missing():
     # No A+B phase recorded -> consolidation/relearn are nan, not a crash.
     series = {

@@ -89,6 +89,14 @@ class Config:
     # --- initial firing rate seeding ---
     init_firing_rate_at_target: bool = True  # avoids spurious early "underfiring"
 
+    # --- eval-harness build hint (NOT read by Trainer) ---
+    # Optional per-variant override of the *initial* graph density used by the
+    # eval runner's build_graph. None => use the suite's --density. This lets a
+    # single suite mix connectivity regimes — e.g. a fully-connected control
+    # (init_density=1.0, all plasticity off) against the sparse, self-rewiring
+    # currency baseline. The Trainer ignores it; only the runner consults it.
+    init_density: float | None = None
+
 
 def _softmax_predict_probs(net, X):
     return np.array([net.forward(x) for x in X])

@@ -49,6 +49,14 @@ def _gen(dataset, n, seed, turns, noise):
     return generate_spirals(n=n, seed=seed, turns=turns, noise=noise)
 
 
+def _build_density(cfg, spec) -> float:
+    """Initial graph density for this variant: its own ``init_density`` override
+    if set, else the suite-wide ``spec.density``. Lets a fully-connected control
+    (init_density=1.0) and the sparse baseline share one suite."""
+    override = getattr(cfg, "init_density", None)
+    return spec.density if override is None else override
+
+
 def _snapshot(series, net, tr, X_tr, y_tr, X_te, y_te):
     """Append one timepoint to the series (cheap metrics only)."""
     series["rec_step"].append(tr.step_idx)
@@ -109,7 +117,7 @@ def run_one_continual(variant_name, seed, spec):
     X_te_both = np.vstack([Xa_te, Xb_te])
     y_te_both = np.concatenate([ya_te, yb_te])
 
-    net = build_graph(list(spec.layers), density=spec.density, seed=seed)
+    net = build_graph(list(spec.layers), density=_build_density(cfg, spec), seed=seed)
     init_weights(net, seed=seed)
     tr = Trainer(cfg, net, Xa_tr, ya_tr, seed=seed)
     initial_edges = set(net.synapses)
@@ -156,7 +164,7 @@ def run_one(variant_name, seed, spec):
     X_te, y_te = _gen(spec.dataset, spec.n_points, seed + spec.test_seed_offset,
                       spec.turns, spec.noise)
 
-    net = build_graph(list(spec.layers), density=spec.density, seed=seed)
+    net = build_graph(list(spec.layers), density=_build_density(cfg, spec), seed=seed)
     init_weights(net, seed=seed)
     tr = Trainer(cfg, net, X_tr, y_tr, seed=seed)
     initial_edges = set(net.synapses)

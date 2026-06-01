@@ -71,6 +71,14 @@ def test_default_config_uses_selective_grow_bar():
     assert Config().grow_bar_frac == 3.0
 
 
+def test_default_config_has_no_init_density_override():
+    # init_density is an eval-harness build hint, not a training knob: None means
+    # "use the suite's --density". The Trainer never reads it; it only tells the
+    # eval runner how densely to wire the *initial* graph, letting a variant pin
+    # its own connectivity (e.g. a fully-connected control).
+    assert Config().init_density is None
+
+
 def test_prune_warmup_delays_pruning():
     # No synapse should be pruned before prune_warmup, even with prune enabled.
     net = build_graph([2, 8, 8, 6, 2], density=0.5, seed=0)

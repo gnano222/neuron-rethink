@@ -143,6 +143,12 @@ VARIANTS: dict[str, Callable[[], Config]] = {
     ),
     # plain sparse SGD, all plasticity off (a floor reference)
     "core": lambda: Config(eta_base=0.02),
+    # the "fully connected" comparison arm: a dense, all-to-all MLP
+    # (init_density=1.0) trained with plain single-sample SGD — every plasticity
+    # mechanism off, so the topology is fixed. The brute-force control against the
+    # sparse, self-rewiring `currency` baseline: does self-organised sparsity
+    # learn as fast, and adapt to a second task as quickly, on far fewer synapses?
+    "fully-connected": lambda: Config(eta_base=0.02, init_density=1.0),
 }
 
 

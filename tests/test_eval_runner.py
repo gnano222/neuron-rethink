@@ -49,6 +49,21 @@ def test_run_one_returns_wellformed_result():
         assert key in res["dist"], key
 
 
+def test_runner_honors_per_variant_init_density():
+    # the fully-connected arm pins init_density=1.0, so its initial graph is
+    # dense (all-to-all) regardless of the suite --density. For (2,4,4,2) the
+    # full edge count is 2*4 + 4*4 + 4*2 = 32.
+    spec = tiny_spec(variants=("fully-connected", "currency"),
+                     baseline="currency", layers=(2, 4, 4, 2), density=0.5,
+                     steps=4, record_every=2)
+    fc = runner.run_one("fully-connected", 0, spec)
+    assert fc["final"]["synapse_count_start"] == 32
+    assert fc["final"]["effective_density"] == 1.0
+    # the sparse arm at the SAME suite density starts well below fully connected
+    cur = runner.run_one("currency", 0, spec)
+    assert cur["final"]["synapse_count_start"] < 32
+
+
 def test_run_one_is_deterministic():
     spec = tiny_spec()
     a = runner.run_one("currency", 0, spec)

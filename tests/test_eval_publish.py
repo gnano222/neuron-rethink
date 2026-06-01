@@ -51,6 +51,16 @@ def test_continual_metrics_are_key_metrics():
     assert "consolidation" in KEY_METRICS
 
 
+def test_per_task_learning_speed_are_key_metrics():
+    # the speed-comparison experiment headlines how quickly each model learns the
+    # first task and the second task, plus the single-task steps-to-threshold and
+    # the resulting sparsity — all must be headline metrics.
+    from evals.publish import KEY_METRICS
+    for k in ("steps_to_90", "a_steps_to_90", "b_steps_to_90",
+              "synapse_count_end", "effective_density"):
+        assert k in KEY_METRICS
+
+
 def test_highlight_table_includes_metric_descriptions():
     from evals.metrics import METRIC_DESCRIPTIONS
     table = publish.build_highlight_table(_synth_agg())

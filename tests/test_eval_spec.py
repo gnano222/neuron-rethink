@@ -120,6 +120,22 @@ def test_core_variant_is_plain_sgd():
     assert cfg.enable_grow is False
 
 
+def test_fully_connected_variant_is_a_dense_static_mlp():
+    # the "fully connected" comparison arm: a dense, all-to-all graph
+    # (init_density=1.0) trained with plain single-sample SGD. Every plasticity
+    # mechanism is OFF, so the topology never changes — the brute-force control
+    # against the sparse, self-rewiring `currency` baseline.
+    cfg = make_config("fully-connected")
+    assert cfg.init_density == 1.0
+    assert cfg.eta_base == 0.02
+    assert cfg.grad_currency is False
+    assert cfg.enable_eligibility is False
+    assert cfg.enable_confidence is False
+    assert cfg.enable_prune is False
+    assert cfg.enable_grow is False
+    assert cfg.enable_homeostasis is False
+
+
 def test_make_config_returns_fresh_instances():
     a = make_config("currency")
     b = make_config("currency")
