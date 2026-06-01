@@ -91,6 +91,16 @@ def test_a2_ghost_variants_enable_the_ghost_meter():
     assert strong.beta_ghost == 0.9
 
 
+def test_gb3_ghost_combo_stacks_both_winning_levers():
+    # the combined variant turns on BOTH the B1 (higher bar) and A2 (ghost meter)
+    # levers at once — nothing else changes from the currency baseline
+    cfg = make_config("currency-gb3-ghost")
+    assert cfg.grow_bar_frac == 3.0       # B1
+    assert cfg.ghost_meter is True        # A2
+    assert cfg.beta_ghost == 0.8
+    assert cfg.t_grace == 200             # baseline (C1 not stacked)
+
+
 def test_core_variant_is_plain_sgd():
     cfg = make_config("core")
     assert cfg.grad_currency is False

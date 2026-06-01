@@ -107,6 +107,17 @@ VARIANTS: dict[str, Callable[[], Config]] = {
         enable_prune=True, enable_grow=True,
         gamma_dec=0.001, t_struct=200, ghost_meter=True, beta_ghost=0.9,
     ),
+    # B1 + A2 stacked: pickier hiring (grow_bar_frac=3.0, shrinks how MANY wires
+    # thrash) + sustained-signal growth (ghost meter, cuts how HARD the worst one
+    # thrashes). The two levers fixed different halves of the oscillation in the
+    # sweeps; this tests whether the wins stack (and whether the small post-shift
+    # recovery dip compounds — hence the paired shift guardrail run).
+    "currency-gb3-ghost": lambda: Config(
+        eta_base=0.02, grad_currency=True, enable_confidence=True,
+        enable_prune=True, enable_grow=True,
+        gamma_dec=0.001, t_struct=200,
+        grow_bar_frac=3.0, ghost_meter=True, beta_ghost=0.8,
+    ),
     # plain sparse SGD, all plasticity off (a floor reference)
     "core": lambda: Config(eta_base=0.02),
 }
