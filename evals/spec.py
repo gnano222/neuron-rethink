@@ -143,6 +143,14 @@ VARIANTS: dict[str, Callable[[], Config]] = {
     ),
     # plain sparse SGD, all plasticity off (a floor reference)
     "core": lambda: Config(eta_base=0.02),
+    # the synapse-count-matched control for the fully-connected comparison: a
+    # STATIC sparse net (all plasticity off) that inherits the suite --density, so
+    # it starts from the SAME random graph as the currency baseline (same seed)
+    # and never rewires. Plain single-sample SGD. Isolates "does adaptive rewiring
+    # earn its keep at an equal wire budget?" (vs `currency`) and "was the dense
+    # net's speed just extra wires?" (vs `fully-connected`). Config-identical to
+    # `core`; named for its role in the matched-synapse-count experiment.
+    "static-matched": lambda: Config(eta_base=0.02),
     # the "fully connected" comparison arm: a dense, all-to-all MLP
     # (init_density=1.0) trained with plain single-sample SGD — every plasticity
     # mechanism off, so the topology is fixed. The brute-force control against the

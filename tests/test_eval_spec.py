@@ -120,6 +120,22 @@ def test_core_variant_is_plain_sgd():
     assert cfg.enable_grow is False
 
 
+def test_static_matched_variant_is_plain_sgd_at_baseline_budget():
+    # the synapse-count-matched control: a STATIC sparse net (all plasticity off)
+    # that inherits the suite --density, so it starts from the same random graph
+    # as the currency baseline (same seed) and never rewires. Isolates the effect
+    # of adaptive rewiring at an equal wire budget. Config-identical to `core`.
+    cfg = make_config("static-matched")
+    assert cfg.init_density is None          # uses the suite density, matching baseline
+    assert cfg.eta_base == 0.02
+    assert cfg.grad_currency is False
+    assert cfg.enable_eligibility is False
+    assert cfg.enable_confidence is False
+    assert cfg.enable_prune is False
+    assert cfg.enable_grow is False
+    assert cfg.enable_homeostasis is False
+
+
 def test_fully_connected_variant_is_a_dense_static_mlp():
     # the "fully connected" comparison arm: a dense, all-to-all graph
     # (init_density=1.0) trained with plain single-sample SGD. Every plasticity
