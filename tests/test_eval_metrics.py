@@ -66,6 +66,30 @@ def test_dead_unit_count_zero_when_all_fire():
     assert metrics.dead_unit_count(net, X) == 0
 
 
+def test_neuron_activation_stats_average_and_dead_fraction():
+    # "average neuron value": mean hidden-neuron ReLU output over the data,
+    # averaged per-neuron-then-over-neurons (equal weight per neuron).
+    # hidden 2 has bias -1e6 (never fires); hidden 3 has bias 0.5. Each hidden
+    # neuron has incoming 0->h (w=0.5) and 1->h (w=0.5).
+    net = _net_2_2_2()
+    net.neurons[2].bias = -1e6
+    net.neurons[3].bias = 0.5
+    X = [np.array([1.0, 1.0]), np.array([0.0, 0.0])]
+    # neuron 2: ReLU(<0) = 0 on both samples -> per-neuron mean 0.0
+    # neuron 3: ReLU(0.5+1.0)=1.5 ; ReLU(0.5+0.0)=0.5 -> per-neuron mean 1.0
+    # mean over the two hidden neurons = (0.0 + 1.0) / 2 = 0.5
+    s = metrics.neuron_activation_stats(net, X)
+    assert s["mean_neuron_activation"] == pytest.approx(0.5)
+    assert s["dead_unit_frac"] == pytest.approx(0.5)   # neuron 2 of {2,3} dead
+
+
+def test_neuron_activation_stats_no_hidden_neurons():
+    net = Network([2, 2])               # no hidden layer
+    s = metrics.neuron_activation_stats(net, [np.array([0.3, 0.7])])
+    assert s["mean_neuron_activation"] == 0.0
+    assert s["dead_unit_frac"] == 0.0
+
+
 # -- utility -----------------------------------------------------------------
 
 def test_synapse_utilities_combine_weight_and_demand():

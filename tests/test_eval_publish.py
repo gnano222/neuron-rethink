@@ -61,6 +61,14 @@ def test_per_task_learning_speed_are_key_metrics():
         assert k in KEY_METRICS
 
 
+def test_neuron_value_metrics_are_key_metrics():
+    # the width-sweep experiment headlines "average neuron value": the mean hidden
+    # activation and the dead-unit fraction (scale-comparable across sizes).
+    from evals.publish import KEY_METRICS
+    for k in ("mean_neuron_activation", "dead_unit_frac"):
+        assert k in KEY_METRICS
+
+
 def test_highlight_table_includes_metric_descriptions():
     from evals.metrics import METRIC_DESCRIPTIONS
     table = publish.build_highlight_table(_synth_agg())

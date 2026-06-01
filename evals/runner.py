@@ -57,6 +57,14 @@ def _build_density(cfg, spec) -> float:
     return spec.density if override is None else override
 
 
+def _build_layers(cfg, spec) -> list:
+    """Initial layer sizes for this variant: its own ``init_layers`` override if
+    set, else the suite-wide ``spec.layers``. Lets a width-sweep arm pin its own
+    neuron counts while the rest of the suite shares one topology."""
+    override = getattr(cfg, "init_layers", None)
+    return list(spec.layers) if override is None else list(override)
+
+
 def _snapshot(series, net, tr, X_tr, y_tr, X_te, y_te):
     """Append one timepoint to the series (cheap metrics only)."""
     series["rec_step"].append(tr.step_idx)
@@ -117,7 +125,7 @@ def run_one_continual(variant_name, seed, spec):
     X_te_both = np.vstack([Xa_te, Xb_te])
     y_te_both = np.concatenate([ya_te, yb_te])
 
-    net = build_graph(list(spec.layers), density=_build_density(cfg, spec), seed=seed)
+    net = build_graph(_build_layers(cfg, spec), density=_build_density(cfg, spec), seed=seed)
     init_weights(net, seed=seed)
     tr = Trainer(cfg, net, Xa_tr, ya_tr, seed=seed)
     initial_edges = set(net.synapses)
@@ -164,7 +172,7 @@ def run_one(variant_name, seed, spec):
     X_te, y_te = _gen(spec.dataset, spec.n_points, seed + spec.test_seed_offset,
                       spec.turns, spec.noise)
 
-    net = build_graph(list(spec.layers), density=_build_density(cfg, spec), seed=seed)
+    net = build_graph(_build_layers(cfg, spec), density=_build_density(cfg, spec), seed=seed)
     init_weights(net, seed=seed)
     tr = Trainer(cfg, net, X_tr, y_tr, seed=seed)
     initial_edges = set(net.synapses)

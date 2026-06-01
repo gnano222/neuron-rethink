@@ -79,6 +79,13 @@ def test_default_config_has_no_init_density_override():
     assert Config().init_density is None
 
 
+def test_default_config_has_no_init_layers_override():
+    # init_layers is the sibling build hint to init_density: None means "use the
+    # suite's --layers". The Trainer never reads it; it only lets a variant pin
+    # its own neuron counts (e.g. a width-sweep arm) within one suite.
+    assert Config().init_layers is None
+
+
 def test_prune_warmup_delays_pruning():
     # No synapse should be pruned before prune_warmup, even with prune enabled.
     net = build_graph([2, 8, 8, 6, 2], density=0.5, seed=0)

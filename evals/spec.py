@@ -141,6 +141,35 @@ VARIANTS: dict[str, Callable[[], Config]] = {
         gamma_dec=0.001, t_struct=200,
         grow_bar_frac=3.0, ghost_meter=True, beta_ghost=0.8,
     ),
+    # === neuron-count (width) sweep =========================================
+    # The promoted currency-gb3 config held FIXED while only the hidden-layer
+    # width varies (uniform 3-hidden-layer topology, input/output pinned by the
+    # 2D spirals task). init_density stays None so every arm uses the suite's
+    # sparse density — only neuron count, not connectivity regime, changes. The
+    # sweep asks how network size trades off learning speed, accuracy, and neuron
+    # utilisation ("average neuron value"). Baseline = size-w10 (≈ the standard
+    # (2,10,10,8,2) net, 2 extra hidden neurons).
+    "size-w4": lambda: Config(
+        eta_base=0.02, grad_currency=True, enable_confidence=True,
+        enable_prune=True, enable_grow=True,
+        gamma_dec=0.001, t_struct=200, init_layers=(2, 4, 4, 4, 2)),
+    "size-w6": lambda: Config(
+        eta_base=0.02, grad_currency=True, enable_confidence=True,
+        enable_prune=True, enable_grow=True,
+        gamma_dec=0.001, t_struct=200, init_layers=(2, 6, 6, 6, 2)),
+    "size-w10": lambda: Config(
+        eta_base=0.02, grad_currency=True, enable_confidence=True,
+        enable_prune=True, enable_grow=True,
+        gamma_dec=0.001, t_struct=200, init_layers=(2, 10, 10, 10, 2)),
+    "size-w16": lambda: Config(
+        eta_base=0.02, grad_currency=True, enable_confidence=True,
+        enable_prune=True, enable_grow=True,
+        gamma_dec=0.001, t_struct=200, init_layers=(2, 16, 16, 16, 2)),
+    "size-w24": lambda: Config(
+        eta_base=0.02, grad_currency=True, enable_confidence=True,
+        enable_prune=True, enable_grow=True,
+        gamma_dec=0.001, t_struct=200, init_layers=(2, 24, 24, 24, 2)),
+
     # plain sparse SGD, all plasticity off (a floor reference)
     "core": lambda: Config(eta_base=0.02),
     # the synapse-count-matched control for the fully-connected comparison: a

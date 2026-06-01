@@ -152,6 +152,28 @@ def test_fully_connected_variant_is_a_dense_static_mlp():
     assert cfg.enable_homeostasis is False
 
 
+def test_size_sweep_variants_are_currency_gb3_at_varied_widths():
+    # the neuron-count sweep: the promoted currency-gb3 config held fixed, only
+    # the hidden-layer width varies (uniform 3-hidden-layer topology). init_density
+    # stays None so each arm uses the suite's sparse density — only neuron count,
+    # not connectivity regime, changes across the sweep.
+    expected = {
+        "size-w4": (2, 4, 4, 4, 2),
+        "size-w6": (2, 6, 6, 6, 2),
+        "size-w10": (2, 10, 10, 10, 2),
+        "size-w16": (2, 16, 16, 16, 2),
+        "size-w24": (2, 24, 24, 24, 2),
+    }
+    for name, layers in expected.items():
+        cfg = make_config(name)
+        assert cfg.grad_currency is True
+        assert cfg.enable_confidence and cfg.enable_prune and cfg.enable_grow
+        assert cfg.confidence_mode == "twod" and cfg.settled_mode == "sigmoid"
+        assert cfg.grow_bar_frac == 3.0          # the promoted selective bar
+        assert cfg.init_layers == layers
+        assert cfg.init_density is None          # sparse, suite-density wiring
+
+
 def test_make_config_returns_fresh_instances():
     a = make_config("currency")
     b = make_config("currency")

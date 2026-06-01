@@ -97,6 +97,12 @@ class Config:
     # currency baseline. The Trainer ignores it; only the runner consults it.
     init_density: float | None = None
 
+    # Optional per-variant override of the *initial* layer sizes (neuron counts
+    # per layer) used by the eval runner's build_graph. None => use the suite's
+    # --layers. Sibling to init_density: it lets one suite hold the config fixed
+    # while sweeping network size (e.g. a hidden-width sweep). Trainer ignores it.
+    init_layers: tuple[int, ...] | None = None
+
 
 def _softmax_predict_probs(net, X):
     return np.array([net.forward(x) for x in X])

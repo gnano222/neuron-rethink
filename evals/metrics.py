@@ -125,6 +125,36 @@ def dead_unit_count(net, X, eps: float = EPS) -> int:
     return sum(1 for nid in hidden if max_act[nid] < eps)
 
 
+def neuron_activation_stats(net, X, eps: float = EPS) -> dict:
+    """The "average neuron value": how much hidden neurons actually output.
+
+    ``mean_neuron_activation`` is each hidden neuron's mean ReLU activation over
+    ``X``, then averaged over neurons (equal weight per neuron) — so it stays
+    comparable as the layer width changes. ``dead_unit_frac`` is the fraction of
+    hidden neurons that never fire (the scale-free companion to the absolute
+    ``dead_unit_count``). Both are 0.0 for a net with no hidden layer.
+    """
+    last = len(net.layers) - 1
+    hidden = [nid for L in range(1, last) for nid in net.layers[L]]
+    if not hidden or len(X) == 0:
+        return {"mean_neuron_activation": 0.0, "dead_unit_frac": 0.0}
+    sum_act = {nid: 0.0 for nid in hidden}
+    max_act = {nid: 0.0 for nid in hidden}
+    for xi in X:
+        net.forward(xi)
+        for nid in hidden:
+            a = net.neurons[nid].activation
+            sum_act[nid] += a
+            if a > max_act[nid]:
+                max_act[nid] = a
+    per_neuron_mean = [sum_act[nid] / len(X) for nid in hidden]
+    dead = sum(1 for nid in hidden if max_act[nid] < eps)
+    return {
+        "mean_neuron_activation": float(np.mean(per_neuron_mean)),
+        "dead_unit_frac": dead / len(hidden),
+    }
+
+
 # ---------------------------------------------------------------------------
 # C. synapse structure — event-log derived
 # ---------------------------------------------------------------------------
@@ -440,6 +470,8 @@ METRIC_DIRECTIONS: dict[str, str] = {
     "conf_utility_corr": "higher",
     "frozen_freeloader_frac": "lower",
     "dead_unit_count": "lower",
+    "dead_unit_frac": "lower",
+    "mean_neuron_activation": "neutral",
     "inert_synapse_frac": "lower",
     "used_vs_allocated": "neutral",
     # sanity (currency)
@@ -496,6 +528,8 @@ METRIC_DESCRIPTIONS: dict[str, str] = {
     "conf_utility_corr": "corr of confidence with real utility (calibration)",
     "frozen_freeloader_frac": "high-confidence but low-utility synapses",
     "dead_unit_count": "hidden neurons that never fire on test data",
+    "dead_unit_frac": "fraction of hidden neurons that never fire (scale-free)",
+    "mean_neuron_activation": "avg hidden-neuron ReLU output on test data (neuron value)",
     "inert_synapse_frac": "fraction of synapses with ~zero weight",
     "used_vs_allocated": "live edges vs edges present at init",
     # sanity
@@ -522,7 +556,8 @@ METRIC_FAMILIES: dict[str, tuple[str, ...]] = {
         "p10_utility", "freeloader_frac", "mean_survivor_age",
         "median_survivor_age", "mean_pruned_lifespan", "oscillation_frac",
         "max_regrow", "conf_utility_corr", "frozen_freeloader_frac",
-        "dead_unit_count", "inert_synapse_frac", "used_vs_allocated"),
+        "dead_unit_count", "dead_unit_frac", "mean_neuron_activation",
+        "inert_synapse_frac", "used_vs_allocated"),
     "Signal sanity": ("meter_fidelity",),
 }
 
@@ -543,6 +578,7 @@ def final_snapshot(net, X_test, y_test, events, initial_edges, series,
     lifes = pruned_lifespans(events, initial_edges)
     fans = fan_stats(net)
     cap = capacity_metrics(net, X_test, initial_count=len(initial_edges))
+    nact = neuron_activation_stats(net, X_test)
     ages = survivor_age_stats(net)
 
     rec = series["rec_step"]
@@ -584,6 +620,8 @@ def final_snapshot(net, X_test, y_test, events, initial_edges, series,
         "conf_utility_corr": cal["conf_utility_corr"],
         "frozen_freeloader_frac": cal["frozen_freeloader_frac"],
         "dead_unit_count": cap["dead_unit_count"],
+        "dead_unit_frac": nact["dead_unit_frac"],
+        "mean_neuron_activation": nact["mean_neuron_activation"],
         "inert_synapse_frac": cap["inert_synapse_frac"],
         "used_vs_allocated": cap["used_vs_allocated"],
         "meter_fidelity": meter_fidelity(net, demand),
