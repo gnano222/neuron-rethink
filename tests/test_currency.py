@@ -22,6 +22,7 @@ from sprout.currency import (
     prune_currency,
     grow_currency,
     batch_edge_scores,
+    update_ghost_meter,
 )
 
 
@@ -353,7 +354,68 @@ def test_batch_scores_are_zero_for_ghosts_into_dead_neuron():
     assert ref > 0.0                            # and live edges still carry signal
 
 
+# -- Readout C (A2): ghost-gradient meter (anti-oscillation) -----------------
+
+def test_ghost_meter_new_entry_enters_below_full_value():
+    # A brand-new ghost (just appeared this cycle) enters the meter at only
+    # (1-beta) of its score, NOT the full score: one spike cannot, on its own,
+    # clear a bar set at the full instantaneous level. This is the refractory.
+    meter = {}
+    update_ghost_meter(meter, {(0, 2): 10.0}, beta=0.8)
+    assert abs(meter[(0, 2)] - 2.0) < 1e-12     # (1-0.8)*10
+
+
+def test_ghost_meter_climbs_toward_sustained_score():
+    # A genuinely, persistently wanted ghost climbs toward its score over cycles.
+    meter = {}
+    for _ in range(50):
+        update_ghost_meter(meter, {(0, 2): 10.0}, beta=0.8)
+    assert meter[(0, 2)] > 9.9                  # EMA has converged to ~score
+
+
+def test_ghost_meter_decays_and_drops_unseen_entries():
+    # An entry not seen this cycle decays by beta, and is dropped once it falls
+    # below the floor (keeps the candidate dict bounded to currently-wanted wires).
+    meter = {(0, 2): 1.0}
+    update_ghost_meter(meter, {}, beta=0.5)     # unseen -> 0.5
+    assert abs(meter[(0, 2)] - 0.5) < 1e-12
+    for _ in range(60):                         # decay past the floor
+        update_ghost_meter(meter, {}, beta=0.5)
+    assert (0, 2) not in meter
+
+
+def test_ghost_meter_refractory_a_single_spike_stays_below_the_bar():
+    # The whole point: a one-cycle virtual-gradient spike (e.g. right after a
+    # prune) leaves the meter below the instantaneous spike, so a grow bar set at
+    # that level is NOT cleared — the wire must re-earn growth over several
+    # cycles instead of being re-requested immediately.
+    meter = {}
+    update_ghost_meter(meter, {(0, 2): 10.0}, beta=0.8)   # the spike
+    update_ghost_meter(meter, {}, beta=0.8)               # spike gone next cycle
+    bar = 1.5 * 1.0   # a typical grow bar (grow_bar_frac * ref, ref~1)
+    assert meter[(0, 2)] < 10.0                 # never reaches the spike level
+    # and it keeps decaying while unseen, rather than re-triggering
+    assert meter[(0, 2)] < 2.0
+
+
 # -- integration -------------------------------------------------------------
+
+def test_ghost_meter_mode_trains_and_keeps_grown_edges_out_of_the_meter():
+    # ghost_meter mode still learns, and a grown edge (now live) is not retained
+    # as a ghost candidate — so if it is later pruned it restarts from zero.
+    net = build_graph([2, 8, 8, 6, 2], density=0.5, seed=0)
+    init_weights(net, seed=0)
+    X, y = generate_blobs(n=300, seed=0)
+    cfg = Config(grad_currency=True, enable_confidence=True, enable_prune=True,
+                 enable_grow=True, eta_base=0.05, gamma_dec=0.001, t_struct=100,
+                 ghost_meter=True, beta_ghost=0.8)
+    tr = Trainer(cfg, net, X, y, seed=0)
+    for _ in range(3000):
+        tr.step()
+    assert accuracy(net, X, y) > 0.9
+    # the meter never holds an edge that is currently a live synapse
+    assert all(e not in net.synapses for e in tr.ghost_meter)
+
 
 def test_currency_confidence_learns_blobs():
     net = build_graph([2, 8, 8, 6, 2], density=0.5, seed=0)

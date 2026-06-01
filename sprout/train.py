@@ -62,6 +62,12 @@ class Config:
     prune_u_floor: float = 0.5    # prune wires with normalised utility below this
     grow_bar_frac: float = 1.5    # grow ghost wire if virt-grad > this * live ref
     virt_batch: int = 32          # batch size for scoring ghost wires
+    # A2 anti-oscillation: grow on a persistent EMA of the virtual gradient
+    # (a "ghost meter") instead of one noisy batch. A just-pruned wire has no
+    # meter entry, so it must re-earn growth over several cycles rather than being
+    # re-requested on the next spike. Opt-in so the baseline is unchanged.
+    ghost_meter: bool = False
+    beta_ghost: float = 0.8       # ghost-meter EMA memory (higher = longer refractory)
     # confidence rule (currency mode): "twod" (importance x settledness,
     # calibrated to prune utility — the DEFAULT / baseline) or "tugofwar" (the
     # prior calm+consistent earn/lose rule, kept for comparison). See currency.py.
@@ -116,6 +122,9 @@ class Trainer:
         self.tracked = {}  # (pre,post) -> list of confidence over recorded steps
         # event log so the viz / tests can see structural changes as they happen
         self.events = []  # list of dicts: {"step", "type": "prune"|"grow", "edge"}
+        # A2: persistent EMA of the virtual gradient per candidate (ghost) wire,
+        # carried across rewire cycles so growth reacts to a sustained signal.
+        self.ghost_meter = {}  # (pre, post) -> ema score; only when cfg.ghost_meter
 
         if cfg.init_firing_rate_at_target:
             for n in net.neurons:
@@ -247,7 +256,8 @@ class Trainer:
         return n_pruned, n_grown
 
     def _rewire_currency(self):
-        from sprout.currency import prune_currency, grow_currency, batch_edge_scores
+        from sprout.currency import (prune_currency, grow_currency,
+                                      batch_edge_scores, update_ghost_meter)
         cfg, net = self.cfg, self.net
         n_pruned = n_grown = 0
         if cfg.enable_prune:                                        # Readout B
@@ -260,8 +270,14 @@ class Trainer:
             b = min(cfg.virt_batch, len(self.X))
             idx = self.rng.choice(len(self.X), size=b, replace=False)
             ghost, ref = batch_edge_scores(net, self.X[idx], self.y[idx])
-            grown = grow_currency(net, ghost, ref, cfg.max_grow, cfg.grow_bar_frac)
+            if cfg.ghost_meter:        # A2: grow on the sustained EMA, not 1 batch
+                update_ghost_meter(self.ghost_meter, ghost, cfg.beta_ghost)
+                scores = self.ghost_meter
+            else:
+                scores = ghost
+            grown = grow_currency(net, scores, ref, cfg.max_grow, cfg.grow_bar_frac)
             for edge in grown:
                 self.events.append({"step": self.step_idx, "type": "grow", "edge": edge})
+                self.ghost_meter.pop(edge, None)   # now live -> not a candidate
             n_grown = len(grown)
         return n_pruned, n_grown

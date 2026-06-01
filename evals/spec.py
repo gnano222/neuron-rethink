@@ -61,6 +61,52 @@ VARIANTS: dict[str, Callable[[], Config]] = {
         enable_prune=True, enable_grow=True,
         gamma_dec=0.001, t_struct=200, t_grace=1000, grow_bar_frac=2.0,
     ),
+
+    # === anti-oscillation experiments (all branch ONLY from `currency`) ======
+    # B1 — raise the hiring bar (Schmitt-trigger gap): only robustly-wanted wires
+    # are born, so once born they clear the prune floor comfortably. Sweeps
+    # grow_bar_frac alone (t_grace stays at the baseline 200).
+    "currency-gb2": lambda: Config(
+        eta_base=0.02, grad_currency=True, enable_confidence=True,
+        enable_prune=True, enable_grow=True,
+        gamma_dec=0.001, t_struct=200, grow_bar_frac=2.0,
+    ),
+    "currency-gb3": lambda: Config(
+        eta_base=0.02, grad_currency=True, enable_confidence=True,
+        enable_prune=True, enable_grow=True,
+        gamma_dec=0.001, t_struct=200, grow_bar_frac=3.0,
+    ),
+    # C1 — longer probation: give a newborn wire more time to convert potential
+    # into visible weight before it is prunable. Sweeps t_grace alone
+    # (grow_bar_frac stays at the baseline 1.5).
+    "currency-grace500": lambda: Config(
+        eta_base=0.02, grad_currency=True, enable_confidence=True,
+        enable_prune=True, enable_grow=True,
+        gamma_dec=0.001, t_struct=200, t_grace=500,
+    ),
+    "currency-grace1k": lambda: Config(
+        eta_base=0.02, grad_currency=True, enable_confidence=True,
+        enable_prune=True, enable_grow=True,
+        gamma_dec=0.001, t_struct=200, t_grace=1000,
+    ),
+    "currency-grace2k": lambda: Config(
+        eta_base=0.02, grad_currency=True, enable_confidence=True,
+        enable_prune=True, enable_grow=True,
+        gamma_dec=0.001, t_struct=200, t_grace=2000,
+    ),
+    # A2 — ghost-gradient meter: grow on a persistent EMA of the virtual gradient
+    # so a just-pruned wire must re-earn growth over several cycles (soft
+    # refractory) instead of being re-requested on the next noisy batch spike.
+    "currency-ghost": lambda: Config(
+        eta_base=0.02, grad_currency=True, enable_confidence=True,
+        enable_prune=True, enable_grow=True,
+        gamma_dec=0.001, t_struct=200, ghost_meter=True, beta_ghost=0.8,
+    ),
+    "currency-ghost-strong": lambda: Config(
+        eta_base=0.02, grad_currency=True, enable_confidence=True,
+        enable_prune=True, enable_grow=True,
+        gamma_dec=0.001, t_struct=200, ghost_meter=True, beta_ghost=0.9,
+    ),
     # plain sparse SGD, all plasticity off (a floor reference)
     "core": lambda: Config(eta_base=0.02),
 }

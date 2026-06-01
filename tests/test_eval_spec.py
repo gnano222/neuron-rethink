@@ -62,6 +62,35 @@ def test_currency_grace_extends_currency():
     assert cfg.grow_bar_frac == 2.0
 
 
+def test_b1_growbar_variants_vary_only_the_grow_bar():
+    # B1: grow_bar_frac swept, t_grace pinned at the baseline (clean isolation)
+    for name, gb in [("currency-gb2", 2.0), ("currency-gb3", 3.0)]:
+        cfg = make_config(name)
+        assert cfg.grow_bar_frac == gb
+        assert cfg.t_grace == 200            # unchanged from baseline
+        assert cfg.ghost_meter is False
+
+
+def test_c1_grace_variants_vary_only_the_grace_window():
+    # C1: t_grace swept, grow_bar_frac pinned at the baseline (clean isolation)
+    for name, tg in [("currency-grace500", 500), ("currency-grace1k", 1000),
+                     ("currency-grace2k", 2000)]:
+        cfg = make_config(name)
+        assert cfg.t_grace == tg
+        assert cfg.grow_bar_frac == 1.5      # unchanged from baseline
+        assert cfg.ghost_meter is False
+
+
+def test_a2_ghost_variants_enable_the_ghost_meter():
+    cfg = make_config("currency-ghost")
+    assert cfg.ghost_meter is True
+    assert cfg.beta_ghost == 0.8
+    assert cfg.grow_bar_frac == 1.5 and cfg.t_grace == 200   # only the meter differs
+    strong = make_config("currency-ghost-strong")
+    assert strong.ghost_meter is True
+    assert strong.beta_ghost == 0.9
+
+
 def test_core_variant_is_plain_sgd():
     cfg = make_config("core")
     assert cfg.grad_currency is False

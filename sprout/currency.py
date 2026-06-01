@@ -261,6 +261,41 @@ def batch_edge_scores(net, X, y):
     return ghost, ref
 
 
+def update_ghost_meter(meter, ghost_scores, beta, drop_floor=1e-9):
+    """EMA-update the persistent *ghost-gradient meter* across rewire cycles (A2).
+
+        meter[e] <- beta * meter[e] + (1 - beta) * score_e   (score 0 if unseen)
+
+    ``meter`` is a dict ``{(pre, post) -> ema}`` mutated in place. ``ghost_scores``
+    is this cycle's instantaneous virtual-gradient batch (from
+    :func:`batch_edge_scores`). The point is to grow on a *sustained* signal, not
+    one noisy batch:
+
+      * A brand-new ghost enters at only ``(1-beta)*score`` and must persist over
+        several cycles before its EMA can clear the grow bar — so a wire that was
+        just pruned (and therefore has no meter entry) cannot be re-requested on
+        the very next cycle's spike. That lag *is* the anti-oscillation refractory.
+      * An entry not seen this cycle decays by ``beta`` and is dropped once it
+        falls below ``drop_floor``, keeping the dict bounded to currently-wanted
+        candidates.
+
+    Higher ``beta`` => longer memory => stronger refractory (and slower to grow a
+    newly-needed wire). Returns ``meter`` for convenience.
+    """
+    for e in list(meter):                       # decay existing (add score if seen)
+        m = beta * meter[e] + (1.0 - beta) * ghost_scores.get(e, 0.0)
+        if m < drop_floor:
+            del meter[e]
+        else:
+            meter[e] = m
+    for e, s in ghost_scores.items():           # brand-new ghosts enter from zero
+        if e not in meter:
+            m = (1.0 - beta) * s
+            if m >= drop_floor:
+                meter[e] = m
+    return meter
+
+
 def grow_currency(net, ghost_scores, ref, max_grow, grow_bar_frac):
     """Grow the most-wanted ghost wires, born at weight 0.
 
