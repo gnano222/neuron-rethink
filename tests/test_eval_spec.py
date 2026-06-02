@@ -226,3 +226,14 @@ def test_suitespec_continual_regime_opt_in():
     spec = SuiteSpec(regime="continual", steps_a=100, steps_b=100, steps_ab=50)
     assert spec.regime == "continual"
     assert spec.steps_a == 100
+
+
+def test_currency_bounded_is_currency_plus_demand_k():
+    from evals.spec import make_config
+    base = make_config("currency")
+    bounded = make_config("currency-bounded")
+    assert base.grow_demand_k is None
+    assert isinstance(bounded.grow_demand_k, int) and bounded.grow_demand_k > 0
+    # identical to currency except for the demand bound
+    assert bounded.grad_currency and bounded.enable_grow and bounded.enable_prune
+    assert bounded.grow_bar_frac == base.grow_bar_frac

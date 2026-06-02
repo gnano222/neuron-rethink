@@ -141,6 +141,16 @@ VARIANTS: dict[str, Callable[[], Config]] = {
         gamma_dec=0.001, t_struct=200,
         grow_bar_frac=3.0, ghost_meter=True, beta_ghost=0.8,
     ),
+    # === Phase-2 demand-gated grow scan =====================================
+    # The currency baseline, but the grow scan scores ghosts only into the top-k
+    # highest-|delta| post neurons (Config.grow_demand_k) — the bounded tier that
+    # pushes scan cost toward ∝ active edges. Opt-in; validated for accuracy ≈
+    # baseline before it could ever be promoted. k=4 is the moderate setting.
+    "currency-bounded": lambda: Config(
+        eta_base=0.02, grad_currency=True, enable_confidence=True,
+        enable_prune=True, enable_grow=True,
+        gamma_dec=0.001, t_struct=200, grow_demand_k=4),
+
     # === neuron-count (width) sweep =========================================
     # The promoted currency-gb3 config held FIXED while only the hidden-layer
     # width varies (uniform 3-hidden-layer topology, input/output pinned by the
