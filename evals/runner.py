@@ -162,6 +162,7 @@ def run_one_continual(variant_name, seed, spec):
         "shift_start_index": None,
         "regime": "continual",
         "initial_edge_count": len(initial_edges),
+        "n_neurons": net.num_neurons,
     }
 
 
@@ -209,6 +210,7 @@ def run_one(variant_name, seed, spec):
         "shift_start_index": shift_start_index,
         "regime": "single",
         "initial_edge_count": len(initial_edges),
+        "n_neurons": net.num_neurons,
     }
 
 

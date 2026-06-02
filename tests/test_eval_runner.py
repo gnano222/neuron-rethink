@@ -24,6 +24,13 @@ def tiny_spec(**kw):
     return SuiteSpec(**base)
 
 
+def test_run_result_reports_neuron_count():
+    spec = tiny_spec(variants=("core",), seeds=1, steps=20, record_every=10,
+                     layers=(2, 3, 2), n_points=40)
+    res = runner.run_one("core", 0, spec)
+    assert res["n_neurons"] == 2 + 3 + 2
+
+
 def test_run_one_returns_wellformed_result():
     spec = tiny_spec()
     res = runner.run_one("currency", seed=0, spec=spec)
