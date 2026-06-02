@@ -312,3 +312,22 @@ Pure NumPy is enough and keeps the per-synapse object model transparent. PyTorch
 - Confidence-gated exploration noise (Thompson-sampling-like behavior at the synapse level).
 - A "sleep"/consolidation replay phase that reinforces high-confidence pathways offline.
 - Real datasets, real sparsity levels, wall-clock performance.
+## Research roadmap: compute efficiency
+
+The grow scan's `O(N²)` ghost enumeration was replaced by an activity-sparse scan
+(see `sprout/currency.py` `active_ghost_sets` / `iter_ghost_candidates` and the
+`docs/eval-runs` grow-scan scaling run). Two further sparsity wins are deferred —
+both are **constant-factor** (the per-step path is already `O(live edges)`, not
+`O(N²)`), so they improve wall-clock but not the asymptotic scaling the grow-scan
+fix addressed:
+
+- **#2 Lazy gradient meters.** `update_gradient_meters` EMA-updates *all* live
+  wires every step, but a wire whose pre was silent has gradient 0, so its update
+  is pure decay `M ← β·M`. Track each wire's last-touched step and apply `β^Δ`
+  lazily on next access, so per-step work touches only the active wires.
+  Bit-identical to the current meters.
+- **#3 Event-driven forward/backward.** `forward`/`backward` visit every hidden
+  neuron each step. An active-frontier formulation propagates only out of neurons
+  that fired (ReLU output ≠ 0), so silent neurons and their wires cost nothing —
+  turning the per-step path from `∝ edges` into `∝ active edges`. The largest
+  inner-loop change; left for when per-step wall-clock becomes the bottleneck.
