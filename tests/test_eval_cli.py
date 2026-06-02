@@ -13,7 +13,7 @@ def test_parse_args_defaults():
     args = cli.parse_args([])
     assert args.variants == "currency,legacy-full"
     assert args.seeds == 5
-    assert args.steps == 30000
+    assert args.steps == 15000          # promoted single-task horizon
     assert args.shift == 0
     assert args.baseline == "legacy-full"
     assert args.dataset == "spirals"
@@ -26,6 +26,13 @@ def test_build_spec_parses_lists_and_layers():
     assert spec.variants == ("currency", "core")
     assert spec.layers == (2, 4, 2)
     assert spec.seeds == 3
+
+
+def test_build_spec_defaults_to_w16_topology():
+    # with no --layers, the suite uses the promoted w16 default (the sweet spot
+    # from the neuron-width sweep), not the old (2,10,10,8,2).
+    spec = cli.build_spec(cli.parse_args([]))
+    assert spec.layers == (2, 16, 16, 16, 2)
 
 
 def test_main_rejects_unknown_variant():

@@ -23,7 +23,7 @@ from evals.report import write_report, build_table
 from evals.publish import publish_run
 from evals.metrics import METRIC_DIRECTIONS
 
-DEFAULT_LAYERS = (2, 10, 10, 8, 2)
+DEFAULT_LAYERS = (2, 16, 16, 16, 2)   # w16: the width-sweep sweet spot
 CACHE_DIR = os.path.join("output", "eval", "cache")
 
 
@@ -33,7 +33,7 @@ def parse_args(argv=None):
                     help="comma-separated variant names")
     ap.add_argument("--seeds", type=int, default=5)
     ap.add_argument("--dataset", default="spirals", choices=["spirals", "blobs"])
-    ap.add_argument("--steps", type=int, default=30000)
+    ap.add_argument("--steps", type=int, default=15000)
     ap.add_argument("--shift", type=int, default=0,
                     help="concept-shift (label-swap) steps after the main run")
     ap.add_argument("--regime", default="single", choices=["single", "continual"],

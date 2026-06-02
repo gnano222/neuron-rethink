@@ -90,7 +90,7 @@ pip install numpy matplotlib pytest pillow
 
 pytest -q                                   # 189 unit + integration tests
 
-python run.py --preset currency --dataset spirals --steps 30000 --density 0.4
+python run.py --preset currency --dataset spirals --steps 15000 --density 0.4
 python validate.py                          # currency, all 7 criteria + plots
 python validate.py --legacy                 # the v1 eligibility system instead
 
@@ -200,7 +200,15 @@ eligibility clamped ≥0; confidence reads eligibility as a *bounded gate* not a
 raw multiplier (unbounded froze half-trained synapses); homeostasis off by
 default (ReLU + weight-rescaling diverges); `grow_budget` to stop dead-ReLU
 growth churn; `theta_prune`/`prune_warmup` tuned so pruning doesn't sever
-mid-training wires; network `[2,10,10,8,2]` and spirals `turns=1.0, noise=0.10`.
+mid-training wires; network `[2,16,16,16,2]` and spirals `turns=1.0, noise=0.10`.
+
+**Default topology + horizon.** The default hidden layers were promoted from
+`10,10,8` to a uniform **16** (`[2,16,16,16,2]`), and the single-task training
+horizon shortened to **15k steps**. The [neuron-width sweep](docs/eval-runs/neuron-width-sweep/)
+found w16 the accuracy/speed sweet spot — near-top accuracy, ~1.8× faster
+convergence than the old net, and the fewest idle units — and w16 converges
+comfortably inside 15k. (`validate.py` stays pinned to the original net/horizon
+as a fixed regression guardrail.)
 
 **The one genuinely unsolved problem (both architectures): reviving dead ReLU
 units.** A neuron whose pre-activation is always negative emits zero gradient, so

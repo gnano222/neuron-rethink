@@ -147,8 +147,9 @@ VARIANTS: dict[str, Callable[[], Config]] = {
     # 2D spirals task). init_density stays None so every arm uses the suite's
     # sparse density — only neuron count, not connectivity regime, changes. The
     # sweep asks how network size trades off learning speed, accuracy, and neuron
-    # utilisation ("average neuron value"). Baseline = size-w10 (≈ the standard
-    # (2,10,10,8,2) net, 2 extra hidden neurons).
+    # utilisation ("average neuron value"). The sweep's own baseline was size-w10
+    # (≈ the THEN-standard (2,10,10,8,2) net); its result promoted w16 to the new
+    # default topology (see SuiteSpec.layers).
     "size-w4": lambda: Config(
         eta_base=0.02, grad_currency=True, enable_confidence=True,
         enable_prune=True, enable_grow=True,
@@ -204,11 +205,15 @@ class SuiteSpec:
     variants: tuple[str, ...] = ("currency", "legacy-full")
     seeds: int = 5
     dataset: str = "spirals"
-    steps: int = 30000
+    steps: int = 15000
     shift_steps: int = 0          # > 0 enables a mid-training label-swap phase
     record_every: int = 200
     baseline: str = "currency"     # softened-cliff 2D-confidence currency = the reference
-    layers: tuple[int, ...] = (2, 10, 10, 8, 2)
+    # promoted to w16 (uniform 16-wide hidden layers): the neuron-width sweep
+    # found it the efficiency sweet spot — near-top accuracy and ~1.8x faster
+    # convergence than the old (2,10,10,8,2) at ~2x the wires, with the fewest
+    # freeloaders/idle units (docs/eval-runs/neuron-width-sweep).
+    layers: tuple[int, ...] = (2, 16, 16, 16, 2)
     density: float = 0.4
     n_points: int = 600
     turns: float = 1.0

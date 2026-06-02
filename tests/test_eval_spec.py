@@ -194,7 +194,10 @@ def test_suitespec_defaults():
     assert spec.variants == ("currency", "legacy-full")
     assert spec.seeds == 5
     assert spec.dataset == "spirals"
-    assert spec.steps == 30000
+    # promoted defaults: the width sweep made w16 the sweet spot, and the
+    # single-task horizon is now 15k (w16 converges well within it).
+    assert spec.steps == 15000
+    assert spec.layers == (2, 16, 16, 16, 2)
     assert spec.shift_steps == 0
     assert spec.baseline == "currency"   # promoted: softened-cliff currency is the reference
     assert spec.record_every == 200

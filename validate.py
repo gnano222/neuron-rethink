@@ -43,6 +43,12 @@ def _make_config(mode):
 def main(mode="currency"):
     os.makedirs(OUT, exist_ok=True)
     X, y = generate_spirals(n=600, seed=0, turns=1.0, noise=0.10)
+    # NOTE: this guardrail is deliberately PINNED to the original (2,10,10,8,2)
+    # net @ 30k steps even though the project default moved to w16 @ 15k (see
+    # evals/spec.py). Its §11 pass/fail thresholds (confidence gating,
+    # consolidation counts, shift decay) were tuned against this exact net and
+    # horizon; keeping it fixed makes it a stable regression check rather than a
+    # moving target. Re-point + re-tune it only as a deliberate, separate task.
     net = build_graph([2, 10, 10, 8, 2], density=0.4, seed=0)
     init_weights(net, seed=0)
     tr = Trainer(_make_config(mode), net, X, y, seed=0)

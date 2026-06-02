@@ -9,7 +9,7 @@ following the build order in §10. Produces:
 
 Usage:
     python run.py --preset step1 --dataset blobs --steps 4000
-    python run.py --preset full  --dataset spirals --steps 30000
+    python run.py --preset full  --dataset spirals --steps 15000
 """
 
 from __future__ import annotations
@@ -155,7 +155,7 @@ if __name__ == "__main__":
     ap.add_argument("--steps", type=int, default=4000)
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--layers", type=_parse_layers, default=None,
-                    help="comma-separated, e.g. 2,10,10,8,2")
+                    help="comma-separated, e.g. 2,16,16,16,2")
     ap.add_argument("--density", type=float, default=0.5)
     ap.add_argument("--eta", type=float, default=None)
     ap.add_argument("--theta-prune", type=float, default=None)
@@ -171,7 +171,7 @@ if __name__ == "__main__":
 
     # sensible defaults for the harder spirals task
     spirals = args.dataset == "spirals"
-    layers = args.layers or ((2, 10, 10, 8, 2) if spirals else (2, 8, 8, 6, 2))
+    layers = args.layers or ((2, 16, 16, 16, 2) if spirals else (2, 8, 8, 6, 2))
     overrides = {}
     overrides["eta_base"] = args.eta if args.eta is not None else (0.02 if spirals else 0.05)
     # theta_prune + prune_warmup only matter for the legacy eligibility pruner;
