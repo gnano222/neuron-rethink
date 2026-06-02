@@ -156,6 +156,32 @@ def neuron_activation_stats(net, X, eps: float = EPS) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# E. compute cost — grow-scan candidate counts
+# ---------------------------------------------------------------------------
+
+def ghost_scan_cost(net, X, y, grow_demand_k=None) -> dict:
+    """Compute cost of one grow scan on this net: candidate ghost wires.
+
+    ``ghost_dense_cost`` is the activity-independent count of valid candidates
+    (~N^2); ``ghost_pairs_scored`` is the mean per-sample count actually evaluated
+    after activity + demand pruning. Reuses the *same* candidate helpers the
+    trainer's grow scan uses, so the measurement cannot drift from behaviour.
+    """
+    from sprout.currency import (active_ghost_sets, iter_ghost_candidates,
+                                  dense_ghost_count)
+    dense = float(dense_ghost_count(net))
+    if len(X) == 0:
+        return {"ghost_pairs_scored": 0.0, "ghost_dense_cost": dense}
+    total = 0
+    for xi, yi in zip(X, y):
+        net.forward(xi)
+        _, _, grad_b = net.backward(int(yi))
+        ap, apo = active_ghost_sets(net, grad_b, grow_demand_k)
+        total += sum(1 for _ in iter_ghost_candidates(net, ap, apo))
+    return {"ghost_pairs_scored": total / len(X), "ghost_dense_cost": dense}
+
+
+# ---------------------------------------------------------------------------
 # C. synapse structure — event-log derived
 # ---------------------------------------------------------------------------
 
@@ -476,6 +502,9 @@ METRIC_DIRECTIONS: dict[str, str] = {
     "used_vs_allocated": "neutral",
     # sanity (currency)
     "meter_fidelity": "higher",
+    # E. compute cost (descriptive: the scaling story is the chart, not verdicts)
+    "ghost_dense_cost": "neutral",
+    "ghost_pairs_scored": "neutral",
 }
 
 # one-line plain-language description per metric (shown in the key-metrics
@@ -534,6 +563,9 @@ METRIC_DESCRIPTIONS: dict[str, str] = {
     "used_vs_allocated": "live edges vs edges present at init",
     # sanity
     "meter_fidelity": "corr of metered vs fresh gradient (currency only)",
+    # E. compute cost
+    "ghost_dense_cost": "candidate ghost wires the grow-scan must consider (~N²)",
+    "ghost_pairs_scored": "candidate wires actually scored after activity+demand pruning",
 }
 
 # which metric belongs to which family, for grouped scorecard rendering
@@ -558,6 +590,7 @@ METRIC_FAMILIES: dict[str, tuple[str, ...]] = {
         "max_regrow", "conf_utility_corr", "frozen_freeloader_frac",
         "dead_unit_count", "dead_unit_frac", "mean_neuron_activation",
         "inert_synapse_frac", "used_vs_allocated"),
+    "Compute cost": ("ghost_dense_cost", "ghost_pairs_scored"),
     "Signal sanity": ("meter_fidelity",),
 }
 
@@ -579,6 +612,8 @@ def final_snapshot(net, X_test, y_test, events, initial_edges, series,
     fans = fan_stats(net)
     cap = capacity_metrics(net, X_test, initial_count=len(initial_edges))
     nact = neuron_activation_stats(net, X_test)
+    scan = ghost_scan_cost(net, X_test, y_test,
+                           getattr(cfg, "grow_demand_k", None))
     ages = survivor_age_stats(net)
 
     rec = series["rec_step"]
@@ -622,6 +657,8 @@ def final_snapshot(net, X_test, y_test, events, initial_edges, series,
         "dead_unit_count": cap["dead_unit_count"],
         "dead_unit_frac": nact["dead_unit_frac"],
         "mean_neuron_activation": nact["mean_neuron_activation"],
+        "ghost_dense_cost": scan["ghost_dense_cost"],
+        "ghost_pairs_scored": scan["ghost_pairs_scored"],
         "inert_synapse_frac": cap["inert_synapse_frac"],
         "used_vs_allocated": cap["used_vs_allocated"],
         "meter_fidelity": meter_fidelity(net, demand),

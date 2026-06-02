@@ -11,7 +11,8 @@ import math
 import numpy as np
 import pytest
 
-from sprout.network import Network
+from sprout.network import Network, build_graph, init_weights
+from sprout.data import generate_blobs
 from evals import metrics
 
 
@@ -370,3 +371,33 @@ def test_continual_metrics_nan_when_phase_missing():
     m = metrics.continual_metrics(series)
     assert m["forgetting"] == pytest.approx(0.55)
     assert math.isnan(m["consolidation"])
+
+
+# -- compute cost: grow-scan candidate counts --------------------------------
+
+def test_ghost_scan_cost_scored_le_dense_and_dense_matches_bruteforce():
+    net = build_graph([2, 4, 4, 2], density=0.5, seed=7)
+    init_weights(net, seed=7)
+    X, y = generate_blobs(n=16, seed=4)
+    out = metrics.ghost_scan_cost(net, X, y)
+    brute_dense = sum(1 for j in range(net.num_neurons)
+                      for i in range(net.num_neurons)
+                      if net.neurons[i].layer < net.neurons[j].layer
+                      and (i, j) not in net.synapses)
+    assert out["ghost_dense_cost"] == float(brute_dense)
+    assert 0.0 <= out["ghost_pairs_scored"] <= out["ghost_dense_cost"]
+
+
+def test_ghost_scan_cost_empty_set_is_zero_scored():
+    net = build_graph([2, 3, 2], density=0.5, seed=8)
+    out = metrics.ghost_scan_cost(net, [], [])
+    assert out["ghost_pairs_scored"] == 0.0
+    assert out["ghost_dense_cost"] > 0.0
+
+
+def test_cost_metrics_are_registered_neutral_and_in_compute_family():
+    for k in ("ghost_dense_cost", "ghost_pairs_scored"):
+        assert metrics.METRIC_DIRECTIONS[k] == "neutral"
+        assert k in metrics.METRIC_DESCRIPTIONS
+    assert metrics.METRIC_FAMILIES["Compute cost"] == (
+        "ghost_dense_cost", "ghost_pairs_scored")
