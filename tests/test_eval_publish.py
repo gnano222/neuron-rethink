@@ -116,3 +116,9 @@ def test_publish_run_copies_artifacts_and_writes_readme(tmp_path):
     readme = open(os.path.join(dest, "README.md")).read()
     assert "spirals_demo" in readme and "Key metrics" in readme
     assert "![acc_curves](acc_curves.png)" in readme
+
+
+def test_cost_metrics_are_key_metrics():
+    from evals.publish import KEY_METRICS
+    assert "ghost_dense_cost" in KEY_METRICS
+    assert "ghost_pairs_scored" in KEY_METRICS

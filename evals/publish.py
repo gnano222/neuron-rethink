@@ -28,6 +28,7 @@ KEY_METRICS = (
     "forgetting", "consolidation",                          # continual: retention
     "pre_shift_test_acc", "recovered_test_acc",             # label-swap regime
     "synapse_count_end", "effective_density",               # sparsity (cost/benefit)
+    "ghost_dense_cost", "ghost_pairs_scored",               # grow-scan compute cost
     "mean_neuron_activation", "dead_unit_frac",             # "average neuron value"
     "max_grows_into_one_neuron", "oscillation_frac",
     "freeloader_frac", "conf_utility_corr", "dead_unit_count",
