@@ -1,0 +1,38 @@
+metric                           size-w10-k4     size-w16-k4     size-w24-k4      size-w4-k4      size-w6-k4
+------------------------------------------------------------------------------------------------------------
+final_test_acc ↑                      0.984≈           0.993          0.996≈          0.829▼          0.895▼
+max_test_acc ↑                        0.997≈           0.998          0.998≈          0.853▼          0.954▼
+final_train_acc ↑                     0.982≈           0.995          0.998≈          0.824▼          0.893▼
+final_test_loss ↓                     0.047≈           0.023          0.015≈          0.354▼          0.310▼
+steps_to_90 ↓                          3761▼            2001           1401≈              ∞?              ∞?
+steps_to_95 ↓                          4281▼            2521           1761▲              ∞?              ∞?
+auc_test_acc ↑                        0.898▼           0.944          0.958≈          0.730▼          0.801▼
+final_acc_stability ↓                 0.009≈           0.005          0.002≈          0.027▼          0.030▼
+synapse_count_start                 113.400≈             244        558.400≈         31.400≈         45.600≈
+synapse_count_peak                  114.200≈             244        558.400≈         33.200≈         50.800≈
+synapse_count_end                   103.200≈             204            474≈             29≈         46.800≈
+n_grow_events                        43.800≈              59         65.600≈             11≈         23.200≈
+n_prune_events                           52≈              97            148≈         11.400≈             20≈
+distinct_neurons_grown                   10≈          11.400             11≈          3.800≈          6.800≈
+turnover ↓                            0.895▼           0.707          0.406▲          0.750≈          0.927▼
+max_grows_into_one_neuron ↓               9▲          13.400         15.400≈          4.200▲          5.800▲
+mean_fan_in                           3.225≈           4.080          6.405≈          2.071≈          2.340≈
+mean_fan_out                          3.225≈           4.080          6.405≈          2.071≈          2.340≈
+effective_density                     0.430≈           0.354          0.380≈          0.604≈          0.487≈
+p10_utility ↑                         0.724≈           0.679          0.600▼          0.615≈          0.510▼
+freeloader_frac ↓                     0.010≈           0.004          0.045▼          0.092▼          0.093▼
+mean_survivor_age ↑                   13640▼           14249          14614▲          14503≈          13771≈
+median_survivor_age ↑                 15000≈           15000          15000≈          15000≈          15000≈
+mean_pruned_lifespan                   3883≈            4178           6543≈           2694≈           2691≈
+oscillation_frac ↓                    0.036▲           0.139          0.080▲          0.015▲          0.090≈
+max_regrow ↓                          1.600▲           3.400          2.800≈          0.200▲          1.200▲
+conf_utility_corr ↑                   0.237≈           0.240          0.171▼          0.169≈          0.166≈
+frozen_freeloader_frac ↓                  0≈               0              0≈              0≈              0≈
+dead_unit_count ↓                     4.800≈               3          3.600≈          4.600≈          5.600▼
+dead_unit_frac ↓                      0.160▼           0.062          0.050≈          0.383▼          0.311▼
+mean_neuron_activation                0.437≈           0.389          0.353≈          0.310≈          0.396≈
+inert_synapse_frac ↓                      0≈               0              0≈              0≈              0≈
+used_vs_allocated                     0.927≈           0.843          0.852≈          0.987≈          1.075≈
+ghost_dense_cost                    320.800≈             760           1546≈             71≈        137.200≈
+ghost_pairs_scored                    4.995≈           5.413          5.566≈          4.976≈          6.208≈
+meter_fidelity ↑                      0.791≈           0.765          0.767≈          0.975▲          0.907▲
