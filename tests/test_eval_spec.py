@@ -237,3 +237,15 @@ def test_currency_bounded_is_currency_plus_demand_k():
     # identical to currency except for the demand bound
     assert bounded.grad_currency and bounded.enable_grow and bounded.enable_prune
     assert bounded.grow_bar_frac == base.grow_bar_frac
+
+
+def test_bounded_size_sweep_arms_match_widths_with_demand_k():
+    from evals.spec import make_config
+    widths = {"size-w4-k4": (2, 4, 4, 4, 2), "size-w6-k4": (2, 6, 6, 6, 2),
+              "size-w10-k4": (2, 10, 10, 10, 2), "size-w16-k4": (2, 16, 16, 16, 2),
+              "size-w24-k4": (2, 24, 24, 24, 2)}
+    for name, layers in widths.items():
+        cfg = make_config(name)
+        assert cfg.init_layers == layers
+        assert cfg.grow_demand_k == 4
+        assert cfg.grad_currency and cfg.enable_grow and cfg.enable_prune

@@ -181,6 +181,33 @@ VARIANTS: dict[str, Callable[[], Config]] = {
         enable_prune=True, enable_grow=True,
         gamma_dec=0.001, t_struct=200, init_layers=(2, 24, 24, 24, 2)),
 
+    # === demand-gated (k=4) width sweep =====================================
+    # The width sweep above, but with the Phase-2 demand bound (grow_demand_k=4)
+    # on the grow scan. Paired arm-for-arm with size-w* so the cost curves can be
+    # compared: exact-sparse scored cost is ∝ active² (still ~N²), the bound caps
+    # it to ≈ k·|active_pre| (∝ N) — the curve that actually bends the exponent.
+    # Accuracy is read against the bit-identical size-w* arms (docs/eval-runs).
+    "size-w4-k4": lambda: Config(
+        eta_base=0.02, grad_currency=True, enable_confidence=True,
+        enable_prune=True, enable_grow=True,
+        gamma_dec=0.001, t_struct=200, init_layers=(2, 4, 4, 4, 2), grow_demand_k=4),
+    "size-w6-k4": lambda: Config(
+        eta_base=0.02, grad_currency=True, enable_confidence=True,
+        enable_prune=True, enable_grow=True,
+        gamma_dec=0.001, t_struct=200, init_layers=(2, 6, 6, 6, 2), grow_demand_k=4),
+    "size-w10-k4": lambda: Config(
+        eta_base=0.02, grad_currency=True, enable_confidence=True,
+        enable_prune=True, enable_grow=True,
+        gamma_dec=0.001, t_struct=200, init_layers=(2, 10, 10, 10, 2), grow_demand_k=4),
+    "size-w16-k4": lambda: Config(
+        eta_base=0.02, grad_currency=True, enable_confidence=True,
+        enable_prune=True, enable_grow=True,
+        gamma_dec=0.001, t_struct=200, init_layers=(2, 16, 16, 16, 2), grow_demand_k=4),
+    "size-w24-k4": lambda: Config(
+        eta_base=0.02, grad_currency=True, enable_confidence=True,
+        enable_prune=True, enable_grow=True,
+        gamma_dec=0.001, t_struct=200, init_layers=(2, 24, 24, 24, 2), grow_demand_k=4),
+
     # plain sparse SGD, all plasticity off (a floor reference)
     "core": lambda: Config(eta_base=0.02),
     # the synapse-count-matched control for the fully-connected comparison: a
