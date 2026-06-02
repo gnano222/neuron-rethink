@@ -216,6 +216,55 @@ def prune_currency(net, t_grace, max_prune, prune_u_floor=0.5, lam=1.0, eps=1e-9
     return pruned
 
 
+# -- Readout C: shared candidate generation (one source of truth) ------------
+
+def active_ghost_sets(net, grad_b, grow_demand_k=None):
+    """Active pre/post neuron-id lists for ghost scoring.
+
+    ``active_pre``  = neurons with **nonzero** activation. Input neurons hold raw
+                      coordinates that can be negative, so the predicate is
+                      ``!= 0`` (not ``> 0``): those ghosts have a real gradient.
+    ``active_post`` = non-input neurons whose backprop delta is nonzero (a silent
+                      ReLU unit has ``delta = 0``). If ``grow_demand_k`` is set,
+                      keep only the top-k by ``|delta|`` — the demand bound.
+    """
+    active_pre = [i for i in range(net.num_neurons)
+                  if net.neurons[i].activation != 0.0]
+    posts = [(j, abs(dj)) for j, dj in grad_b.items() if dj != 0.0]
+    if grow_demand_k is not None and len(posts) > grow_demand_k:
+        posts.sort(key=lambda jd: jd[1], reverse=True)
+        posts = posts[:grow_demand_k]
+    return active_pre, [j for j, _ in posts]
+
+
+def iter_ghost_candidates(net, active_pre, active_post):
+    """Yield valid candidate ghost wires: layer-ordered ``(i, j)`` not already live."""
+    neurons, syn = net.neurons, net.synapses
+    for j in active_post:
+        lj = neurons[j].layer
+        for i in active_pre:
+            if neurons[i].layer < lj and (i, j) not in syn:
+                yield (i, j)
+
+
+def dense_ghost_count(net):
+    """Closed-form count of valid candidate wires if *every* neuron were active.
+
+        Sum over non-input j of (neurons in earlier layers) - indegree(j).
+
+    O(N) and activity-independent; grows ~N^2. The measurement baseline the
+    activity-sparse scan is compared against.
+    """
+    sizes = [len(L) for L in net.layers]
+    before = 0
+    total = 0
+    for L in range(1, len(net.layers)):
+        before += sizes[L - 1]                 # neurons strictly before layer L
+        for j in net.layers[L]:
+            total += before - len(net.incoming[j])
+    return total
+
+
 # -- Readout C: growth (RigL-style virtual gradient) -------------------------
 
 def batch_edge_scores(net, X, y):

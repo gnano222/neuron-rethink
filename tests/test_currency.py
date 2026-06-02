@@ -23,6 +23,9 @@ from sprout.currency import (
     grow_currency,
     batch_edge_scores,
     update_ghost_meter,
+    active_ghost_sets,
+    iter_ghost_candidates,
+    dense_ghost_count,
 )
 
 
@@ -352,6 +355,45 @@ def test_batch_scores_are_zero_for_ghosts_into_dead_neuron():
     assert all(j != dead for (i, j) in ghost)
     assert ghost                                # live neurons DO get candidates
     assert ref > 0.0                            # and live edges still carry signal
+
+
+# -- Readout C: shared candidate generation (one source of truth) ------------
+
+def test_active_ghost_sets_uses_nonzero_not_positive_for_pre():
+    # input coords can be negative; a negative-activation pre is still "active"
+    net = Network([2, 2])                      # inputs 0,1 ; outputs 2,3
+    net.neurons[0].activation = -0.7           # negative -> still active
+    net.neurons[1].activation = 0.0            # exactly zero -> inactive
+    grad_b = {2: 0.5, 3: 0.0}                   # only neuron 2 has gradient
+    ap, apo = active_ghost_sets(net, grad_b)
+    assert 0 in ap and 1 not in ap
+    assert apo == [2]                           # 3 dropped (delta 0)
+
+
+def test_active_ghost_sets_topk_keeps_loudest_posts():
+    net = Network([2, 3])                       # inputs 0,1 ; outputs 2,3,4
+    for nid in (0, 1):
+        net.neurons[nid].activation = 1.0
+    grad_b = {2: 0.1, 3: 0.9, 4: 0.5}
+    _, apo = active_ghost_sets(net, grad_b, grow_demand_k=2)
+    assert set(apo) == {3, 4}                   # top-2 by |delta|
+
+
+def test_iter_ghost_candidates_respects_layer_order_and_liveness():
+    net = Network([2, 1, 1])                    # 0,1 | 2 | 3
+    net.add_synapse(2, 3)                       # live
+    cand = set(iter_ghost_candidates(net, active_pre=[0, 1, 2], active_post=[2, 3]))
+    # into 2 (layer1): 0,1 (layer0) -> (0,2),(1,2). into 3 (layer2): 0,1,2 minus live (2,3)
+    assert cand == {(0, 2), (1, 2), (0, 3), (1, 3)}
+
+
+def test_dense_ghost_count_matches_bruteforce():
+    net = build_graph([2, 3, 2], density=0.5, seed=2)
+    brute = sum(1 for j in range(net.num_neurons)
+                for i in range(net.num_neurons)
+                if net.neurons[i].layer < net.neurons[j].layer
+                and (i, j) not in net.synapses)
+    assert dense_ghost_count(net) == brute
 
 
 # -- Readout C (A2): ghost-gradient meter (anti-oscillation) -----------------
