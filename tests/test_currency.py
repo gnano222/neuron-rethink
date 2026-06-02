@@ -6,6 +6,7 @@ growth (missing wires). These tests pin each readout's behaviour.
 """
 
 import numpy as np
+import pytest
 
 from sprout.data import generate_blobs
 from sprout.network import Network, build_graph, init_weights
@@ -355,6 +356,67 @@ def test_batch_scores_are_zero_for_ghosts_into_dead_neuron():
     assert all(j != dead for (i, j) in ghost)
     assert ghost                                # live neurons DO get candidates
     assert ref > 0.0                            # and live edges still carry signal
+
+
+# -- Readout C: exact-sparse batch scoring (bit-identical to the old N^2 scan) -
+
+def _brute_edge_scores(net, X, y):
+    """The original O(N^2) enumeration, kept here as the bit-identity oracle."""
+    from collections import defaultdict
+    ghost = defaultdict(float)
+    live_sum = live_n = 0.0
+    n = len(X)
+    for xi, yi in zip(X, y):
+        net.forward(xi)
+        _, gw, gb = net.backward(int(yi))
+        for g in gw.values():
+            live_sum += abs(g); live_n += 1
+        for j in range(net.num_neurons):
+            lj = net.neurons[j].layer
+            if lj == 0:
+                continue
+            dj = gb.get(j, 0.0)
+            if dj == 0.0:
+                continue
+            for i in range(net.num_neurons):
+                if net.neurons[i].layer >= lj or (i, j) in net.synapses:
+                    continue
+                ghost[(i, j)] += abs(dj * net.neurons[i].activation)
+    ghost = {k: v / n for k, v in ghost.items()}
+    return ghost, (live_sum / live_n if live_n else 0.0)
+
+
+def test_batch_edge_scores_bit_identical_to_bruteforce():
+    net = build_graph([2, 4, 4, 2], density=0.5, seed=3)
+    init_weights(net, seed=3)
+    X, y = generate_blobs(n=24, seed=1)
+    g_new, ref_new = batch_edge_scores(net, X, y)
+    g_old, ref_old = _brute_edge_scores(net, X, y)
+    nz_old = {k: v for k, v in g_old.items() if v != 0.0}   # drop spurious 0 keys
+    assert ref_new == pytest.approx(ref_old, rel=1e-12)
+    assert set(g_new) == set(nz_old)
+    for k in g_new:
+        assert g_new[k] == pytest.approx(nz_old[k], rel=1e-12)
+
+
+def test_batch_edge_scores_scores_ghost_from_negative_input():
+    # a negative input coordinate must still produce a (nonzero) ghost score
+    net = build_graph([2, 2, 2], density=0.5, seed=4)
+    init_weights(net, seed=4)
+    X = np.array([[-0.9, -0.8], [-0.7, 0.6]])
+    y = np.array([0, 1])
+    g, _ = batch_edge_scores(net, X, y)
+    assert any(net.neurons[i].layer == 0 for (i, j) in g)   # an input is a live pre
+
+
+def test_batch_edge_scores_demand_k_caps_candidates():
+    net = build_graph([2, 6, 6, 2], density=0.5, seed=5)
+    init_weights(net, seed=5)
+    X, y = generate_blobs(n=20, seed=2)
+    g_full, _ = batch_edge_scores(net, X, y)
+    g_k1, _ = batch_edge_scores(net, X, y, grow_demand_k=1)
+    assert len(g_k1) <= len(g_full)                          # bound only removes
+    assert set(g_k1) <= set(g_full)                          # subset of the full set
 
 
 # -- Readout C: shared candidate generation (one source of truth) ------------

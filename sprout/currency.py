@@ -267,17 +267,23 @@ def dense_ghost_count(net):
 
 # -- Readout C: growth (RigL-style virtual gradient) -------------------------
 
-def batch_edge_scores(net, X, y):
-    """Score every *candidate* (missing) wire by its virtual gradient over a
-    small batch, plus a reference scale from the live wires.
+def batch_edge_scores(net, X, y, grow_demand_k=None):
+    """Score candidate (missing) wires by their virtual gradient over a batch,
+    plus a reference scale from the live wires.
 
         g_ij^virt = delta_j * a_i      for (i,j) not an edge, layer(i) < layer(j)
         score_ij  = mean over the batch of |g_ij^virt|
 
     ``delta_j`` comes from backprop (``grad_b``) and ``a_i`` from the forward
-    pass, so a wire's would-be usefulness is read off without building it. A
-    dead neuron has ``delta_j = 0`` (no gradient flows), so ghosts into it score
-    ~0 and are never grown - the system stops wasting growth on corpses for free.
+    pass, so a wire's would-be usefulness is read off without building it. Only
+    activity-relevant candidates are visited: a ghost is nonzero only when its
+    pre fired (``activation != 0``) AND its post has gradient (``delta != 0``),
+    so the scan runs over ``active_pre x active_post`` (see ``active_ghost_sets``
+    / ``iter_ghost_candidates``) rather than all N^2 pairs — exact-sparse, every
+    skipped pair contributed exactly 0. A dead neuron has ``delta_j = 0``, so
+    ghosts into it are never scored and never grown (no growth wasted on corpses).
+    With ``grow_demand_k`` set, only the top-k highest-|delta| posts are scored
+    (the Phase-2 demand bound).
 
     Returns ``(ghost_scores, ref)`` where ``ref`` is the mean |gradient| over
     live wires (the calibration scale for the growth bar).
@@ -291,21 +297,11 @@ def batch_edge_scores(net, X, y):
         for g in grad_w.values():
             live_sum += abs(g)
             live_n += 1
-        for j in range(net.num_neurons):
-            lj = net.neurons[j].layer
-            if lj == 0:
-                continue
-            dj = grad_b.get(j, 0.0)
-            if dj == 0.0:
-                continue
-            for i in range(net.num_neurons):
-                if net.neurons[i].layer >= lj:
-                    continue
-                if (i, j) in net.synapses:
-                    continue
-                ghost[(i, j)] += abs(dj * net.neurons[i].activation)
+        active_pre, active_post = active_ghost_sets(net, grad_b, grow_demand_k)
+        for (i, j) in iter_ghost_candidates(net, active_pre, active_post):
+            ghost[(i, j)] += abs(grad_b[j] * net.neurons[i].activation)
 
-    ghost = {k: v / n for k, v in ghost.items()}
+    ghost = {k: v / n for k, v in ghost.items()} if n else {}
     ref = (live_sum / live_n) if live_n else 0.0
     return ghost, ref
 
