@@ -277,6 +277,41 @@ def _plot_verdict_heatmap(agg, path):
     plt.close(fig)
 
 
+def _plot_scaling(agg, results, path) -> bool:
+    """grow-scan cost vs network size: dense candidates (~N²) vs scored (sparse).
+
+    Returns True if it wrote a chart, False if the cost metrics / neuron counts
+    aren't present (caller skips silently).
+    """
+    m = agg.get("metrics", {})
+    if "ghost_dense_cost" not in m or "ghost_pairs_scored" not in m:
+        return False
+    by = _by_variant(results)
+    pts = []
+    for v, runs in by.items():
+        n = runs[0].get("n_neurons")
+        dense = m["ghost_dense_cost"].get(v, {}).get("mean")
+        scored = m["ghost_pairs_scored"].get(v, {}).get("mean")
+        if n is None or dense is None or scored is None:
+            continue
+        pts.append((n, dense, scored))
+    if len(pts) < 2:
+        return False
+    pts.sort()
+    xs = [p[0] for p in pts]
+    fig, ax = plt.subplots(figsize=(7, 4))
+    ax.plot(xs, [p[1] for p in pts], "o-", label="dense candidates (≈N²)")
+    ax.plot(xs, [p[2] for p in pts], "s-", label="scored (activity-sparse)")
+    ax.set_title("grow-scan cost vs network size")
+    ax.set_xlabel("neuron count (N)")
+    ax.set_ylabel("candidate ghost wires per sample")
+    ax.legend()
+    fig.tight_layout()
+    fig.savefig(path, dpi=90)
+    plt.close(fig)
+    return True
+
+
 # -- orchestration -----------------------------------------------------------
 
 def write_report(agg, results, out_dir) -> dict:
@@ -307,6 +342,7 @@ def write_report(agg, results, out_dir) -> dict:
                  os.path.join(out_dir, "count_curves.png"))
     _plot_churn(by_variant, os.path.join(out_dir, "churn_curves.png"))
     _plot_verdict_heatmap(agg, os.path.join(out_dir, "verdict_heatmap.png"))
+    _plot_scaling(agg, results, os.path.join(out_dir, "cost_scaling.png"))
     for variant, runs in by_variant.items():
         _plot_quality(variant, runs,
                       os.path.join(out_dir, f"quality_{variant}.png"))
