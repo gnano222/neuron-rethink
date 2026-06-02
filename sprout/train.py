@@ -68,6 +68,10 @@ class Config:
     # b1-growbar-sweep). 1.5 was the prior eager default (variant currency-eager).
     grow_bar_frac: float = 3.0    # grow ghost wire if virt-grad > this * live ref
     virt_batch: int = 32          # batch size for scoring ghost wires
+    # Phase-2 demand bound for the grow scan: when an int k, score ghosts only
+    # into the top-k highest-|delta| post neurons (bounds work to k * active_pre).
+    # None => exact-sparse scan over all active posts (the bit-identical default).
+    grow_demand_k: int | None = None
     # A2 anti-oscillation: grow on a persistent EMA of the virtual gradient
     # (a "ghost meter") instead of one noisy batch. A just-pruned wire has no
     # meter entry, so it must re-earn growth over several cycles rather than being
@@ -289,7 +293,8 @@ class Trainer:
         if cfg.enable_grow:                                         # Readout C
             b = min(cfg.virt_batch, len(self.X))
             idx = self.rng.choice(len(self.X), size=b, replace=False)
-            ghost, ref = batch_edge_scores(net, self.X[idx], self.y[idx])
+            ghost, ref = batch_edge_scores(net, self.X[idx], self.y[idx],
+                                           grow_demand_k=cfg.grow_demand_k)
             if cfg.ghost_meter:        # A2: grow on the sustained EMA, not 1 batch
                 update_ghost_meter(self.ghost_meter, ghost, cfg.beta_ghost)
                 scores = self.ghost_meter

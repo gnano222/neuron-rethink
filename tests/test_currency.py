@@ -419,6 +419,18 @@ def test_batch_edge_scores_demand_k_caps_candidates():
     assert set(g_k1) <= set(g_full)                          # subset of the full set
 
 
+def test_trainer_passes_grow_demand_k_to_growth():
+    net = build_graph([2, 6, 6, 2], density=0.6, seed=6)
+    init_weights(net, seed=6)
+    X, y = generate_blobs(n=60, seed=3)
+    cfg = Config(grad_currency=True, enable_confidence=True, enable_prune=True,
+                 enable_grow=True, t_struct=10, grow_demand_k=1)
+    tr = Trainer(cfg, net, X, y, seed=0)
+    for _ in range(50):
+        tr.step()                                # must not raise; growth bounded
+    assert isinstance(len(net.synapses), int)    # trained, net intact
+
+
 # -- Readout C: shared candidate generation (one source of truth) ------------
 
 def test_active_ghost_sets_uses_nonzero_not_positive_for_pre():

@@ -86,6 +86,12 @@ def test_default_config_has_no_init_layers_override():
     assert Config().init_layers is None
 
 
+def test_default_config_has_no_grow_demand_k():
+    # grow_demand_k=None => exact-sparse grow scan over all active posts (the
+    # bit-identical default); an int k restricts to the top-k highest-|delta|.
+    assert Config().grow_demand_k is None
+
+
 def test_prune_warmup_delays_pruning():
     # No synapse should be pruned before prune_warmup, even with prune enabled.
     net = build_graph([2, 8, 8, 6, 2], density=0.5, seed=0)
