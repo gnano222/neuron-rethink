@@ -90,6 +90,21 @@ class Config:
     settled_mode: str = "sigmoid"  # "hard" | "sigmoid" | "exp" | "rational"
     conf_k: float = 3.0            # settled-cliff steepness
 
+    # --- sleep consolidation (opt-in) ---
+    # Prune AGGRESSIVELY only when the net has settled (a loss-EMA plateau),
+    # instead of churning continuously. Measurements showed one-shot pruning of a
+    # *converged* net is ~27% free while the same sparsity reached by continuous
+    # online churn craters accuracy — so the lever is *timing*, not the criterion
+    # (sleep reuses prune_currency). Off by default => baseline unchanged. See
+    # sprout/sleep.py and docs/superpowers/specs/2026-06-03-sleep-consolidation-design.md.
+    enable_sleep: bool = False
+    sleep_warmup: int = 2500       # no consolidation before this step
+    sleep_loss_beta: float = 0.01  # loss-EMA smoothing (~100-step memory)
+    sleep_loss_tol: float = 0.03   # rel. loss improvement that resets the plateau
+    sleep_patience: int = 1500     # steps w/o a tol-improvement => settled
+    sleep_prune_floor: float = 2.0  # aggressive prune utility floor during a burst
+    sleep_max_prune: int = 10      # aggressive per-burst prune cap
+
     # --- initial firing rate seeding ---
     init_firing_rate_at_target: bool = True  # avoids spurious early "underfiring"
 

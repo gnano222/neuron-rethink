@@ -92,6 +92,19 @@ def test_default_config_has_no_grow_demand_k():
     assert Config().grow_demand_k is None
 
 
+def test_default_config_has_sleep_off():
+    # settledness-gated sleep consolidation is OPT-IN: baseline currency is
+    # unchanged. Defaults chosen from the measured loss-settling trace.
+    cfg = Config()
+    assert cfg.enable_sleep is False
+    assert cfg.sleep_warmup == 2500
+    assert cfg.sleep_loss_beta == 0.01
+    assert cfg.sleep_loss_tol == 0.03
+    assert cfg.sleep_patience == 1500
+    assert cfg.sleep_prune_floor == 2.0
+    assert cfg.sleep_max_prune == 10
+
+
 def test_prune_warmup_delays_pruning():
     # No synapse should be pruned before prune_warmup, even with prune enabled.
     net = build_graph([2, 8, 8, 6, 2], density=0.5, seed=0)
