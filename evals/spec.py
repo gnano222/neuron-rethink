@@ -32,6 +32,15 @@ VARIANTS: dict[str, Callable[[], Config]] = {
         enable_prune=True, enable_grow=True,
         gamma_dec=0.001, t_struct=200,
     ),
+    # the currency baseline + settledness-gated SLEEP consolidation: prune
+    # aggressively only when the loss-EMA has plateaued (the net has settled),
+    # instead of churning continuously. Isolates the sleep effect vs `currency`.
+    # See sprout/sleep.py and docs/eval-runs/sleep-consolidation.
+    "sleep": lambda: Config(
+        eta_base=0.02, grad_currency=True, enable_confidence=True,
+        enable_prune=True, enable_grow=True,
+        gamma_dec=0.001, t_struct=200, enable_sleep=True,
+    ),
     # currency with the PRIOR eager growth bar (grow_bar_frac=1.5), kept for
     # comparison now that the selective 3.0 bar is the default. The eager bar grew
     # ~2x as many wires and drove the grow<->prune oscillation (docs/eval-runs/

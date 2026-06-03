@@ -174,6 +174,19 @@ def test_size_sweep_variants_are_currency_gb3_at_varied_widths():
         assert cfg.init_density is None          # sparse, suite-density wiring
 
 
+def test_sleep_variant_is_currency_plus_sleep():
+    # the sleep arm is the currency baseline with settledness-gated consolidation
+    # turned on — nothing else differs, so the eval isolates the sleep effect.
+    base = make_config("currency")
+    s = make_config("sleep")
+    assert base.enable_sleep is False
+    assert s.enable_sleep is True
+    assert s.grad_currency and s.enable_prune and s.enable_grow
+    assert s.confidence_mode == base.confidence_mode
+    assert s.settled_mode == base.settled_mode
+    assert s.grow_bar_frac == base.grow_bar_frac
+
+
 def test_make_config_returns_fresh_instances():
     a = make_config("currency")
     b = make_config("currency")
