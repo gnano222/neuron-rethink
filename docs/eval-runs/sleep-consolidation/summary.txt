@@ -1,0 +1,38 @@
+metric                              currency           sleep      sleep-deep
+----------------------------------------------------------------------------
+final_test_acc ↑                       0.989          0.996≈          0.995≈
+max_test_acc ↑                         0.997          0.998≈          0.998≈
+final_train_acc ↑                      0.991          0.997≈          0.997≈
+final_test_loss ↓                      0.033          0.016≈          0.018≈
+steps_to_90 ↓                           1801           1801≈           1801≈
+steps_to_95 ↓                           2481           2481≈           2481≈
+auc_test_acc ↑                         0.943          0.943≈          0.941≈
+final_acc_stability ↓                  0.018          0.009≈          0.008≈
+synapse_count_start                      244            244≈            244≈
+synapse_count_peak                   247.800        245.800≈        244.800≈
+synapse_count_end                    240.600        221.600≈        151.800≈
+n_grow_events                        106.800        100.600≈         91.400≈
+n_prune_events                       108.200            121≈        181.600≈
+distinct_neurons_grown                16.600         16.600≈         15.600≈
+turnover ↓                             0.889          0.940≈          1.293▼
+max_grows_into_one_neuron ↓           16.600             14≈         13.400≈
+mean_fan_in                            4.812          4.432≈          3.036≈
+mean_fan_out                           4.812          4.432≈          3.036≈
+effective_density                      0.418          0.385≈          0.264≈
+p10_utility ↑                          0.711          0.749≈          0.898▲
+freeloader_frac ↓                      0.011          0.014≈          0.016≈
+mean_survivor_age ↑                    13560          13552≈          13621≈
+median_survivor_age ↑                  15000          15000≈          15000≈
+mean_pruned_lifespan                    3348           4425≈           6073≈
+oscillation_frac ↓                     0.142          0.149≈          0.197▼
+max_regrow ↓                           3.400          3.200≈          2.400▲
+conf_utility_corr ↑                    0.303          0.312≈          0.290≈
+frozen_freeloader_frac ↓                   0              0≈              0≈
+dead_unit_count ↓                          3          3.600≈          6.800▼
+dead_unit_frac ↓                       0.063          0.075≈          0.142▼
+mean_neuron_activation                 0.363          0.368≈          0.362≈
+inert_synapse_frac ↓                       0              0≈              0≈
+used_vs_allocated                      0.994          0.916≈          0.627≈
+ghost_dense_cost                     723.400        742.400≈        812.200≈
+ghost_pairs_scored                   149.784        154.568≈        141.494≈
+meter_fidelity ↑                       0.648          0.691≈          0.804≈
