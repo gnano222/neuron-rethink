@@ -105,6 +105,44 @@ def test_default_config_has_sleep_off():
     assert cfg.sleep_max_prune == 10
 
 
+def test_sleep_consolidation_fires_and_sparsifies():
+    # An aggressive-sleep trainer should (a) fire at least one consolidation burst
+    # once settled and (b) end sparser than an otherwise-identical no-sleep twin.
+    from sprout.data import generate_spirals
+    base = dict(eta_base=0.02, grad_currency=True, enable_confidence=True,
+                enable_prune=True, enable_grow=True, gamma_dec=0.001, t_struct=100)
+    X, y = generate_spirals(n=400, seed=0)
+
+    def run(sleep):
+        net = build_graph([2, 12, 12, 8, 2], density=0.5, seed=0)
+        init_weights(net, seed=0)
+        cfg = Config(**base, enable_sleep=sleep, sleep_warmup=500,
+                     sleep_patience=300, sleep_loss_tol=0.05, sleep_max_prune=8)
+        tr = Trainer(cfg, net, X, y, seed=0)
+        for _ in range(4000):
+            tr.step()
+        return tr, len(net.synapses)
+
+    tr_sleep, n_sleep = run(True)
+    _, n_wake = run(False)
+    assert any(e["type"] == "sleep" for e in tr_sleep.events)   # it slept
+    assert n_sleep < n_wake                                      # and ended sparser
+
+
+def test_sleep_off_leaves_no_sleep_events():
+    # the default (sleep off) path must never record a sleep event.
+    from sprout.data import generate_spirals
+    net = build_graph([2, 10, 10, 8, 2], density=0.5, seed=0)
+    init_weights(net, seed=0)
+    X, y = generate_spirals(n=300, seed=0)
+    cfg = Config(eta_base=0.02, grad_currency=True, enable_confidence=True,
+                 enable_prune=True, enable_grow=True, gamma_dec=0.001, t_struct=100)
+    tr = Trainer(cfg, net, X, y, seed=0)
+    for _ in range(2000):
+        tr.step()
+    assert not any(e["type"] == "sleep" for e in tr.events)
+
+
 def test_prune_warmup_delays_pruning():
     # No synapse should be pruned before prune_warmup, even with prune enabled.
     net = build_graph([2, 8, 8, 6, 2], density=0.5, seed=0)

@@ -164,6 +164,14 @@ class Trainer:
         # A2: persistent EMA of the virtual gradient per candidate (ghost) wire,
         # carried across rewire cycles so growth reacts to a sustained signal.
         self.ghost_meter = {}  # (pre, post) -> ema score; only when cfg.ghost_meter
+        # sleep consolidation: detect when the net has settled, then prune hard.
+        self.settled = False
+        self.sleep_detector = None
+        if cfg.enable_sleep:
+            from sprout.sleep import SettlednessDetector
+            self.sleep_detector = SettlednessDetector(
+                cfg.sleep_loss_beta, cfg.sleep_loss_tol,
+                cfg.sleep_patience, cfg.sleep_warmup)
 
         if cfg.init_firing_rate_at_target:
             for n in net.neurons:
@@ -190,7 +198,7 @@ class Trainer:
 
         if cfg.grad_currency:
             loss, grad_w, grad_b = net.backward(y_true)
-            n_pruned, n_grown = self._step_currency(grad_w, grad_b)
+            n_pruned, n_grown = self._step_currency(grad_w, grad_b, loss)
         else:
             if cfg.enable_eligibility:
                 self._update_eligibility()               # §4.3
@@ -270,7 +278,7 @@ class Trainer:
         homeostasis(self.net, self.cfg.r_target, self.cfg.rho, self.cfg.eps)
 
     # -- gradient-as-currency path (enhancement) ----------------------------
-    def _step_currency(self, grad_w, grad_b):
+    def _step_currency(self, grad_w, grad_b, loss):
         """One step in currency mode: meter the gradient, then read it three
         ways (confidence, prune, grow). Returns (n_pruned, n_grown)."""
         from sprout.currency import (update_gradient_meters,
@@ -288,6 +296,8 @@ class Trainer:
                                            cfg.gamma_dn, cfg.c_max, cfg.m_floor_frac)
         apply_gated_update(net, grad_w, grad_b, cfg.eta_base)       # gated SGD
         self._increment_ages()
+        if self.sleep_detector is not None:                        # settledness
+            self.settled = self.sleep_detector.update(loss, self.step_idx)
 
         n_pruned = n_grown = 0
         if (cfg.enable_prune or cfg.enable_grow) and self.step_idx % cfg.t_struct == 0:
@@ -299,13 +309,22 @@ class Trainer:
                                       batch_edge_scores, update_ghost_meter)
         cfg, net = self.cfg, self.net
         n_pruned = n_grown = 0
+
+        # Sleep consolidation: when the net has SETTLED, prune aggressively and
+        # skip grow (don't explore while consolidating). Then require a fresh
+        # loss plateau before the next burst, which makes churn impossible.
+        consolidating = bool(cfg.enable_sleep and self.settled)
+        if consolidating:
+            self.events.append({"step": self.step_idx, "type": "sleep", "edge": None})
+
         if cfg.enable_prune:                                        # Readout B
-            pruned = prune_currency(net, cfg.t_grace, cfg.max_prune,
-                                    cfg.prune_u_floor, cfg.lam_prune)
+            floor = cfg.sleep_prune_floor if consolidating else cfg.prune_u_floor
+            cap = cfg.sleep_max_prune if consolidating else cfg.max_prune
+            pruned = prune_currency(net, cfg.t_grace, cap, floor, cfg.lam_prune)
             for edge in pruned:
                 self.events.append({"step": self.step_idx, "type": "prune", "edge": edge})
             n_pruned = len(pruned)
-        if cfg.enable_grow:                                         # Readout C
+        if cfg.enable_grow and not consolidating:                   # Readout C
             b = min(cfg.virt_batch, len(self.X))
             idx = self.rng.choice(len(self.X), size=b, replace=False)
             ghost, ref = batch_edge_scores(net, self.X[idx], self.y[idx],
@@ -320,4 +339,8 @@ class Trainer:
                 self.events.append({"step": self.step_idx, "type": "grow", "edge": edge})
                 self.ghost_meter.pop(edge, None)   # now live -> not a candidate
             n_grown = len(grown)
+
+        if consolidating:                       # require a fresh plateau next time
+            self.sleep_detector.reset()
+            self.settled = False
         return n_pruned, n_grown
