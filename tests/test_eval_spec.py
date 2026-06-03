@@ -199,6 +199,21 @@ def test_sleep_deep_is_more_aggressive_than_sleep():
     assert deep.sleep_warmup <= s.sleep_warmup
 
 
+def test_sleep_prune_sweep_scales_aggressiveness_monotonically():
+    # the deeper-prune sweep: floor AND per-burst cap both rise together so each
+    # arm consolidates strictly harder than the last (maps the accuracy tail-off).
+    sweep = ["sleep-f2", "sleep-f3", "sleep-f4", "sleep-f5", "sleep-f6"]
+    floors = [make_config(n).sleep_prune_floor for n in sweep]
+    caps = [make_config(n).sleep_max_prune for n in sweep]
+    assert floors == sorted(floors) and len(set(floors)) == 5   # strictly increasing
+    assert caps == sorted(caps) and len(set(caps)) == 5
+    for n in sweep:
+        cfg = make_config(n)
+        assert cfg.enable_sleep is True
+        assert cfg.sleep_warmup == 2000 and cfg.sleep_patience == 800
+        assert cfg.grad_currency and cfg.enable_prune and cfg.enable_grow
+
+
 def test_make_config_returns_fresh_instances():
     a = make_config("currency")
     b = make_config("currency")

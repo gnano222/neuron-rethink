@@ -51,6 +51,36 @@ VARIANTS: dict[str, Callable[[], Config]] = {
         sleep_warmup=2000, sleep_patience=800, sleep_prune_floor=3.0,
         sleep_max_prune=20,
     ),
+    # the DEEPER-PRUNE sweep: a fixed fire-often frame (warmup 2000, patience 800)
+    # with the burst depth scaled monotonically — the prune utility floor AND the
+    # per-burst cap both rise together — to map where accuracy tails off. floor
+    # rises past the ~2.0 average-wire utility, so the deep arms prune even
+    # above-average wires; the cap rises so the floor isn't the only binding lever.
+    "sleep-f2": lambda: Config(
+        eta_base=0.02, grad_currency=True, enable_confidence=True,
+        enable_prune=True, enable_grow=True, gamma_dec=0.001, t_struct=200,
+        enable_sleep=True, sleep_warmup=2000, sleep_patience=800,
+        sleep_prune_floor=2.0, sleep_max_prune=8),
+    "sleep-f3": lambda: Config(
+        eta_base=0.02, grad_currency=True, enable_confidence=True,
+        enable_prune=True, enable_grow=True, gamma_dec=0.001, t_struct=200,
+        enable_sleep=True, sleep_warmup=2000, sleep_patience=800,
+        sleep_prune_floor=3.0, sleep_max_prune=16),
+    "sleep-f4": lambda: Config(
+        eta_base=0.02, grad_currency=True, enable_confidence=True,
+        enable_prune=True, enable_grow=True, gamma_dec=0.001, t_struct=200,
+        enable_sleep=True, sleep_warmup=2000, sleep_patience=800,
+        sleep_prune_floor=4.0, sleep_max_prune=24),
+    "sleep-f5": lambda: Config(
+        eta_base=0.02, grad_currency=True, enable_confidence=True,
+        enable_prune=True, enable_grow=True, gamma_dec=0.001, t_struct=200,
+        enable_sleep=True, sleep_warmup=2000, sleep_patience=800,
+        sleep_prune_floor=5.0, sleep_max_prune=36),
+    "sleep-f6": lambda: Config(
+        eta_base=0.02, grad_currency=True, enable_confidence=True,
+        enable_prune=True, enable_grow=True, gamma_dec=0.001, t_struct=200,
+        enable_sleep=True, sleep_warmup=2000, sleep_patience=800,
+        sleep_prune_floor=6.0, sleep_max_prune=50),
     # currency with the PRIOR eager growth bar (grow_bar_frac=1.5), kept for
     # comparison now that the selective 3.0 bar is the default. The eager bar grew
     # ~2x as many wires and drove the grow<->prune oscillation (docs/eval-runs/
