@@ -187,6 +187,18 @@ def test_sleep_variant_is_currency_plus_sleep():
     assert s.grow_bar_frac == base.grow_bar_frac
 
 
+def test_sleep_deep_is_more_aggressive_than_sleep():
+    # the aggressive sleep arm: bigger bursts that fire sooner/more often, to
+    # probe whether the ~27% offline headroom is reachable online without churn.
+    s = make_config("sleep")
+    deep = make_config("sleep-deep")
+    assert deep.enable_sleep is True
+    assert deep.sleep_max_prune > s.sleep_max_prune
+    assert deep.sleep_prune_floor >= s.sleep_prune_floor
+    assert deep.sleep_patience <= s.sleep_patience
+    assert deep.sleep_warmup <= s.sleep_warmup
+
+
 def test_make_config_returns_fresh_instances():
     a = make_config("currency")
     b = make_config("currency")
