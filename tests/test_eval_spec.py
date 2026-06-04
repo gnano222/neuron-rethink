@@ -229,6 +229,23 @@ def test_sleep_nocap_sweep_varies_floor_with_no_effective_cap():
         assert cfg.grad_currency and cfg.enable_prune and cfg.enable_grow
 
 
+def test_sleep_lowfloor_nocap_sweep_varies_floor_below_one():
+    # the LOW-floor no-cap sweep: uncapped bursts, but floors 0.2-1.0 — all BELOW
+    # the median wire utility (~1.7) and around the default wake floor (0.5), so
+    # each burst removes only the genuinely-weak tail. Probes where uncapped
+    # pruning starts to bite (the high-floor no-cap sweep collapsed because 2-6
+    # were above the median). Names use floor x 10: lo2 = 0.2 ... lo10 = 1.0.
+    sweep = {"sleep-lo2": 0.2, "sleep-lo4": 0.4, "sleep-lo6": 0.6,
+             "sleep-lo8": 0.8, "sleep-lo10": 1.0}
+    for name, floor in sweep.items():
+        cfg = make_config(name)
+        assert cfg.enable_sleep is True
+        assert cfg.sleep_prune_floor == floor
+        assert cfg.sleep_max_prune >= 100000          # no cap
+        assert cfg.sleep_warmup == 2000 and cfg.sleep_patience == 800
+        assert cfg.grad_currency and cfg.enable_prune and cfg.enable_grow
+
+
 def test_make_config_returns_fresh_instances():
     a = make_config("currency")
     b = make_config("currency")
