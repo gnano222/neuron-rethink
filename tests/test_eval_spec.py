@@ -246,6 +246,20 @@ def test_sleep_lowfloor_nocap_sweep_varies_floor_below_one():
         assert cfg.grad_currency and cfg.enable_prune and cfg.enable_grow
 
 
+def test_sleep_midfloor_nocap_arms_fill_one_to_two():
+    # fills the 1.0->2.0 gap in the no-cap floor sweep (between the safe lo10=1.0
+    # and the collapsing nc2=2.0), so the full 0->2 curve resolves the cliff.
+    sweep = {"sleep-lo12": 1.2, "sleep-lo14": 1.4,
+             "sleep-lo16": 1.6, "sleep-lo18": 1.8}
+    for name, floor in sweep.items():
+        cfg = make_config(name)
+        assert cfg.enable_sleep is True
+        assert cfg.sleep_prune_floor == floor
+        assert cfg.sleep_max_prune >= 100000          # no cap
+        assert cfg.sleep_warmup == 2000 and cfg.sleep_patience == 800
+        assert cfg.grad_currency and cfg.enable_prune and cfg.enable_grow
+
+
 def test_make_config_returns_fresh_instances():
     a = make_config("currency")
     b = make_config("currency")
