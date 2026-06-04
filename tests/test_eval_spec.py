@@ -214,6 +214,21 @@ def test_sleep_prune_sweep_scales_aggressiveness_monotonically():
         assert cfg.grad_currency and cfg.enable_prune and cfg.enable_grow
 
 
+def test_sleep_nocap_sweep_varies_floor_with_no_effective_cap():
+    # the no-cap sweep: same fire-often frame, but the per-burst cap far exceeds
+    # the wire count so the FLOOR is the sole lever — each burst removes EVERY
+    # eligible (below-floor, non-orphan) wire in one shot. Isolates floor depth.
+    sweep = {"sleep-nc2": 2.0, "sleep-nc3": 3.0, "sleep-nc4": 4.0,
+             "sleep-nc5": 5.0, "sleep-nc6": 6.0}
+    for name, floor in sweep.items():
+        cfg = make_config(name)
+        assert cfg.enable_sleep is True
+        assert cfg.sleep_prune_floor == floor
+        assert cfg.sleep_max_prune >= 100000          # effectively uncapped
+        assert cfg.sleep_warmup == 2000 and cfg.sleep_patience == 800
+        assert cfg.grad_currency and cfg.enable_prune and cfg.enable_grow
+
+
 def test_make_config_returns_fresh_instances():
     a = make_config("currency")
     b = make_config("currency")
