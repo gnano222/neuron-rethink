@@ -92,17 +92,43 @@ def test_default_config_has_no_grow_demand_k():
     assert Config().grow_demand_k is None
 
 
-def test_default_config_has_sleep_off():
-    # settledness-gated sleep consolidation is OPT-IN: baseline currency is
-    # unchanged. Defaults chosen from the measured loss-settling trace.
+def test_default_config_has_sleep_on_floor1_nocap():
+    # PROMOTED DEFAULT: settledness-gated sleep consolidation is now ON by
+    # default at floor 1.0 with NO per-burst cap (sleep_max_prune=None) — the
+    # floor-0-to-2 sweep found this the deepest preserved-accuracy operating
+    # point (~-46% synapses, acc preserved). validate.py and the eval `currency`
+    # baseline are pinned no-sleep as stable references.
     cfg = Config()
-    assert cfg.enable_sleep is False
+    assert cfg.enable_sleep is True
+    assert cfg.sleep_prune_floor == 1.0
+    assert cfg.sleep_max_prune is None          # None = no cap (prune all eligible)
+    # detector knobs unchanged from the measured loss-settling trace
     assert cfg.sleep_warmup == 2500
     assert cfg.sleep_loss_beta == 0.01
     assert cfg.sleep_loss_tol == 0.03
     assert cfg.sleep_patience == 1500
-    assert cfg.sleep_prune_floor == 2.0
-    assert cfg.sleep_max_prune == 10
+
+
+def test_sleep_no_cap_prunes_more_than_wake_cap_in_one_burst():
+    # sleep_max_prune=None => a consolidation burst removes EVERY eligible wire,
+    # not a fixed few — so a single burst exceeds the gentle wake cap (max_prune).
+    from collections import Counter
+    from sprout.data import generate_spirals
+    X, y = generate_spirals(n=400, seed=0)
+    net = build_graph([2, 12, 12, 8, 2], density=0.6, seed=0)
+    init_weights(net, seed=0)
+    cfg = Config(eta_base=0.02, grad_currency=True, enable_confidence=True,
+                 enable_prune=True, enable_grow=True, gamma_dec=0.001, t_struct=100,
+                 enable_sleep=True, sleep_warmup=500, sleep_patience=300,
+                 sleep_loss_tol=0.05, sleep_prune_floor=1.0, sleep_max_prune=None)
+    tr = Trainer(cfg, net, X, y, seed=0)
+    for _ in range(3000):
+        tr.step()
+    sleep_steps = [e["step"] for e in tr.events if e["type"] == "sleep"]
+    prune_by_step = Counter(e["step"] for e in tr.events if e["type"] == "prune")
+    bursts = [prune_by_step.get(s, 0) for s in sleep_steps]
+    assert sleep_steps                          # it slept
+    assert max(bursts) > cfg.max_prune          # uncapped: a burst beat the wake cap (2)
 
 
 def test_sleep_consolidation_fires_and_sparsifies():
@@ -136,7 +162,8 @@ def test_sleep_off_leaves_no_sleep_events():
     init_weights(net, seed=0)
     X, y = generate_spirals(n=300, seed=0)
     cfg = Config(eta_base=0.02, grad_currency=True, enable_confidence=True,
-                 enable_prune=True, enable_grow=True, gamma_dec=0.001, t_struct=100)
+                 enable_prune=True, enable_grow=True, gamma_dec=0.001, t_struct=100,
+                 enable_sleep=False)          # explicit off (default is now on)
     tr = Trainer(cfg, net, X, y, seed=0)
     for _ in range(2000):
         tr.step()

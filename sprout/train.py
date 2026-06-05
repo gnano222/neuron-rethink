@@ -90,20 +90,24 @@ class Config:
     settled_mode: str = "sigmoid"  # "hard" | "sigmoid" | "exp" | "rational"
     conf_k: float = 3.0            # settled-cliff steepness
 
-    # --- sleep consolidation (opt-in) ---
+    # --- sleep consolidation (ON by default) ---
     # Prune AGGRESSIVELY only when the net has settled (a loss-EMA plateau),
-    # instead of churning continuously. Measurements showed one-shot pruning of a
-    # *converged* net is ~27% free while the same sparsity reached by continuous
-    # online churn craters accuracy — so the lever is *timing*, not the criterion
-    # (sleep reuses prune_currency). Off by default => baseline unchanged. See
-    # sprout/sleep.py and docs/superpowers/specs/2026-06-03-sleep-consolidation-design.md.
-    enable_sleep: bool = False
+    # instead of churning continuously. The lever is *timing*, not the criterion
+    # (sleep reuses prune_currency). PROMOTED to the default at floor 1.0 / NO cap
+    # (sleep_max_prune=None => each burst removes every below-floor wire): the
+    # floor-0-to-2 sweep found this the deepest preserved-accuracy operating point
+    # (~-46% synapses at preserved single-task accuracy). The floor stays *below*
+    # the median wire utility (~1.7) so only the genuinely-weak tail is ever
+    # eligible — the floor is the quality filter that keeps deep pruning safe.
+    # validate.py and the eval `currency` baseline pin enable_sleep=False as stable
+    # references. See sprout/sleep.py and docs/eval-runs/sleep-nocap-floor-0-to-2.
+    enable_sleep: bool = True
     sleep_warmup: int = 2500       # no consolidation before this step
     sleep_loss_beta: float = 0.01  # loss-EMA smoothing (~100-step memory)
     sleep_loss_tol: float = 0.03   # rel. loss improvement that resets the plateau
     sleep_patience: int = 1500     # steps w/o a tol-improvement => settled
-    sleep_prune_floor: float = 2.0  # aggressive prune utility floor during a burst
-    sleep_max_prune: int = 10      # aggressive per-burst prune cap
+    sleep_prune_floor: float = 1.0  # prune utility floor during a burst (quality filter)
+    sleep_max_prune: int | None = None  # per-burst cap; None = no cap (prune all eligible)
 
     # --- initial firing rate seeding ---
     init_firing_rate_at_target: bool = True  # avoids spurious early "underfiring"
@@ -320,6 +324,8 @@ class Trainer:
         if cfg.enable_prune:                                        # Readout B
             floor = cfg.sleep_prune_floor if consolidating else cfg.prune_u_floor
             cap = cfg.sleep_max_prune if consolidating else cfg.max_prune
+            if cap is None:                     # sleep 'no cap' => all eligible
+                cap = len(net.synapses)
             pruned = prune_currency(net, cfg.t_grace, cap, floor, cfg.lam_prune)
             for edge in pruned:
                 self.events.append({"step": self.step_idx, "type": "prune", "edge": edge})

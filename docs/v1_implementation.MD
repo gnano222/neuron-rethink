@@ -310,8 +310,49 @@ Pure NumPy is enough and keeps the per-synapse object model transparent. PyTorch
 - Recurrent connections (would break the DAG/backprop simplicity).
 - Gradient-informed growth (RigL-style: grow where the backprop gradient is largest, instead of/alongside activity-based growth).
 - Confidence-gated exploration noise (Thompson-sampling-like behavior at the synapse level).
-- A "sleep"/consolidation replay phase that reinforces high-confidence pathways offline.
+- A "sleep"/consolidation replay phase that reinforces high-confidence pathways offline. **— now implemented** (as offline *pruning* of the weak tail when the net has settled, rather than replay-reinforcement): see the Sleep consolidation section below.
 - Real datasets, real sparsity levels, wall-clock performance.
+## Sleep consolidation (default mechanism)
+
+A fourth reading of the same machinery, **on by default** (`Config.enable_sleep =
+True`). Confidence, prune and grow act every step; sleep consolidation acts only
+when the network has **settled**, detected by a plateau in an EMA of the training
+loss (`sprout/sleep.py`, `SettlednessDetector` — early-stopping-style "patience"
+on the smoothed loss, past a warmup). Loss is the signal because it is the only
+clean one: mean confidence is non-monotonic and the gradient meter `M̄` is too
+spiky (both measured).
+
+On a settled step the trainer runs one aggressive **consolidation burst**: prune
+every wire below `sleep_prune_floor` (no per-burst cap by default), pause growth,
+then `reset()` the detector so a *fresh* plateau is required before the next
+burst. That gating makes churn structurally impossible, and handles concept shift
+for free — a label swap re-raises the loss, so the detector waits and only
+re-consolidates after re-convergence. The burst reuses `prune_currency`: the
+criterion is fine, *timing* is the lever (one-shot pruning of a *converged* net is
+~lossless, where the same sparsity reached by continuous online churn craters
+accuracy).
+
+**Default = floor 1.0, no cap** (`sleep_prune_floor=1.0`, `sleep_max_prune=None`).
+An uncapped floor sweep from 0→2 found accuracy holds with no clear regression all
+the way to floor ~1.8 (−69% synapses, fan-in ~1.5) and then a sharp cliff at 2.0.
+The reason: the **floor is a quality filter** — at 1.0 it sits *below* the median
+wire utility (~1.7), so only the genuinely-weak tail is ever eligible — while the
+per-burst **cap is merely a rate limit**. At matched sparsity, low-floor/no-cap
+beats high-floor/capped (it keeps the *right* wires). Floor 1.0 / no cap is the
+deepest reliably-safe point: ~**−46% synapses at preserved single-task accuracy**,
+making the model ~2–3× cheaper to run and fine-tune (forward and the per-step
+training path are both `O(live edges)`; SPROUT stores explicit synapses, so fewer
+wires = fewer operations). See `docs/eval-runs/sleep-nocap-floor-0-to-2`.
+
+**Honest caveats.** (1) Sleep cuts *edges*, not *neurons* and not the firing
+fraction — the ~47% of neurons that fire per input is unchanged (synapse sparsity
+⊥ activation sparsity); the compute win comes from lower fan-in, not from fewer
+neurons firing. (2) It raises the **dead-unit fraction** (~0.06 → ~0.15) — capacity
+that is permanently silent. Single-task and label-swap accuracy are preserved, but
+the cost to the **continual/forgetting** regime is not yet measured — that is the
+outstanding validation before relying on consolidation there. `validate.py` and
+the eval `currency` baseline pin `enable_sleep=False` as fixed references.
+
 ## Research roadmap: compute efficiency
 
 The grow scan's `O(N²)` ghost enumeration was replaced by an activity-sparse scan
@@ -331,3 +372,73 @@ fix addressed:
   that fired (ReLU output ≠ 0), so silent neurons and their wires cost nothing —
   turning the per-step path from `∝ edges` into `∝ active edges`. The largest
   inner-loop change; left for when per-step wall-clock becomes the bottleneck.
+  See the detailed treatment below.
+
+### #3 in detail: the per-sample active subgraph
+
+**Mechanism.** Both passes currently iterate every neuron and its full adjacency
+(`sprout/network.py` `forward` / `backward`). The event-driven rewrite tracks a
+*frontier* and touches only the edges that carry real signal:
+
+- *Forward (a "fired" frontier).* Initialise each non-input neuron's
+  pre-activation to its bias (`z_j ← bias_j`); input neurons are the seed
+  frontier. Walking layers in order, each fired neuron *scatters* `w_ij·a_i` into
+  its posts' `z`; after a layer finishes, one pass applies ReLU and the neurons
+  with `z_j > 0` become the next frontier. Work = `O(N)` for the bias/ReLU pass
+  plus `Σ out-degree` over *fired* neurons — i.e. `∝ fwd-active edges`, where an
+  edge is fwd-active iff its pre fired (`a_pre ≠ 0`). The `O(N)` floor is
+  irreducible: every neuron must still be ReLU'd and bias-initialised, and a
+  neuron with `bias_j > 0` fires even with an all-silent fan-in, so it joins the
+  frontier on bias alone.
+- *Backward (a "nonzero-delta" frontier).* `δ_j = relu'(z_j)·Σ w_jk·δ_k` is zero
+  whenever `j` was silent (`relu'=0`), so silent neurons neither receive nor
+  propagate a delta. Seed the frontier with the output neurons (always nonzero),
+  and scatter `w_pre,j·δ_j` only *back through fired pres* (a silent pre's δ is
+  killed by its own `relu'` regardless). Work `∝ bwd-active edges`.
+
+**The unifying insight — one active subgraph for the whole step.** The weight
+gradient is `grad_w[(pre,post)] = δ_post · a_pre`, which is nonzero **iff
+`a_pre ≠ 0` AND `δ_post ≠ 0`** — the *doubly-active* edges. Every per-step
+consumer of the gradient is therefore already structurally sparse on the same
+subgraph: `apply_gated_update` changes a weight only on doubly-active edges (a
+zero-gradient edge is a pure no-op, not even decay), and `update_gradient_meters`
+does real work only there (everywhere else it is the decay `M ← β·M` that #2
+defers). So #2 and #3 are two views of one optimisation: **confine forward,
+backward, the meter update, and the weight update to the per-sample active
+subgraph.** Build the frontier once in forward, reuse it everywhere downstream.
+
+**Measured magnitude (this is the important part).** The ceiling is set purely by
+realised ReLU sparsity, and in the v1 nets that sparsity is *mild* — far from
+what `r_target = 0.15` suggests, because nothing in currency mode enforces it
+(homeostasis is off; growth is gradient-driven, not firing-rate-driven). On the
+**default w16 net (`(2,16,16,16,2)`, currency, spirals, 15k steps)**, averaged
+over the held-out test set:
+
+| quantity | value | ceiling for |
+|---|---|---|
+| hidden neurons firing (`a > 0`) | **~44%** | — |
+| fwd-active edges (pre fired) | ~60% | forward **~1.7×** |
+| bwd-active edges (post δ ≠ 0) | ~57% | backward **~1.7×** |
+| doubly-active edges (grad ≠ 0) | ~36% | meters + update **~2.8×** |
+
+A width/depth sweep (w6→w48, plus an 8-hidden-layer net) shows the firing
+fraction stays roughly flat at **~40–47%** as width grows (so this is a
+**constant-factor** win, not asymptotic — the active *fraction* doesn't shrink
+with `N`), and improves only modestly with depth (the deep net fires ~39%, for a
+~2.3× forward / ~4.9× gradient ceiling).
+
+**The catch, and the prerequisite.** Those are *zero-overhead ceilings*. The
+current inner loop is Python scalar ops with tiny constants; an event-driven
+rewrite adds frontier bookkeeping (membership sets, the scatter accumulator, the
+unavoidable `O(N)` ReLU/bias pass). At the v1 default scale (`N=52`, `E≈250`) that
+overhead would likely **erase or invert** a 1.7× edge-count saving — #3 is a wash
+here. It pays off only when one of these holds: **(a)** nets get much larger, so
+`E` dwarfs the `O(N)` floor and the constant amortises; **(b)** activation
+sparsity is actually *enforced* — turning on homeostasis toward `r_target`, or a
+k-winners-take-all activation, would push firing toward ~15% and lift the forward
+ceiling to ~6× (and under fixed-`k` WTA the active fraction shrinks with width,
+making #3 genuinely *asymptotic*); or **(c)** the inner loop leaves Python for a
+vectorised/compiled backend where branchy frontier logic is cheap. The honest
+ordering: **#3's payoff is gated on activation sparsity being real, and right now
+it isn't** — so the highest-leverage precursor is to enforce (or at least measure
+under homeostasis) ReLU sparsity before investing in the event-driven rewrite.

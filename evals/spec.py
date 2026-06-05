@@ -27,15 +27,21 @@ VARIANTS: dict[str, Callable[[], Config]] = {
     # calibrated 2D (importance x settledness) rule with the softened sigmoid
     # cliff, and growth uses the selective hiring bar (grow_bar_frac=3.0) — both
     # inherited from Config defaults. This is the promoted BASELINE.
+    # the no-sleep currency reference. Sleep consolidation is now ON by default
+    # (Config.enable_sleep=True), but this baseline pins it OFF so it stays the
+    # STABLE A/B reference every other variant is measured against (and so all
+    # historical eval-runs remain comparable). The promoted default itself = this
+    # + sleep, i.e. the `sleep` variant below.
     "currency": lambda: Config(
         eta_base=0.02, grad_currency=True, enable_confidence=True,
         enable_prune=True, enable_grow=True,
-        gamma_dec=0.001, t_struct=200,
+        gamma_dec=0.001, t_struct=200, enable_sleep=False,
     ),
-    # the currency baseline + settledness-gated SLEEP consolidation: prune
-    # aggressively only when the loss-EMA has plateaued (the net has settled),
-    # instead of churning continuously. Isolates the sleep effect vs `currency`.
-    # See sprout/sleep.py and docs/eval-runs/sleep-consolidation.
+    # the PROMOTED DEFAULT: currency + settledness-gated sleep consolidation at
+    # floor 1.0 / no cap (inherited from Config defaults). Prunes aggressively
+    # only once the loss-EMA has plateaued. = `currency` + the new default sleep;
+    # compare vs the no-sleep `currency` baseline. See docs/eval-runs/
+    # sleep-nocap-floor-0-to-2.
     "sleep": lambda: Config(
         eta_base=0.02, grad_currency=True, enable_confidence=True,
         enable_prune=True, enable_grow=True,

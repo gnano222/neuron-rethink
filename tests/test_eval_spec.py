@@ -174,29 +174,28 @@ def test_size_sweep_variants_are_currency_gb3_at_varied_widths():
         assert cfg.init_density is None          # sparse, suite-density wiring
 
 
-def test_sleep_variant_is_currency_plus_sleep():
-    # the sleep arm is the currency baseline with settledness-gated consolidation
-    # turned on — nothing else differs, so the eval isolates the sleep effect.
+def test_sleep_variant_is_currency_plus_the_promoted_default():
+    # `sleep` = the no-sleep `currency` baseline + the PROMOTED default sleep
+    # (floor 1.0, no cap). currency pins sleep off; sleep inherits the new default.
     base = make_config("currency")
     s = make_config("sleep")
-    assert base.enable_sleep is False
+    assert base.enable_sleep is False              # pinned baseline
     assert s.enable_sleep is True
+    assert s.sleep_prune_floor == 1.0 and s.sleep_max_prune is None  # the default
     assert s.grad_currency and s.enable_prune and s.enable_grow
     assert s.confidence_mode == base.confidence_mode
     assert s.settled_mode == base.settled_mode
     assert s.grow_bar_frac == base.grow_bar_frac
 
 
-def test_sleep_deep_is_more_aggressive_than_sleep():
-    # the aggressive sleep arm: bigger bursts that fire sooner/more often, to
-    # probe whether the ~27% offline headroom is reachable online without churn.
-    s = make_config("sleep")
+def test_sleep_deep_is_a_bounded_floor3_variant():
+    # sleep-deep is a historical bounded-aggressive arm (floor 3, capped 20), kept
+    # for comparison — distinct from the promoted no-cap default `sleep`.
     deep = make_config("sleep-deep")
     assert deep.enable_sleep is True
-    assert deep.sleep_max_prune > s.sleep_max_prune
-    assert deep.sleep_prune_floor >= s.sleep_prune_floor
-    assert deep.sleep_patience <= s.sleep_patience
-    assert deep.sleep_warmup <= s.sleep_warmup
+    assert deep.sleep_prune_floor == 3.0
+    assert deep.sleep_max_prune == 20              # bounded (unlike the no-cap default)
+    assert deep.sleep_warmup == 2000 and deep.sleep_patience == 800
 
 
 def test_sleep_prune_sweep_scales_aggressiveness_monotonically():

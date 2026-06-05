@@ -15,7 +15,10 @@ The project has two architectures, both live and both tested:
    **confidence** (freeze a wire that is *important and settled*), **pruning**
    (delete a wire weak in *both* load and demand), **growth** (add the missing
    wire the loss most wishes existed, when it clears a *selective* bar —
-   RigL-style). See [sprout/currency.py](sprout/currency.py).
+   RigL-style). A fourth lens, **sleep consolidation** *(on by default)*, waits
+   until the loss has *settled* and then prunes the weak tail hard — a ~45%
+   sparser net at no single-task accuracy cost. See
+   [sprout/currency.py](sprout/currency.py) and [sprout/sleep.py](sprout/sleep.py).
 
 2. **Legacy v1 — eligibility / three-factor** — the original spec
    ([docs/v1_implementation.MD](docs/v1_implementation.MD)): a Hebbian
@@ -82,13 +85,32 @@ a *sustained* EMA so a just-cut wire must re-earn its place), cuts the worst
 re-grow further (to ~4) but proved partly redundant once the bar is high
 ([gb3-ghost-combo](docs/eval-runs/gb3-ghost-combo/)).
 
+**Sleep consolidation makes the net ~45% sparser for free — now on by default.**
+A fourth mechanism waits until the training loss has *settled* (a plateau in its
+EMA — the only clean settledness signal; mean confidence and the gradient meter
+are too noisy) and then prunes the weak tail hard, pausing growth, before
+requiring a *fresh* plateau — so it can't churn, and a concept shift just makes it
+wait for re-convergence. The default (prune everything below utility floor `1.0`,
+**no per-burst cap**) came from an uncapped floor sweep 0→2: accuracy holds with
+no clear regression to floor ~1.8 (−69% wires), then cliffs sharply at 2.0 —
+because the floor is a *quality filter* (1.0 sits below the median wire utility
+~1.7, so only genuinely-weak wires are ever eligible) while the cap is only a rate
+limit. Floor 1.0 / no-cap is the deepest safe point: **−46% synapses at preserved
+single-task accuracy**, ~2–3× cheaper forward + training step. Two honest
+residuals: it does **not** change the ~47% per-input firing fraction (synapse
+sparsity is orthogonal to *activation* sparsity — the win is lower fan-in, not
+fewer neurons firing), and it raises permanently-dead units (~0.06 → 0.15), whose
+cost to the **continual/forgetting** regime is not yet measured — so `validate.py`
+and the `currency` baseline pin it off as stable references. See
+[docs/eval-runs/sleep-nocap-floor-0-to-2/](docs/eval-runs/sleep-nocap-floor-0-to-2/).
+
 ## Quick start
 
 ```bash
 python3 -m venv .venv && source .venv/bin/activate
 pip install numpy matplotlib pytest pillow
 
-pytest -q                                   # 189 unit + integration tests
+pytest -q                                   # 249 unit + integration tests
 
 python run.py --preset currency --dataset spirals --steps 15000 --density 0.4
 python validate.py                          # currency, all 7 criteria + plots
@@ -108,7 +130,7 @@ Artifacts land in `output/<preset>_<dataset>/` (`animation.gif`, frames,
 |---|---|---|
 | `core` | plain sparse backprop | all mechanisms off |
 | `currency-conf` | currency: + confidence | edges auto-coloured by gradient **demand** |
-| **`currency`** *(default)* | currency: confidence + prune + grow | the current architecture (2D calibrated confidence + softened cliff + selective grow bar) |
+| **`currency`** *(default)* | currency: confidence + prune + grow + **sleep** | the current architecture (2D calibrated confidence + softened cliff + selective grow bar + settledness-gated sleep consolidation, on by default) |
 | `legacy-step1…step5` | v1 build-order, one mechanism at a time | the most legible way to watch each part |
 | `legacy-step6` | + homeostasis | opt-in; unstable with ReLU (see deviations) |
 | `legacy-full` | full v1 eligibility system | the tuned baseline in the table above |

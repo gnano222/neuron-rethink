@@ -31,13 +31,18 @@ OUT = os.path.join("output", "validation")
 
 
 def _make_config(mode):
+    # validate.py is a FIXED guardrail of the core currency mechanics
+    # (confidence/prune/grow). Sleep consolidation is now ON by default, but we
+    # pin it OFF here so this 7/7 guardrail stays a stable reference of the base
+    # learning loop (sleep is validated separately under docs/eval-runs).
     if mode == "legacy":
         return Config(eta_base=0.02, enable_eligibility=True, enable_confidence=True,
                       enable_prune=True, enable_grow=True,
-                      theta_prune=0.001, prune_warmup=6000)
+                      theta_prune=0.001, prune_warmup=6000, enable_sleep=False)
     # currency (default): no theta_prune / prune_warmup / grow_budget tuning
     return Config(eta_base=0.02, grad_currency=True, enable_confidence=True,
-                  enable_prune=True, enable_grow=True, gamma_dec=0.001, t_struct=200)
+                  enable_prune=True, enable_grow=True, gamma_dec=0.001, t_struct=200,
+                  enable_sleep=False)
 
 
 def main(mode="currency"):
