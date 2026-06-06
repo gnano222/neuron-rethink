@@ -310,48 +310,59 @@ Pure NumPy is enough and keeps the per-synapse object model transparent. PyTorch
 - Recurrent connections (would break the DAG/backprop simplicity).
 - Gradient-informed growth (RigL-style: grow where the backprop gradient is largest, instead of/alongside activity-based growth).
 - Confidence-gated exploration noise (Thompson-sampling-like behavior at the synapse level).
-- A "sleep"/consolidation replay phase that reinforces high-confidence pathways offline. **— now implemented** (as offline *pruning* of the weak tail when the net has settled, rather than replay-reinforcement): see the Sleep consolidation section below.
+- A "sleep"/consolidation replay phase that reinforces high-confidence pathways offline. **— now implemented** as *phasic structural plasticity*: the net rewires (prunes the weak + grows the wanted) only when the loss has settled, rather than replay-reinforcement. See the Phasic structural plasticity section below.
 - Real datasets, real sparsity levels, wall-clock performance.
-## Sleep consolidation (default mechanism)
+## Phasic structural plasticity (default mechanism)
 
-A fourth reading of the same machinery, **on by default** (`Config.enable_sleep =
-True`). Confidence, prune and grow act every step; sleep consolidation acts only
-when the network has **settled**, detected by a plateau in an EMA of the training
-loss (`sprout/sleep.py`, `SettlednessDetector` — early-stopping-style "patience"
-on the smoothed loss, past a warmup). Loss is the signal because it is the only
-clean one: mean confidence is non-monotonic and the gradient meter `M̄` is too
-spiky (both measured).
+Structural change is **phasic** and on by default (`Config.phasic_structure =
+True`): the net **learns while awake** (confidence + gated-SGD + gradient metering
+every step, *no* rewiring) and **rewires while it sleeps**. "Sleep" is a
+**settledness** plateau, detected by an EMA of the training loss
+(`sprout/sleep.py`, `SettlednessDetector` — early-stopping-style "patience" on the
+smoothed loss, past a warmup). Loss is the signal because it is the only clean
+one: mean confidence is non-monotonic and the gradient meter `M̄` is too spiky
+(both measured).
 
-On a settled step the trainer runs one aggressive **consolidation burst**: prune
-every wire below `sleep_prune_floor` (no per-burst cap by default), pause growth,
-then `reset()` the detector so a *fresh* plateau is required before the next
-burst. That gating makes churn structurally impossible, and handles concept shift
-for free — a label swap re-raises the loss, so the detector waits and only
-re-consolidates after re-convergence. The burst reuses `prune_currency`: the
-criterion is fine, *timing* is the lever (one-shot pruning of a *converged* net is
-~lossless, where the same sparsity reached by continuous online churn craters
-accuracy).
+On a settled step the trainer runs **one rewire pass** (`_rewire_phasic`): prune
+every wire below `sleep_prune_floor` AND grow every ghost the loss wants above the
+relative bar — both uncapped, the floor and the bar are the only limits — then
+`reset()` the detector so a *fresh* plateau is required before the next pass.
+Because rewires are far apart and gated on re-settling, grow↔prune oscillation is
+**structurally impossible**: a just-cut wire cannot be re-requested mid-run, so
+the older anti-oscillation patches (the inflated grow bar, the ghost-meter
+refractory) stop being load-bearing here. Cold start is *pure phasic* — no
+structural change until the first plateau, so the net learns on its initial graph
+until then. This **subsumes** the earlier continuous-churn + sleep-overlay design;
+the continuous path is retained behind `phasic_structure=False` as the pinned A/B
+baseline. The lever is *timing*: one-shot rewiring of a *settled* net is ~lossless
+where the same sparsity reached by continuous online churn craters accuracy.
 
-**Default = floor 1.0, no cap** (`sleep_prune_floor=1.0`, `sleep_max_prune=None`).
+**Prune floor = 1.0, no cap** (`sleep_prune_floor=1.0`, `sleep_max_prune=None`).
 An uncapped floor sweep from 0→2 found accuracy holds with no clear regression all
-the way to floor ~1.8 (−69% synapses, fan-in ~1.5) and then a sharp cliff at 2.0.
-The reason: the **floor is a quality filter** — at 1.0 it sits *below* the median
-wire utility (~1.7), so only the genuinely-weak tail is ever eligible — while the
-per-burst **cap is merely a rate limit**. At matched sparsity, low-floor/no-cap
-beats high-floor/capped (it keeps the *right* wires). Floor 1.0 / no cap is the
-deepest reliably-safe point: ~**−46% synapses at preserved single-task accuracy**,
-making the model ~2–3× cheaper to run and fine-tune (forward and the per-step
-training path are both `O(live edges)`; SPROUT stores explicit synapses, so fewer
-wires = fewer operations). See `docs/eval-runs/sleep-nocap-floor-0-to-2`.
+the way to floor ~1.8 and then a sharp cliff at 2.0. The reason: the **floor is a
+quality filter** — at 1.0 it sits *below* the median wire utility (~1.7), so only
+the genuinely-weak tail is ever eligible — while the per-burst **cap is merely a
+rate limit**. At matched sparsity, low-floor/no-cap beats high-floor/capped (it
+keeps the *right* wires).
 
-**Honest caveats.** (1) Sleep cuts *edges*, not *neurons* and not the firing
+**Measured** (5 seeds, w16, 15k + 3k shift, `docs/eval-runs/phasic-vs-continuous`):
+vs the continuous `currency` baseline, phasic **preserves accuracy** (final /
+recovered test acc ≈), ends **~47% sparser** (synapse_count 234 → 123; mean fan-in
+4.7 → 2.5, so ~2–3× cheaper forward + step — both are `O(live edges)`, and SPROUT
+stores explicit synapses so fewer wires = fewer operations), with near-zero
+re-grow (`max_regrow` 3.4 → 0.4) and higher-quality survivors (`p10_utility` ▲). It
+also beats the old continuous+sleep default on accuracy, dead units and
+oscillation at comparable sparsity.
+
+**Honest caveats.** (1) Phasic cuts *edges*, not *neurons* and not the firing
 fraction — the ~47% of neurons that fire per input is unchanged (synapse sparsity
-⊥ activation sparsity); the compute win comes from lower fan-in, not from fewer
-neurons firing. (2) It raises the **dead-unit fraction** (~0.06 → ~0.15) — capacity
-that is permanently silent. Single-task and label-swap accuracy are preserved, but
-the cost to the **continual/forgetting** regime is not yet measured — that is the
-outstanding validation before relying on consolidation there. `validate.py` and
-the eval `currency` baseline pin `enable_sleep=False` as fixed references.
+⊥ activation sparsity); the compute win is lower fan-in. (2) It roughly **doubles
+the dead-unit fraction** (~0.09 → ~0.18) and slightly worsens post-shift accuracy
+stability — capacity that is permanently silent. Single-task and label-swap
+accuracy are preserved, but the dead-unit cost to the **continual/forgetting**
+regime is not yet measured — that is the outstanding validation. `validate.py` and
+the eval `currency`/`sleep` baselines pin `phasic_structure=False` as fixed
+references.
 
 ## Research roadmap: compute efficiency
 

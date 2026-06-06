@@ -5,35 +5,37 @@ observable*: synapses accumulate **confidence**, slow their own learning, get
 **pruned**, and new ones **grow** — all on a standard backprop core, on a
 sparse graph you can watch rewire itself.
 
-The project has two architectures, both live and both tested:
+The architecture is **gradient-as-currency**: one metered signal drives
+everything. Backprop already computes a per-synapse gradient `g_ij = δ_j·a_i`
+("how hard, and which way, the loss wants this wire to change"). We meter that
+once into one shared per-wire state — **load** `|w|/w̄` and **demand** `M/M̄` —
+and read it through three lenses: **confidence** (freeze a wire that is
+*important and settled*), **pruning** (delete a wire weak in *both* load and
+demand), **growth** (add the missing wire the loss most wishes existed, when it
+clears a *selective* bar — RigL-style). See [sprout/currency.py](sprout/currency.py).
 
-1. **Gradient-as-currency** *(current default)* — one metered signal drives
-   everything. Backprop already computes a per-synapse gradient
-   `g_ij = δ_j·a_i` ("how hard, and which way, the loss wants this wire to
-   change"). We meter that once into one shared per-wire state — **load**
-   `|w|/w̄` and **demand** `M/M̄` — and read it through three lenses:
-   **confidence** (freeze a wire that is *important and settled*), **pruning**
-   (delete a wire weak in *both* load and demand), **growth** (add the missing
-   wire the loss most wishes existed, when it clears a *selective* bar —
-   RigL-style). A fourth lens, **sleep consolidation** *(on by default)*, waits
-   until the loss has *settled* and then prunes the weak tail hard — a ~45%
-   sparser net at no single-task accuracy cost. See
-   [sprout/currency.py](sprout/currency.py) and [sprout/sleep.py](sprout/sleep.py).
+Structural change is **phasic** *(default)*: the net **learns while awake** (pure
+gated-SGD + metering, no rewiring) and **rewires while it sleeps** — one
+prune-the-weak + grow-the-wanted pass, fired only once the loss has *settled*
+onto a plateau, then it must re-settle before the next. One signal, one
+operation, one trigger: this subsumes the older always-on churn (and its
+anti-oscillation patches) and ends a net ~45% sparser at no single-task accuracy
+cost. See [sprout/sleep.py](sprout/sleep.py) and `_rewire_phasic` in
+[sprout/train.py](sprout/train.py). The continuous path is retained behind
+`phasic_structure=False` as the pinned A/B baseline.
 
-2. **Legacy v1 — eligibility / three-factor** — the original spec
-   ([docs/v1_implementation.MD](docs/v1_implementation.MD)): a Hebbian
-   "fired-together-recently" eligibility trace gates a global low-error signal to
-   drive confidence; growth chases under-firing neurons; pruning uses `|w|·r`.
-   Kept verbatim under the `legacy-*` presets — it is more *biologically* flavoured
-   and a lateral move on accuracy, with cleaner churn on spirals (see results below).
+> An earlier **legacy v1** stack (Hebbian eligibility + three-factor confidence +
+> `|w|·r` pruning + activity-chasing growth) was removed once gradient-as-currency
+> proved a lateral move on accuracy from a *single* signal. Its multi-seed
+> comparison is archived under [docs/eval-runs/](docs/eval-runs/); the original
+> design notes remain in [docs/v1_implementation.MD](docs/v1_implementation.MD).
 
 ## Headline result
 
-Both pass **7/7** of the "it works" criteria on two interleaving spirals
-(`python validate.py` for currency, `--legacy` for v1). The currency system hits
-**99% accuracy** *with no `theta_prune`, `prune_warmup`, or `grow_budget`
-tuning* — those three hand-set knobs from v1 are replaced by the one
-gradient-aware signal.
+The currency system passes **7/7** of the "it works" criteria on two interleaving
+spirals (`python validate.py`), hitting **99% accuracy** *with no `theta_prune`,
+`prune_warmup`, or `grow_budget` tuning* — those three hand-set knobs from v1 are
+replaced by the one gradient-aware signal.
 
 | step 0 (all plastic, garbage boundary) | converged (consolidated, fits spirals) |
 |---|---|
@@ -43,16 +45,16 @@ gradient-aware signal.
 ## Honest comparison: where currency stands
 
 Currency is the **default architecture and the baseline** other variants are
-measured against. Three honest truths, all multi-seed (full scorecards under
+measured against. The honest truths, all multi-seed (full scorecards under
 [docs/eval-runs/](docs/eval-runs/)):
 
-**Accuracy vs legacy is a lateral move, not an upgrade.** Currency matches
-legacy's ~0.97–0.99 on spirals from a *single* signal and deletes three tuned
-knobs (`theta_prune`, `prune_warmup`, `grow_budget`) — elegance, not a higher
-ceiling. The dead-ReLU growth churn that forced `grow_budget` is gone *for free*:
-a dead neuron has zero gradient, so candidate wires into it score ~0 and are
-never grown. Re-run with
-`python evaluate.py --variants legacy-full,currency --baseline currency --seeds 5 --shift 6000`.
+**Accuracy vs the old legacy stack was a lateral move, not an upgrade.** Currency
+matched legacy's ~0.97–0.99 on spirals from a *single* signal and deleted three
+tuned knobs (`theta_prune`, `prune_warmup`, `grow_budget`) — elegance, not a
+higher ceiling. The dead-ReLU growth churn that forced `grow_budget` is gone *for
+free*: a dead neuron has zero gradient, so candidate wires into it score ~0 and
+are never grown. (The legacy variant has since been **removed**; its scorecards
+remain archived under [docs/eval-runs/](docs/eval-runs/).)
 
 **Confidence calibration is a genuine, measured win.** The original tug-of-war
 rule *anti-correlated* with real wire utility (`conf_utility_corr ≈ −0.17`): it
@@ -85,24 +87,28 @@ a *sustained* EMA so a just-cut wire must re-earn its place), cuts the worst
 re-grow further (to ~4) but proved partly redundant once the bar is high
 ([gb3-ghost-combo](docs/eval-runs/gb3-ghost-combo/)).
 
-**Sleep consolidation makes the net ~45% sparser for free — now on by default.**
-A fourth mechanism waits until the training loss has *settled* (a plateau in its
-EMA — the only clean settledness signal; mean confidence and the gradient meter
-are too noisy) and then prunes the weak tail hard, pausing growth, before
-requiring a *fresh* plateau — so it can't churn, and a concept shift just makes it
-wait for re-convergence. The default (prune everything below utility floor `1.0`,
-**no per-burst cap**) came from an uncapped floor sweep 0→2: accuracy holds with
-no clear regression to floor ~1.8 (−69% wires), then cliffs sharply at 2.0 —
-because the floor is a *quality filter* (1.0 sits below the median wire utility
-~1.7, so only genuinely-weak wires are ever eligible) while the cap is only a rate
-limit. Floor 1.0 / no-cap is the deepest safe point: **−46% synapses at preserved
-single-task accuracy**, ~2–3× cheaper forward + training step. Two honest
-residuals: it does **not** change the ~47% per-input firing fraction (synapse
-sparsity is orthogonal to *activation* sparsity — the win is lower fan-in, not
-fewer neurons firing), and it raises permanently-dead units (~0.06 → 0.15), whose
-cost to the **continual/forgetting** regime is not yet measured — so `validate.py`
-and the `currency` baseline pin it off as stable references. See
-[docs/eval-runs/sleep-nocap-floor-0-to-2/](docs/eval-runs/sleep-nocap-floor-0-to-2/).
+**Phasic structure makes the net ~45% sparser and kills grow↔prune churn — now
+the default.** Instead of rewiring continuously, the net changes structure only
+when the training loss has *settled* (a plateau in its EMA — the only clean
+settledness signal; mean confidence and the gradient meter are too noisy): one
+pass prunes the weak tail (below utility floor `1.0`, **no per-burst cap**) and
+grows the wanted, then it must re-settle before the next. Because rewires are far
+apart and gated on a fresh plateau, oscillation is *structurally* impossible — the
+ghost-meter refractory and inflated grow bar stop being load-bearing. The floor
+`1.0` is a *quality filter* (it sits below the median wire utility ~1.7, so only
+genuinely-weak wires are eligible; an uncapped sweep 0→2 found accuracy holds to
+~1.8 then cliffs at 2.0). Measured (5 seeds, w16, 15k + 3k shift,
+[docs/eval-runs/phasic-vs-continuous/](docs/eval-runs/phasic-vs-continuous/)):
+**accuracy preserved** (final / recovered test acc ≈ the continuous baseline),
+**~47% fewer synapses** at the end (234 → 123; mean fan-in 4.7 → 2.5, so ~2–3×
+cheaper forward + step), near-zero re-grow (`max_regrow` 3.4 → 0.4 ▲) and
+higher-quality survivors (`p10_utility` ▲). Two honest costs: it roughly
+**doubles permanently-dead units** (`dead_unit_frac` 0.09 → 0.18 ▼) and slightly
+worsens post-shift accuracy stability — synapse sparsity is orthogonal to the
+~47% per-input firing fraction (the win is lower fan-in, not fewer neurons
+firing), and the dead-unit cost to the **continual/forgetting** regime is not yet
+measured. `validate.py` and the `currency` / `sleep` baselines pin the continuous
+path (`phasic_structure=False`) as stable references.
 
 ## Quick start
 
@@ -110,13 +116,12 @@ and the `currency` baseline pin it off as stable references. See
 python3 -m venv .venv && source .venv/bin/activate
 pip install numpy matplotlib pytest pillow
 
-pytest -q                                   # 249 unit + integration tests
+pytest -q                                   # 219 unit + integration tests
 
 python run.py --preset currency --dataset spirals --steps 15000 --density 0.4
 python validate.py                          # currency, all 7 criteria + plots
-python validate.py --legacy                 # the v1 eligibility system instead
 
-python evaluate.py --variants currency,legacy-full --seeds 5 --shift 6000
+python evaluate.py --variants currency,sleep,phasic --baseline currency --seeds 5 --shift 3000
                                             # multi-seed comparative scorecard
 ```
 
@@ -130,10 +135,7 @@ Artifacts land in `output/<preset>_<dataset>/` (`animation.gif`, frames,
 |---|---|---|
 | `core` | plain sparse backprop | all mechanisms off |
 | `currency-conf` | currency: + confidence | edges auto-coloured by gradient **demand** |
-| **`currency`** *(default)* | currency: confidence + prune + grow + **sleep** | the current architecture (2D calibrated confidence + softened cliff + selective grow bar + settledness-gated sleep consolidation, on by default) |
-| `legacy-step1…step5` | v1 build-order, one mechanism at a time | the most legible way to watch each part |
-| `legacy-step6` | + homeostasis | opt-in; unstable with ReLU (see deviations) |
-| `legacy-full` | full v1 eligibility system | the tuned baseline in the table above |
+| **`currency`** *(default)* | currency: confidence + prune + grow, **phasic** structure | the architecture (2D calibrated confidence + softened cliff + selective grow bar + phasic structural plasticity — wake learns, sleep rewires — on by default) |
 
 ## What you can watch
 
@@ -142,7 +144,6 @@ lines (**thickness ∝ |weight|**). Edge **colour** depends on the mode:
 
 - `confidence` (default): blue = unsure/fast → red = confident/frozen.
 - `demand` (currency): dark = settled → bright = the loss is still pushing it.
-- `eligibility` (legacy): dark = quiet → bright = co-active "glow".
 
 A line appearing = growth; vanishing = a prune. Side panels: accuracy, synapse
 count, and the 2-D decision boundary. `validate.py` also writes `eff_lr.png`
@@ -193,16 +194,16 @@ The full design, including the honest trade-off discussion, is the basis for
 sprout/
   data.py        generate_blobs / generate_spirals
   network.py     Neuron, Synapse (+ grad_mag/grad_signed meters); forward/backward
-  learning.py    legacy: firing-rate, eligibility, three-factor confidence, gated update
-  currency.py    current: gradient meters + confidence/prune/grow readouts
-  plasticity.py  legacy: prune (|w|·r), grow (activity), homeostasis
-  viz.py         render_frame (confidence / demand / eligibility edges) + make_gif
-  train.py       Config (both stacks behind flags) + Trainer (grad_currency branch)
-run.py           experiment driver / CLI (currency default, legacy-* presets)
-validate.py      validation harness (currency default; --legacy for v1)
+  learning.py    firing-rate EMA + confidence-gated weight update
+  currency.py    gradient meters + confidence/prune/grow readouts
+  sleep.py       SettlednessDetector — the loss-plateau gate / phasic trigger
+  viz.py         render_frame (confidence / demand edges) + make_gif
+  train.py       Config + Trainer (phasic vs continuous structural plasticity)
+run.py           experiment driver / CLI (currency presets)
+validate.py      validation harness (the 7 "it works" criteria + plots)
 evaluate.py      comparative eval entry: multi-seed scorecard + diagnostic plots
 evals/           eval harness package (spec, runner, metrics, aggregate, report, cli)
-tests/           TDD suite (data, network, learning, plasticity, train, currency, infra, eval)
+tests/           TDD suite (data, network, learning, train, currency, sleep, infra, eval)
 ```
 
 Pure NumPy; forward/backward are hand-rolled over adjacency lists so the
@@ -214,15 +215,15 @@ irregular, mutating sparse graph is handled directly (no dense layers).
 trace (the most *biologically local* part of v1) with the backprop gradient. The
 result is more functional and unified but openly "backprop, read three ways" —
 less biologically plausible. For a project about *legibility*, leading with the
-clearer single-cause story is the deliberate choice; the local Hebbian version
-remains one command away (`--legacy`).
+clearer single-cause story is the deliberate choice; the original local Hebbian
+v1 is preserved in the design notes ([docs/v1_implementation.MD](docs/v1_implementation.MD)).
 
-**Legacy-v1 deviations** (discovered empirically; each documented in-code):
-eligibility clamped ≥0; confidence reads eligibility as a *bounded gate* not a
-raw multiplier (unbounded froze half-trained synapses); homeostasis off by
-default (ReLU + weight-rescaling diverges); `grow_budget` to stop dead-ReLU
-growth churn; `theta_prune`/`prune_warmup` tuned so pruning doesn't sever
-mid-training wires; network `[2,16,16,16,2]` and spirals `turns=1.0, noise=0.10`.
+**Legacy-v1 deviations** (the now-removed stack; documented for the record in
+[docs/v1_implementation.MD](docs/v1_implementation.MD)): eligibility clamped ≥0;
+confidence read eligibility as a *bounded gate* not a raw multiplier; homeostasis
+off by default (ReLU + weight-rescaling diverges); `grow_budget` /
+`theta_prune` / `prune_warmup` hand-tuning — all obsoleted by the single
+gradient-aware signal.
 
 **Default topology + horizon.** The default hidden layers were promoted from
 `10,10,8` to a uniform **16** (`[2,16,16,16,2]`), and the single-task training
@@ -232,8 +233,8 @@ convergence than the old net, and the fewest idle units — and w16 converges
 comfortably inside 15k. (`validate.py` stays pinned to the original net/horizon
 as a fixed regression guardrail.)
 
-**The one genuinely unsolved problem (both architectures): reviving dead ReLU
-units.** A neuron whose pre-activation is always negative emits zero gradient, so
+**The one genuinely unsolved problem: reviving dead ReLU units.** A neuron whose
+pre-activation is always negative emits zero gradient, so
 *no* growth rule — activity-based or gradient-based — can revive it (a wire into
 it gets no learning signal). Currency handles this gracefully (never wastes
 growth there); it does not *solve* it. Fixes on the list: a small non-zero birth
@@ -242,15 +243,17 @@ weight, or a bias nudge for chronically-dead units.
 ## Next steps
 
 Confidence **calibration is resolved** (the 2D + softened-cliff redesign) and
-grow↔prune **oscillation is largely tamed** by the selective grow bar (the
-default; see "Honest comparison" above). Remaining:
+grow↔prune **oscillation is structurally resolved** by phasic structure (rewires
+fire only at far-apart plateaus, so a just-cut wire can't be re-requested mid-run;
+see "Honest comparison" above). Remaining:
 
-1. **Oscillation residuals** — the selective bar lowers thrash *incidence* but
-   ~28% of grown wires are still tried twice, and damping growth nudges post-shift
-   recovery down slightly. The opt-in ghost meter (A2) cuts intensity further; a
-   cleaner *recovery-preserving* lever is still open.
-2. **Dead-unit revival** — small non-zero birth weight or bias nudge.
+1. **Dead-unit cost on the continual/forgetting regime** — phasic roughly doubles
+   permanently-dead units (`dead_unit_frac` 0.09 → 0.18); whether that erodes
+   retention on the A→B→A+B benchmark (vs the pinned continuous baseline) is the
+   key open measurement.
+2. **Dead-unit revival** — small non-zero birth weight or bias nudge (would also
+   relieve #1).
 3. **Stable homeostasis** — a per-neuron trained gain instead of multiplicative
    weight rescaling.
 4. Parked v2 ideas: spiking neurons + surrogate-gradient STDP, recurrence,
-   confidence-gated exploration noise, a sleep/replay consolidation phase.
+   confidence-gated exploration noise.
