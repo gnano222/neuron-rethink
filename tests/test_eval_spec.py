@@ -8,21 +8,9 @@ from evals.spec import VARIANTS, make_config, SuiteSpec
 from sprout.train import Config
 
 
-def test_legacy_full_variant_uses_eligibility_not_currency():
-    cfg = make_config("legacy-full")
-    assert isinstance(cfg, Config)
-    assert cfg.enable_eligibility is True
-    assert cfg.grad_currency is False
-    assert cfg.enable_prune and cfg.enable_grow
-    # the tuned spirals settings the baseline needs
-    assert cfg.theta_prune == 0.001
-    assert cfg.prune_warmup == 6000
-
-
 def test_currency_variant_uses_gradient_currency():
     cfg = make_config("currency")
     assert cfg.grad_currency is True
-    assert cfg.enable_eligibility is False
     assert cfg.enable_confidence and cfg.enable_prune and cfg.enable_grow
     # the promoted baseline: default currency now uses the calibrated 2D
     # confidence with the softened (sigmoid) settled cliff
@@ -114,8 +102,7 @@ def test_gb3_ghost_combo_stacks_both_winning_levers():
 
 def test_core_variant_is_plain_sgd():
     cfg = make_config("core")
-    assert cfg.grad_currency is False
-    assert cfg.enable_eligibility is False
+    assert cfg.enable_confidence is False
     assert cfg.enable_prune is False
     assert cfg.enable_grow is False
 
@@ -128,12 +115,9 @@ def test_static_matched_variant_is_plain_sgd_at_baseline_budget():
     cfg = make_config("static-matched")
     assert cfg.init_density is None          # uses the suite density, matching baseline
     assert cfg.eta_base == 0.02
-    assert cfg.grad_currency is False
-    assert cfg.enable_eligibility is False
     assert cfg.enable_confidence is False
     assert cfg.enable_prune is False
     assert cfg.enable_grow is False
-    assert cfg.enable_homeostasis is False
 
 
 def test_fully_connected_variant_is_a_dense_static_mlp():
@@ -144,12 +128,9 @@ def test_fully_connected_variant_is_a_dense_static_mlp():
     cfg = make_config("fully-connected")
     assert cfg.init_density == 1.0
     assert cfg.eta_base == 0.02
-    assert cfg.grad_currency is False
-    assert cfg.enable_eligibility is False
     assert cfg.enable_confidence is False
     assert cfg.enable_prune is False
     assert cfg.enable_grow is False
-    assert cfg.enable_homeostasis is False
 
 
 def test_size_sweep_variants_are_currency_gb3_at_varied_widths():
@@ -271,12 +252,12 @@ def test_unknown_variant_raises():
 
 
 def test_registry_lists_all_named_variants():
-    assert set(VARIANTS) >= {"legacy-full", "currency", "currency-grace", "core"}
+    assert set(VARIANTS) >= {"currency", "sleep", "currency-grace", "core"}
 
 
 def test_suitespec_defaults():
     spec = SuiteSpec()
-    assert spec.variants == ("currency", "legacy-full")
+    assert spec.variants == ("currency", "sleep")
     assert spec.seeds == 5
     assert spec.dataset == "spirals"
     # promoted defaults: the width sweep made w16 the sweet spot, and the

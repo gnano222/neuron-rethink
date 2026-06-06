@@ -17,12 +17,6 @@ from sprout.train import Config
 # name -> factory returning a FRESH Config (never share mutable Config instances
 # across runs; each (variant, seed) job mutates its own network/config state).
 VARIANTS: dict[str, Callable[[], Config]] = {
-    # the README's tuned v1 eligibility system (the baseline to beat)
-    "legacy-full": lambda: Config(
-        eta_base=0.02, enable_eligibility=True, enable_confidence=True,
-        enable_prune=True, enable_grow=True,
-        theta_prune=0.001, prune_warmup=6000,
-    ),
     # the current default architecture: gradient-as-currency. Confidence is the
     # calibrated 2D (importance x settledness) rule with the softened sigmoid
     # cliff, and growth uses the selective hiring bar (grow_bar_frac=3.0) — both
@@ -374,7 +368,7 @@ def make_config(name: str) -> Config:
 class SuiteSpec:
     """Everything needed to run and aggregate one comparison."""
 
-    variants: tuple[str, ...] = ("currency", "legacy-full")
+    variants: tuple[str, ...] = ("currency", "sleep")
     seeds: int = 5
     dataset: str = "spirals"
     steps: int = 15000

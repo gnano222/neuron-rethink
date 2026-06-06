@@ -1,6 +1,5 @@
-"""Infra tests: the gradient-as-currency mechanism is now the DEFAULT
-architecture wired through run.py presets and the viz edge-colouring, while the
-v1 eligibility build-order is preserved as the ``legacy-*`` presets.
+"""Infra tests: the gradient-as-currency mechanism is the architecture wired
+through run.py presets and the viz edge-colouring.
 """
 
 import os
@@ -21,29 +20,12 @@ def test_currency_is_the_default_preset():
 
 def test_currency_preset_enables_the_currency_stack():
     cfg = make_config("currency")
-    assert cfg.grad_currency is True
     assert cfg.enable_confidence and cfg.enable_prune and cfg.enable_grow
-    assert cfg.enable_eligibility is False     # currency replaces eligibility
-
-
-def test_legacy_full_preset_is_the_v1_eligibility_path():
-    cfg = make_config("legacy-full")
-    assert cfg.grad_currency is False
-    assert cfg.enable_eligibility is True
-    assert cfg.enable_confidence and cfg.enable_prune and cfg.enable_grow
-
-
-def test_legacy_build_order_presets_all_present():
-    for name in ("legacy-step1", "legacy-step2", "legacy-step3",
-                 "legacy-step4", "legacy-step5", "legacy-full"):
-        assert name in PRESETS
 
 
 def test_core_preset_is_plain_backprop():
     cfg = make_config("core")
-    assert cfg.grad_currency is False
-    assert not (cfg.enable_eligibility or cfg.enable_confidence
-                or cfg.enable_prune or cfg.enable_grow)
+    assert not (cfg.enable_confidence or cfg.enable_prune or cfg.enable_grow)
 
 
 # -- viz edge styling --------------------------------------------------------

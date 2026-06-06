@@ -3,8 +3,8 @@
 Run a suite of variants across seeds (in parallel), aggregate with bootstrap
 verdicts vs a baseline, and write a scorecard + diagnostic plots.
 
-    python evaluate.py --variants currency,legacy-full,core --seeds 10 \
-        --dataset spirals --steps 30000 --shift 6000 --baseline legacy-full
+    python evaluate.py --variants currency,sleep,phasic --seeds 10 \
+        --dataset spirals --steps 15000 --shift 3000 --baseline currency
 """
 
 from __future__ import annotations
@@ -29,7 +29,7 @@ CACHE_DIR = os.path.join("output", "eval", "cache")
 
 def parse_args(argv=None):
     ap = argparse.ArgumentParser(description="SPROUT comparative evaluation")
-    ap.add_argument("--variants", default="currency,legacy-full",
+    ap.add_argument("--variants", default="currency,sleep",
                     help="comma-separated variant names")
     ap.add_argument("--seeds", type=int, default=5)
     ap.add_argument("--dataset", default="spirals", choices=["spirals", "blobs"])
@@ -48,7 +48,7 @@ def parse_args(argv=None):
     ap.add_argument("--continual-turns", type=float, default=0.6,
                     help="continual: spiral turns (gentler => the 4-arm union "
                          "stays learnable, so consolidation has headroom)")
-    ap.add_argument("--baseline", default="legacy-full")
+    ap.add_argument("--baseline", default="currency")
     ap.add_argument("--jobs", type=int, default=None,
                     help="parallel workers (default: cpu count)")
     ap.add_argument("--record-every", type=int, default=200)

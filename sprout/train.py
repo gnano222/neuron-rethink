@@ -19,41 +19,28 @@ from sprout.learning import apply_gated_update
 class Config:
     # --- core (§8) ---
     eta_base: float = 0.05        # base learning rate (single-sample)
-    lambda_e: float = 0.9         # eligibility decay (memory of "fired together")
-    # Confidence gains - retuned from the spec so consolidation LAGS learning
-    # (see update_confidence's deviation note). gamma_dec is larger so frozen
-    # synapses still creep and decay can release them; eligibility enters as a
-    # bounded gate with half-saturation e_half.
-    gamma_dec: float = 0.01       # confidence decay (lets confidence fall)
-    gamma_q: float = 0.05         # confidence quality gain (low error -> confidence)
-    gamma_h: float = 0.005        # confidence Hebbian gain (co-firing -> confidence)
-    e_half: float = 0.1           # eligibility gate half-saturation
-    beta: float = 0.05            # firing-rate EMA smoothing
-    r_target: float = 0.15        # target firing rate
-    f_under: float = 0.5          # grow if r_j < f_under * r_target
-    theta_prune: float = 0.01     # utility floor for pruning
+    beta: float = 0.05            # firing-rate EMA smoothing (viz bookkeeping)
+    r_target: float = 0.15        # target firing rate (firing-rate seeding only)
     t_grace: int = 200            # min age before a synapse is prunable
-    t_struct: int = 100           # how often prune/grow runs
-    prune_warmup: int = 0         # don't prune before this step (let weights develop)
-    t_homeo: int = 50             # how often homeostasis runs
+    t_struct: int = 100           # how often the rewire step runs
     max_prune: int = 2            # cap pruned per round (gentle, watchable)
     max_grow: int = 2             # cap grown per round
-    grow_budget: int = 6          # max growth attempts per neuron (retires dead units)
-    rho: float = 0.1              # homeostasis gentleness
     eps: float = 1e-6
 
-    # --- feature flags (build order, §10) ---
-    enable_eligibility: bool = False
+    # --- feature flags: the three currency readouts (toggle for ablations) ---
     enable_confidence: bool = False
     enable_prune: bool = False
     enable_grow: bool = False
-    enable_homeostasis: bool = False
 
-    # --- gradient-as-currency mode (enhancement; replaces eligibility path) ---
-    # When True, confidence/prune/grow read the per-synapse gradient meters
-    # instead of eligibility / |w|*r / activity. See sprout/currency.py.
-    grad_currency: bool = False
+    # --- gradient-as-currency: the only architecture now ---
+    # DEPRECATED FLAG: the legacy non-currency path was removed, so the currency
+    # readouts always run regardless of this flag. Retained transiently (default
+    # True) so existing eval-variant definitions keep constructing; will be
+    # dropped in a follow-up. See sprout/currency.py.
+    grad_currency: bool = True
     beta_g: float = 0.99          # gradient-meter EMA memory (~100 samples)
+    # tug-of-war confidence (opt-in alt rule, confidence_mode="tugofwar"):
+    gamma_dec: float = 0.01       # confidence decay (lets confidence fall)
     gamma_up: float = 0.05        # confidence earn rate (calm + consistent)
     gamma_dn: float = 0.10        # confidence loss rate (contested hot-spot)
     c_max: float = 5.0            # confidence ceiling (legible band)
@@ -89,6 +76,16 @@ class Config:
     # contested load-bearer off zero. "sigmoid" leads (smooth version of the cliff).
     settled_mode: str = "sigmoid"  # "hard" | "sigmoid" | "exp" | "rational"
     conf_k: float = 3.0            # settled-cliff steepness
+
+    # --- phasic structural plasticity (the C architecture; ON by default) ---
+    # When True, the net changes structure ONLY at settledness plateaus: wake =
+    # pure gated-SGD + meter the gradient (no prune/grow); sleep = one rewire pass
+    # (prune the weak + grow the wanted), then re-settle. Subsumes the sleep
+    # overlay and makes grow<->prune oscillation structurally impossible. When
+    # False, the legacy CONTINUOUS path runs (gentle prune+grow every t_struct,
+    # with the sleep overlay if enable_sleep) — retained as the pinned A/B
+    # baseline + the validate.py guardrail. See the rewire step in Trainer.
+    phasic_structure: bool = True
 
     # --- sleep consolidation (ON by default) ---
     # Prune AGGRESSIVELY only when the net has settled (a loss-EMA plateau),
@@ -200,26 +197,8 @@ class Trainer:
         net.forward(x)                                   # §4.1
         self._update_firing_rates()                      # §4.2 (kept for viz)
 
-        if cfg.grad_currency:
-            loss, grad_w, grad_b = net.backward(y_true)
-            n_pruned, n_grown = self._step_currency(grad_w, grad_b, loss)
-        else:
-            if cfg.enable_eligibility:
-                self._update_eligibility()               # §4.3
-            loss, grad_w, grad_b = net.backward(y_true)  # §4.4
-            if cfg.enable_confidence:
-                self._update_confidence(loss)            # §4.5
-            apply_gated_update(net, grad_w, grad_b, cfg.eta_base)  # §4.6
-            self._increment_ages()
-
-            n_pruned = n_grown = 0
-            if (cfg.enable_prune or cfg.enable_grow) and self.step_idx % cfg.t_struct == 0:
-                if cfg.enable_prune and self.step_idx >= cfg.prune_warmup:
-                    n_pruned = self._prune()
-                if cfg.enable_grow:
-                    n_grown = self._grow()
-            if cfg.enable_homeostasis and self.step_idx % cfg.t_homeo == 0:
-                self._homeostasis()
+        loss, grad_w, grad_b = net.backward(y_true)
+        n_pruned, n_grown = self._step_currency(grad_w, grad_b, loss)
 
         # every-step bookkeeping
         self.history["step"].append(self.step_idx)
@@ -249,39 +228,11 @@ class Trainer:
         from sprout.learning import update_firing_rates
         update_firing_rates(self.net, self.cfg.beta)
 
-    def _update_eligibility(self):
-        from sprout.learning import update_eligibility
-        update_eligibility(self.net, self.cfg.lambda_e)
-
-    def _update_confidence(self, loss):
-        from sprout.learning import update_confidence
-        update_confidence(self.net, loss, self.cfg.gamma_dec, self.cfg.gamma_q,
-                           self.cfg.gamma_h, self.cfg.e_half)
-
     def _increment_ages(self):
         for syn in self.net.synapses.values():
             syn.age += 1
 
-    def _prune(self):
-        from sprout.plasticity import prune
-        pruned = prune(self.net, self.cfg.theta_prune, self.cfg.t_grace, self.cfg.max_prune)
-        for edge in pruned:
-            self.events.append({"step": self.step_idx, "type": "prune", "edge": edge})
-        return len(pruned)
-
-    def _grow(self):
-        from sprout.plasticity import grow
-        grown = grow(self.net, self.cfg.r_target, self.cfg.f_under, self.cfg.max_grow,
-                     self.cfg.grow_budget)
-        for edge in grown:
-            self.events.append({"step": self.step_idx, "type": "grow", "edge": edge})
-        return len(grown)
-
-    def _homeostasis(self):
-        from sprout.plasticity import homeostasis
-        homeostasis(self.net, self.cfg.r_target, self.cfg.rho, self.cfg.eps)
-
-    # -- gradient-as-currency path (enhancement) ----------------------------
+    # -- gradient-as-currency path (the only structural path) ---------------
     def _step_currency(self, grad_w, grad_b, loss):
         """One step in currency mode: meter the gradient, then read it three
         ways (confidence, prune, grow). Returns (n_pruned, n_grown)."""

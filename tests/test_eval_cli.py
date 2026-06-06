@@ -11,11 +11,11 @@ from evals import cli
 
 def test_parse_args_defaults():
     args = cli.parse_args([])
-    assert args.variants == "currency,legacy-full"
+    assert args.variants == "currency,sleep"
     assert args.seeds == 5
     assert args.steps == 15000          # promoted single-task horizon
     assert args.shift == 0
-    assert args.baseline == "legacy-full"
+    assert args.baseline == "currency"
     assert args.dataset == "spirals"
 
 
@@ -42,7 +42,7 @@ def test_main_rejects_unknown_variant():
 
 def test_main_rejects_baseline_not_in_variants():
     with pytest.raises(SystemExit):
-        cli.main(["--variants", "currency,core", "--baseline", "legacy-full",
+        cli.main(["--variants", "currency,core", "--baseline", "sleep",
                   "--no-cache"])
 
 

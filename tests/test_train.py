@@ -41,11 +41,9 @@ def test_backprop_only_learns_blobs():
 
 def test_default_config_has_advanced_mechanisms_off():
     cfg = Config()
-    assert cfg.enable_eligibility is False
     assert cfg.enable_confidence is False
     assert cfg.enable_prune is False
     assert cfg.enable_grow is False
-    assert cfg.enable_homeostasis is False
 
 
 def test_default_config_softened_cliff_knobs():
@@ -168,22 +166,6 @@ def test_sleep_off_leaves_no_sleep_events():
     for _ in range(2000):
         tr.step()
     assert not any(e["type"] == "sleep" for e in tr.events)
-
-
-def test_prune_warmup_delays_pruning():
-    # No synapse should be pruned before prune_warmup, even with prune enabled.
-    net = build_graph([2, 8, 8, 6, 2], density=0.5, seed=0)
-    init_weights(net, seed=0)
-    X, y = generate_blobs(n=200, seed=0)
-    cfg = Config(enable_prune=True, prune_warmup=1000, t_struct=100,
-                 t_grace=50, theta_prune=10.0)  # huge theta => everything prunable
-    trainer = Trainer(cfg, net, X, y, seed=0)
-    for _ in range(900):
-        trainer.step()
-    assert all(e["type"] != "prune" for e in trainer.events)  # nothing pruned yet
-    for _ in range(300):  # cross the warmup
-        trainer.step()
-    assert any(e["type"] == "prune" for e in trainer.events)   # now it prunes
 
 
 def test_trainer_records_history():

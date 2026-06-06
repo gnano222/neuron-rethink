@@ -1,20 +1,17 @@
 """Validation harness: check each "it works" criterion with numbers, not vibes.
 
-By default this validates the CURRENT architecture - gradient-as-currency - in
-which one metered signal (the per-synapse backprop gradient) drives confidence,
-pruning and growth (see sprout/currency.py). Run with ``--legacy`` to validate
-the original v1 eligibility / three-factor system against the spec's §11 list.
+This validates the CURRENT architecture - gradient-as-currency - in which one
+metered signal (the per-synapse backprop gradient) drives confidence, pruning
+and growth (see sprout/currency.py).
 
 Produces output/validation/report.json plus supporting plots:
   * eff_lr.png       - mean effective learning rate falling as confidence rises
-  * selectivity.png  - the metered signal is selective (currency: demand meter
-                       vs fresh gradient; legacy: eligibility vs co-activation)
+  * selectivity.png  - the metered signal is selective (demand meter vs fresh gradient)
   * decay.png        - confidence FALLING after a concept shift (re-adaptation)
 """
 
 from __future__ import annotations
 
-import argparse
 import json
 import os
 
@@ -30,22 +27,17 @@ from sprout.train import Config, Trainer, accuracy
 OUT = os.path.join("output", "validation")
 
 
-def _make_config(mode):
+def _make_config():
     # validate.py is a FIXED guardrail of the core currency mechanics
-    # (confidence/prune/grow). Sleep consolidation is now ON by default, but we
-    # pin it OFF here so this 7/7 guardrail stays a stable reference of the base
-    # learning loop (sleep is validated separately under docs/eval-runs).
-    if mode == "legacy":
-        return Config(eta_base=0.02, enable_eligibility=True, enable_confidence=True,
-                      enable_prune=True, enable_grow=True,
-                      theta_prune=0.001, prune_warmup=6000, enable_sleep=False)
-    # currency (default): no theta_prune / prune_warmup / grow_budget tuning
-    return Config(eta_base=0.02, grad_currency=True, enable_confidence=True,
-                  enable_prune=True, enable_grow=True, gamma_dec=0.001, t_struct=200,
-                  enable_sleep=False)
+    # (confidence/prune/grow) running CONTINUOUSLY. Sleep + phasic structure are
+    # pinned OFF here so this 7/7 guardrail stays a stable reference of the base
+    # learning loop (those are validated separately under docs/eval-runs).
+    return Config(eta_base=0.02, enable_confidence=True, enable_prune=True,
+                  enable_grow=True, gamma_dec=0.001, t_struct=200,
+                  enable_sleep=False, phasic_structure=False)
 
 
-def main(mode="currency"):
+def main():
     os.makedirs(OUT, exist_ok=True)
     X, y = generate_spirals(n=600, seed=0, turns=1.0, noise=0.10)
     # NOTE: this guardrail is deliberately PINNED to the original (2,10,10,8,2)
@@ -56,7 +48,7 @@ def main(mode="currency"):
     # moving target. Re-point + re-tune it only as a deliberate, separate task.
     net = build_graph([2, 10, 10, 8, 2], density=0.4, seed=0)
     init_weights(net, seed=0)
-    tr = Trainer(_make_config(mode), net, X, y, seed=0)
+    tr = Trainer(_make_config(), net, X, y, seed=0)
     tr.track(list(net.synapses.keys()))
 
     STEPS = 30000
@@ -64,7 +56,7 @@ def main(mode="currency"):
         tr.step(record=(s % 200 == 0 or s == STEPS - 1))
 
     h = tr.history
-    report = {"_mode": mode}
+    report = {"_mode": "currency"}
 
     # 1. boundary fits spirals -----------------------------------------------
     acc = accuracy(net, X, y)
@@ -72,10 +64,7 @@ def main(mode="currency"):
         "final_accuracy": acc, "max_accuracy": max(h["accuracy"]), "pass": acc > 0.9}
 
     # 2. the metered signal is SELECTIVE -------------------------------------
-    if mode == "legacy":
-        report["2_signal_selective"] = _legacy_eligibility_selectivity(net, X)
-    else:
-        report["2_signal_selective"] = _currency_meter_fidelity(net, X, y)
+    report["2_signal_selective"] = _currency_meter_fidelity(net, X, y)
 
     # 3. confidence gates learning on the wires it CONSOLIDATES --------------
     # 2D currency confidence is selective by design: it freezes only the few
@@ -110,13 +99,11 @@ def main(mode="currency"):
 
     # 6. growth adds useful wires; newborns start at weight 0 ----------------
     n_grow = sum(1 for e in tr.events if e["type"] == "grow")
-    born_zero, dead_skipped = _check_growth(mode)
+    born_zero, dead_skipped = _check_growth()
+    # the RigL win: growth never targets a dead (zero-gradient) neuron
     crit6 = {"n_grow_events": n_grow, "newborns_start_at_zero_weight": born_zero,
-             "pass": n_grow > 5 and born_zero}
-    if mode != "legacy":
-        # the RigL win: growth never targets a dead (zero-gradient) neuron
-        crit6["dead_neuron_never_grown"] = dead_skipped
-        crit6["pass"] = crit6["pass"] and dead_skipped
+             "dead_neuron_never_grown": dead_skipped,
+             "pass": n_grow > 5 and born_zero and dead_skipped}
     report["6_growth_useful"] = crit6
 
     # 7. synapse count grows then stabilizes ---------------------------------
@@ -137,7 +124,7 @@ def main(mode="currency"):
     with open(os.path.join(OUT, "report.json"), "w") as f:
         json.dump(report, f, indent=2, default=float)
 
-    print(f"\n============ VALIDATION ({mode}) ============")
+    print("\n============ VALIDATION (currency) ============")
     for k in sorted(report):
         if k.startswith("_"):
             continue
@@ -183,53 +170,15 @@ def _currency_meter_fidelity(net, X, y):
             "pass": corr > 0.5 and hi > 3 * (lo + 1e-9)}
 
 
-def _legacy_eligibility_selectivity(net, X):
-    """Legacy v1: eligibility is high on co-active synapses, low elsewhere."""
-    coact = {k: 0.0 for k in net.synapses}
-    nb = 0
-    for xi in X:
-        net.forward(xi)
-        for (pre, post) in net.synapses:
-            coact[(pre, post)] += abs(net.neurons[pre].activation * net.neurons[post].activation)
-        nb += 1
-    coact = {k: v / nb for k, v in coact.items()}
-    ck = np.array([coact[k] for k in net.synapses])
-    ek = np.array([net.synapses[k].eligibility for k in net.synapses])
-    corr = float(np.corrcoef(ck, ek)[0, 1])
-    order = np.argsort(ck)
-    lo = ek[order[: len(order) // 3]].mean()
-    hi = ek[order[-len(order) // 3:]].mean()
-    _plot_selectivity(ck, ek, "mean co-activation |a_pre·a_post|", "eligibility",
-                      "Eligibility is high only on co-active synapses")
-    return {"corr_elig_vs_coact": corr, "mean_elig_low_coact": float(lo),
-            "mean_elig_high_coact": float(hi), "pass": corr > 0.5 and hi > 5 * (lo + 1e-9)}
-
-
 # -- criterion 6 variants ----------------------------------------------------
 
-def _check_growth(mode):
+def _check_growth():
     """Return ``(newborns_born_at_zero, dead_neuron_skipped)``.
 
-    Both architectures birth grown synapses at weight 0 (a no-op on arrival).
-    The currency grower additionally must NOT grow into a dead neuron (one whose
-    gradient is identically zero), which is the whole point of RigL-style growth.
+    Grown synapses are born at weight 0 (a no-op on arrival). The currency grower
+    additionally must NOT grow into a dead neuron (one whose gradient is
+    identically zero), which is the whole point of RigL-style growth.
     """
-    from sprout.network import Network
-
-    if mode == "legacy":
-        from sprout.plasticity import grow
-        net = Network([3, 3, 2])
-        for n in net.neurons:
-            n.firing_rate = 1.0
-        net.add_synapse(0, 3)
-        net.neurons[3].firing_rate = 0.0
-        net.neurons[1].activation = 0.9
-        before = set(net.synapses)
-        grow(net, r_target=0.15, f_under=0.5, max_grow=1, grow_budget=6)
-        new = set(net.synapses) - before
-        born_zero = len(new) >= 1 and all(net.synapses[k].weight == 0.0 for k in new)
-        return born_zero, None
-
     from sprout.currency import batch_edge_scores, grow_currency
     from sprout.data import generate_blobs
     net = build_graph([2, 4, 4, 2], density=0.5, seed=1)
@@ -319,8 +268,4 @@ def _plot_decay(top, rel, pre):
 
 
 if __name__ == "__main__":
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--legacy", action="store_true",
-                    help="validate the v1 eligibility system instead of currency")
-    args = ap.parse_args()
-    main(mode="legacy" if args.legacy else "currency")
+    main()
