@@ -165,10 +165,11 @@ class Trainer:
         # A2: persistent EMA of the virtual gradient per candidate (ghost) wire,
         # carried across rewire cycles so growth reacts to a sustained signal.
         self.ghost_meter = {}  # (pre, post) -> ema score; only when cfg.ghost_meter
-        # sleep consolidation: detect when the net has settled, then prune hard.
+        # settledness detector: the plateau gate for sleep consolidation AND the
+        # trigger for phasic structural plasticity, so build it for either.
         self.settled = False
         self.sleep_detector = None
-        if cfg.enable_sleep:
+        if cfg.enable_sleep or cfg.phasic_structure:
             from sprout.sleep import SettlednessDetector
             self.sleep_detector = SettlednessDetector(
                 cfg.sleep_loss_beta, cfg.sleep_loss_tol,
@@ -260,6 +261,9 @@ class Trainer:
         return n_pruned, n_grown
 
     def _rewire_currency(self):
+        if self.cfg.phasic_structure:            # the C architecture: rewire only
+            return self._rewire_phasic()         # at settledness plateaus
+        # --- continuous path (the A/B baseline; selected by phasic_structure) ---
         from sprout.currency import (prune_currency, grow_currency,
                                       batch_edge_scores, update_ghost_meter)
         cfg, net = self.cfg, self.net
@@ -300,4 +304,44 @@ class Trainer:
         if consolidating:                       # require a fresh plateau next time
             self.sleep_detector.reset()
             self.settled = False
+        return n_pruned, n_grown
+
+    def _rewire_phasic(self):
+        """Phasic structural plasticity (the C architecture): structure changes
+        ONLY at a settledness plateau. Wake (not settled) is a no-op here; on a
+        settled tick run ONE rewire pass — prune the weak AND grow the wanted,
+        both uncapped (the utility floor and the relative grow bar are the only
+        limits) — then reset the detector so the next burst needs a fresh plateau.
+
+        This subsumes the sleep overlay and makes grow<->prune churn impossible:
+        rewires are far apart and gated on a fresh plateau, so the ghost-meter
+        refractory and the inflated grow bar are no longer load-bearing here.
+        """
+        from sprout.currency import prune_currency, grow_currency, batch_edge_scores
+        cfg, net = self.cfg, self.net
+        if not self.settled:                          # WAKE: structure frozen
+            return 0, 0
+
+        self.events.append({"step": self.step_idx, "type": "sleep", "edge": None})
+        n_pruned = n_grown = 0
+        if cfg.enable_prune:                          # prune every below-floor wire
+            cap = (cfg.sleep_max_prune if cfg.sleep_max_prune is not None
+                   else len(net.synapses))
+            pruned = prune_currency(net, cfg.t_grace, cap,
+                                    cfg.sleep_prune_floor, cfg.lam_prune)
+            for edge in pruned:
+                self.events.append({"step": self.step_idx, "type": "prune", "edge": edge})
+            n_pruned = len(pruned)
+        if cfg.enable_grow:                           # grow every above-bar ghost
+            b = min(cfg.virt_batch, len(self.X))
+            idx = self.rng.choice(len(self.X), size=b, replace=False)
+            ghost, ref = batch_edge_scores(net, self.X[idx], self.y[idx],
+                                           grow_demand_k=cfg.grow_demand_k)
+            grown = grow_currency(net, ghost, ref, len(ghost), cfg.grow_bar_frac)
+            for edge in grown:
+                self.events.append({"step": self.step_idx, "type": "grow", "edge": edge})
+            n_grown = len(grown)
+
+        self.sleep_detector.reset()                   # require a fresh plateau
+        self.settled = False
         return n_pruned, n_grown

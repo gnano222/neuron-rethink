@@ -117,8 +117,9 @@ def test_sleep_no_cap_prunes_more_than_wake_cap_in_one_burst():
     init_weights(net, seed=0)
     cfg = Config(eta_base=0.02, grad_currency=True, enable_confidence=True,
                  enable_prune=True, enable_grow=True, gamma_dec=0.001, t_struct=100,
-                 enable_sleep=True, sleep_warmup=500, sleep_patience=300,
-                 sleep_loss_tol=0.05, sleep_prune_floor=1.0, sleep_max_prune=None)
+                 enable_sleep=True, phasic_structure=False, sleep_warmup=500,
+                 sleep_patience=300, sleep_loss_tol=0.05, sleep_prune_floor=1.0,
+                 sleep_max_prune=None)
     tr = Trainer(cfg, net, X, y, seed=0)
     for _ in range(3000):
         tr.step()
@@ -134,7 +135,8 @@ def test_sleep_consolidation_fires_and_sparsifies():
     # once settled and (b) end sparser than an otherwise-identical no-sleep twin.
     from sprout.data import generate_spirals
     base = dict(eta_base=0.02, grad_currency=True, enable_confidence=True,
-                enable_prune=True, enable_grow=True, gamma_dec=0.001, t_struct=100)
+                enable_prune=True, enable_grow=True, gamma_dec=0.001, t_struct=100,
+                phasic_structure=False)
     X, y = generate_spirals(n=400, seed=0)
 
     def run(sleep):
@@ -161,11 +163,98 @@ def test_sleep_off_leaves_no_sleep_events():
     X, y = generate_spirals(n=300, seed=0)
     cfg = Config(eta_base=0.02, grad_currency=True, enable_confidence=True,
                  enable_prune=True, enable_grow=True, gamma_dec=0.001, t_struct=100,
-                 enable_sleep=False)          # explicit off (default is now on)
+                 enable_sleep=False, phasic_structure=False)  # continuous, sleep off
     tr = Trainer(cfg, net, X, y, seed=0)
     for _ in range(2000):
         tr.step()
     assert not any(e["type"] == "sleep" for e in tr.events)
+
+
+# -- phasic structural plasticity (the C architecture) ----------------------
+
+def test_default_config_is_phasic():
+    # PROMOTED DEFAULT: structure changes only at settledness plateaus (wake =
+    # learn, sleep = rewire). The continuous path is opt-in (phasic_structure=False).
+    assert Config().phasic_structure is True
+
+
+def _phasic_cfg(**kw):
+    base = dict(eta_base=0.02, enable_confidence=True, enable_prune=True,
+                enable_grow=True, gamma_dec=0.001, t_struct=100,
+                phasic_structure=True)
+    base.update(kw)
+    return Config(**base)
+
+
+def test_phasic_wake_makes_no_structural_change_before_settling():
+    # With a warmup longer than the run the net never settles, so phasic keeps
+    # structure frozen: no prune / grow / sleep events and the topology is fixed.
+    from sprout.data import generate_spirals
+    net = build_graph([2, 12, 12, 8, 2], density=0.6, seed=0)
+    init_weights(net, seed=0)
+    X, y = generate_spirals(n=400, seed=0)
+    cfg = _phasic_cfg(sleep_warmup=100000)        # never settles within the run
+    tr = Trainer(cfg, net, X, y, seed=0)
+    n0 = len(net.synapses)
+    for _ in range(3000):
+        tr.step()
+    assert not tr.events                          # nothing structural happened
+    assert len(net.synapses) == n0                # topology frozen during wake
+
+
+def test_phasic_sleep_pass_both_prunes_and_grows_when_forced():
+    # On a settled tick phasic fires ONE rewire that both prunes the weak and
+    # grows the wanted (independent thresholds, unlike the continuous overlay
+    # which skipped grow), then resets the detector for a fresh plateau.
+    from sprout.data import generate_spirals
+    net = build_graph([2, 12, 12, 8, 2], density=0.6, seed=0)
+    init_weights(net, seed=0)
+    X, y = generate_spirals(n=400, seed=0)
+    cfg = _phasic_cfg(grow_bar_frac=0.0, sleep_prune_floor=1.0, t_grace=50)
+    tr = Trainer(cfg, net, X, y, seed=0)
+    for _ in range(600):                          # age wires past grace; meter grads
+        tr.step()
+    tr.settled = True                             # force a plateau
+    tr.step_idx = 1000                            # a t_struct (=100) boundary
+    tr._rewire_phasic()
+    at = lambda kind: [e for e in tr.events if e["type"] == kind and e["step"] == 1000]
+    assert at("sleep")                            # logged a sleep
+    assert at("prune")                            # pruned a weak wire
+    assert at("grow")                             # grew a wanted ghost
+    assert tr.settled is False                    # detector reset after the burst
+
+
+def test_phasic_structural_events_only_at_sleep_ticks():
+    # The defining phasic property: prune/grow happen ONLY on sleep ticks, never
+    # continuously — so there is no grow<->prune churn between plateaus.
+    from sprout.data import generate_spirals
+    net = build_graph([2, 12, 12, 8, 2], density=0.6, seed=0)
+    init_weights(net, seed=0)
+    X, y = generate_spirals(n=400, seed=0)
+    cfg = _phasic_cfg(sleep_warmup=500, sleep_patience=300, sleep_loss_tol=0.05)
+    tr = Trainer(cfg, net, X, y, seed=0)
+    for _ in range(4000):
+        tr.step()
+    sleep_steps = {e["step"] for e in tr.events if e["type"] == "sleep"}
+    prune_steps = {e["step"] for e in tr.events if e["type"] == "prune"}
+    assert sleep_steps                            # it slept at least once
+    assert prune_steps                            # and pruned
+    assert prune_steps <= sleep_steps             # but ONLY at sleep ticks
+    assert {e["step"] for e in tr.events if e["type"] == "grow"} <= sleep_steps
+
+
+def test_phasic_no_structural_event_before_warmup():
+    # Pure-phasic cold start: nothing structural happens before sleep_warmup,
+    # even with a short patience — the net learns on its initial graph until then.
+    from sprout.data import generate_spirals
+    net = build_graph([2, 12, 12, 8, 2], density=0.6, seed=0)
+    init_weights(net, seed=0)
+    X, y = generate_spirals(n=400, seed=0)
+    cfg = _phasic_cfg(sleep_warmup=2000, sleep_patience=200, sleep_loss_tol=0.05)
+    tr = Trainer(cfg, net, X, y, seed=0)
+    for _ in range(2500):
+        tr.step()
+    assert not [e for e in tr.events if e["step"] < 2000]   # frozen before warmup
 
 
 def test_trainer_records_history():

@@ -29,7 +29,7 @@ VARIANTS: dict[str, Callable[[], Config]] = {
     "currency": lambda: Config(
         eta_base=0.02, grad_currency=True, enable_confidence=True,
         enable_prune=True, enable_grow=True,
-        gamma_dec=0.001, t_struct=200, enable_sleep=False,
+        gamma_dec=0.001, t_struct=200, enable_sleep=False, phasic_structure=False,
     ),
     # the PROMOTED DEFAULT: currency + settledness-gated sleep consolidation at
     # floor 1.0 / no cap (inherited from Config defaults). Prunes aggressively
@@ -39,7 +39,20 @@ VARIANTS: dict[str, Callable[[], Config]] = {
     "sleep": lambda: Config(
         eta_base=0.02, grad_currency=True, enable_confidence=True,
         enable_prune=True, enable_grow=True,
-        gamma_dec=0.001, t_struct=200, enable_sleep=True,
+        gamma_dec=0.001, t_struct=200, enable_sleep=True, phasic_structure=False,
+    ),
+    # the NEW default architecture (C): PHASIC structural plasticity. Wake = pure
+    # gated-SGD + meter the gradient (no structural change); sleep = ONE rewire
+    # pass (prune the weak + grow the wanted) fired only at a settledness plateau.
+    # Subsumes the sleep overlay and removes continuous grow<->prune churn — the
+    # ghost-meter refractory and inflated grow bar are no longer load-bearing.
+    # Compare vs the continuous+sleep `sleep` (the old default) and the no-sleep
+    # `currency` reference. sleep_* knobs inherit the promoted defaults
+    # (warmup 2500, patience 1500, floor 1.0, no cap).
+    "phasic": lambda: Config(
+        eta_base=0.02, grad_currency=True, enable_confidence=True,
+        enable_prune=True, enable_grow=True,
+        gamma_dec=0.001, t_struct=200, phasic_structure=True,
     ),
     # aggressive sleep: bigger consolidation bursts that fire sooner and more
     # often, to probe whether the ~27% lossless headroom the offline one-shot
