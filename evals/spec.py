@@ -54,6 +54,20 @@ VARIANTS: dict[str, Callable[[], Config]] = {
         enable_prune=True, enable_grow=True,
         gamma_dec=0.001, t_struct=200, phasic_structure=True,
     ),
+    # phasic + sleep-time RECYCLING of dead units: each burst clears a corpse's
+    # remaining wires (reclaiming the orphan-guard zombie) and rebirths it as a
+    # faint blank (bias = r_target) that re-enters active_pre and must out-bid
+    # the same grow bar to be rehired. Targets phasic's dead-unit cost
+    # (dead_unit_frac 0.09 -> 0.18 in phasic-vs-continuous); judge it on
+    # idle_unit_frac + the continual metrics, NOT dead_unit_frac (blanks fire,
+    # so that drops trivially). See docs/superpowers/specs/
+    # 2026-06-11-sleep-recycling-design.md. Compare vs `phasic`.
+    "phasic-recycle": lambda: Config(
+        eta_base=0.02, grad_currency=True, enable_confidence=True,
+        enable_prune=True, enable_grow=True,
+        gamma_dec=0.001, t_struct=200, phasic_structure=True,
+        recycle_dead=True,
+    ),
     # aggressive sleep: bigger consolidation bursts that fire sooner and more
     # often, to probe whether the ~27% lossless headroom the offline one-shot
     # prune found is reachable online without churn (or where accuracy breaks).

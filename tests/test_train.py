@@ -1,4 +1,5 @@
 import numpy as np
+import pytest
 
 from sprout.data import generate_blobs
 from sprout.network import build_graph, init_weights
@@ -255,6 +256,81 @@ def test_phasic_no_structural_event_before_warmup():
     for _ in range(2500):
         tr.step()
     assert not [e for e in tr.events if e["step"] < 2000]   # frozen before warmup
+
+
+# -- sleep-time recycling (opt-in on the phasic path) ------------------------
+
+def test_default_config_recycling_off():
+    # recycling is an opt-in experiment; the promoted phasic default is
+    # unchanged until the eval says otherwise.
+    assert Config().recycle_dead is False
+
+
+def _kill_unit(net, nid):
+    """Force a unit permanently silent, meter collapsed (a long-dead corpse)."""
+    net.neurons[nid].bias = -1e6
+    net.neurons[nid].firing_rate = 0.0
+
+
+def test_phasic_burst_recycles_dead_unit_when_enabled():
+    from sprout.data import generate_spirals
+    net = build_graph([2, 12, 12, 8, 2], density=0.6, seed=0)
+    init_weights(net, seed=0)
+    X, y = generate_spirals(n=400, seed=0)
+    cfg = _phasic_cfg(recycle_dead=True, t_grace=50)
+    tr = Trainer(cfg, net, X, y, seed=0)
+    victim = net.layers[1][0]
+    for _ in range(600):
+        tr.step()
+    _kill_unit(net, victim)
+    assert not [e for e in tr.events if e["type"] == "recycle"]  # none during wake
+    tr.settled = True                              # force a plateau
+    tr.step_idx = 1000                             # a t_struct (=100) boundary
+    tr._rewire_phasic()
+    rec = [e for e in tr.events if e["type"] == "recycle"]
+    assert any(e["neuron"] == victim and e["step"] == 1000 for e in rec)
+    assert net.incoming[victim] == [] and net.outgoing[victim] == []
+    assert net.neurons[victim].bias == pytest.approx(cfg.r_target)
+
+
+def test_phasic_burst_does_not_recycle_when_flag_off():
+    from sprout.data import generate_spirals
+    net = build_graph([2, 12, 12, 8, 2], density=0.6, seed=0)
+    init_weights(net, seed=0)
+    X, y = generate_spirals(n=400, seed=0)
+    cfg = _phasic_cfg(t_grace=50)                  # recycle_dead defaults False
+    tr = Trainer(cfg, net, X, y, seed=0)
+    victim = net.layers[1][0]
+    for _ in range(600):
+        tr.step()
+    _kill_unit(net, victim)
+    tr.settled = True
+    tr.step_idx = 1000
+    tr._rewire_phasic()
+    assert not [e for e in tr.events if e["type"] == "recycle"]
+    assert len(net.incoming[victim]) >= 1          # orphan guard still in force
+
+
+def test_training_continues_after_recycle():
+    # blanks (fan-in 0, fan-out 0) must flow through forward/backward/SGD; the
+    # blank keeps firing at its rebirth bias until the market hires it.
+    from sprout.data import generate_spirals
+    net = build_graph([2, 12, 12, 8, 2], density=0.6, seed=0)
+    init_weights(net, seed=0)
+    X, y = generate_spirals(n=400, seed=0)
+    cfg = _phasic_cfg(recycle_dead=True, t_grace=50)
+    tr = Trainer(cfg, net, X, y, seed=0)
+    victim = net.layers[1][0]
+    for _ in range(600):
+        tr.step()
+    _kill_unit(net, victim)
+    tr.settled = True
+    tr.step_idx = 1000
+    tr._rewire_phasic()
+    net.forward(X[0])                              # blank fires at its bias
+    assert net.neurons[victim].activation == pytest.approx(cfg.r_target)
+    losses = [tr.step() for _ in range(200)]       # ...and training goes on
+    assert all(np.isfinite(l) for l in losses)
 
 
 def test_trainer_records_history():

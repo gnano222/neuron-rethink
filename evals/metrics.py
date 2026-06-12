@@ -132,12 +132,17 @@ def neuron_activation_stats(net, X, eps: float = EPS) -> dict:
     ``X``, then averaged over neurons (equal weight per neuron) — so it stays
     comparable as the layer width changes. ``dead_unit_frac`` is the fraction of
     hidden neurons that never fire (the scale-free companion to the absolute
-    ``dead_unit_count``). Both are 0.0 for a net with no hidden layer.
+    ``dead_unit_count``). ``idle_unit_frac`` is the honest capacity readout:
+    hidden neurons that never fire OR have no outgoing wires — recycling turns
+    corpses into firing blanks (so they stop counting as *dead*), but a blank
+    stays *idle* until the grow market actually rehires it. All are 0.0 for a
+    net with no hidden layer.
     """
     last = len(net.layers) - 1
     hidden = [nid for L in range(1, last) for nid in net.layers[L]]
     if not hidden or len(X) == 0:
-        return {"mean_neuron_activation": 0.0, "dead_unit_frac": 0.0}
+        return {"mean_neuron_activation": 0.0, "dead_unit_frac": 0.0,
+                "idle_unit_frac": 0.0}
     sum_act = {nid: 0.0 for nid in hidden}
     max_act = {nid: 0.0 for nid in hidden}
     for xi in X:
@@ -149,9 +154,12 @@ def neuron_activation_stats(net, X, eps: float = EPS) -> dict:
                 max_act[nid] = a
     per_neuron_mean = [sum_act[nid] / len(X) for nid in hidden]
     dead = sum(1 for nid in hidden if max_act[nid] < eps)
+    idle = sum(1 for nid in hidden
+               if max_act[nid] < eps or not net.outgoing[nid])
     return {
         "mean_neuron_activation": float(np.mean(per_neuron_mean)),
         "dead_unit_frac": dead / len(hidden),
+        "idle_unit_frac": idle / len(hidden),
     }
 
 
@@ -425,6 +433,37 @@ def capacity_metrics(net, X, initial_count: int, eps: float = EPS) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# D. synapse quality — recycling (sleep-time corpse re-entry)
+# ---------------------------------------------------------------------------
+
+def recycle_metrics(events, net, X, eps: float = EPS) -> dict:
+    """Recycling activity + outcome.
+
+    ``n_recycle_events`` counts recycle firings (a unit can be recycled more
+    than once). ``recycled_rehired_frac`` is the end-state outcome: of the
+    *distinct* units ever recycled, the fraction ending the run non-idle —
+    firing AND with outgoing wires, i.e. actually back in service. NaN when
+    nothing was ever recycled (variants without the mechanism).
+    """
+    recycled = {e["neuron"] for e in events if e["type"] == "recycle"}
+    if not recycled:
+        return {"n_recycle_events": 0, "recycled_rehired_frac": float("nan")}
+    max_act = {nid: 0.0 for nid in recycled}
+    for xi in X:
+        net.forward(xi)
+        for nid in recycled:
+            a = net.neurons[nid].activation
+            if a > max_act[nid]:
+                max_act[nid] = a
+    rehired = sum(1 for nid in recycled
+                  if max_act[nid] >= eps and net.outgoing[nid])
+    return {
+        "n_recycle_events": sum(1 for e in events if e["type"] == "recycle"),
+        "recycled_rehired_frac": rehired / len(recycled),
+    }
+
+
+# ---------------------------------------------------------------------------
 # sanity: metered signal fidelity (currency only)
 # ---------------------------------------------------------------------------
 
@@ -497,9 +536,12 @@ METRIC_DIRECTIONS: dict[str, str] = {
     "frozen_freeloader_frac": "lower",
     "dead_unit_count": "lower",
     "dead_unit_frac": "lower",
+    "idle_unit_frac": "lower",
     "mean_neuron_activation": "neutral",
     "inert_synapse_frac": "lower",
     "used_vs_allocated": "neutral",
+    "n_recycle_events": "neutral",
+    "recycled_rehired_frac": "neutral",
     # sanity (currency)
     "meter_fidelity": "higher",
     # E. compute cost (descriptive: the scaling story is the chart, not verdicts)
@@ -558,9 +600,12 @@ METRIC_DESCRIPTIONS: dict[str, str] = {
     "frozen_freeloader_frac": "high-confidence but low-utility synapses",
     "dead_unit_count": "hidden neurons that never fire on test data",
     "dead_unit_frac": "fraction of hidden neurons that never fire (scale-free)",
+    "idle_unit_frac": "fraction of hidden neurons dead OR outputless (not in service)",
     "mean_neuron_activation": "avg hidden-neuron ReLU output on test data (neuron value)",
     "inert_synapse_frac": "fraction of synapses with ~zero weight",
     "used_vs_allocated": "live edges vs edges present at init",
+    "n_recycle_events": "dead-unit recycles fired over the run (sleep recycling)",
+    "recycled_rehired_frac": "of recycled units, fraction back in service at the end",
     # sanity
     "meter_fidelity": "corr of metered vs fresh gradient (currency only)",
     # E. compute cost
@@ -588,8 +633,9 @@ METRIC_FAMILIES: dict[str, tuple[str, ...]] = {
         "p10_utility", "freeloader_frac", "mean_survivor_age",
         "median_survivor_age", "mean_pruned_lifespan", "oscillation_frac",
         "max_regrow", "conf_utility_corr", "frozen_freeloader_frac",
-        "dead_unit_count", "dead_unit_frac", "mean_neuron_activation",
-        "inert_synapse_frac", "used_vs_allocated"),
+        "dead_unit_count", "dead_unit_frac", "idle_unit_frac",
+        "mean_neuron_activation", "inert_synapse_frac", "used_vs_allocated",
+        "n_recycle_events", "recycled_rehired_frac"),
     "Compute cost": ("ghost_dense_cost", "ghost_pairs_scored"),
     "Signal sanity": ("meter_fidelity",),
 }
@@ -612,6 +658,7 @@ def final_snapshot(net, X_test, y_test, events, initial_edges, series,
     fans = fan_stats(net)
     cap = capacity_metrics(net, X_test, initial_count=len(initial_edges))
     nact = neuron_activation_stats(net, X_test)
+    recyc = recycle_metrics(events, net, X_test)
     scan = ghost_scan_cost(net, X_test, y_test,
                            getattr(cfg, "grow_demand_k", None))
     ages = survivor_age_stats(net)
@@ -656,7 +703,10 @@ def final_snapshot(net, X_test, y_test, events, initial_edges, series,
         "frozen_freeloader_frac": cal["frozen_freeloader_frac"],
         "dead_unit_count": cap["dead_unit_count"],
         "dead_unit_frac": nact["dead_unit_frac"],
+        "idle_unit_frac": nact["idle_unit_frac"],
         "mean_neuron_activation": nact["mean_neuron_activation"],
+        "n_recycle_events": recyc["n_recycle_events"],
+        "recycled_rehired_frac": recyc["recycled_rehired_frac"],
         "ghost_dense_cost": scan["ghost_dense_cost"],
         "ghost_pairs_scored": scan["ghost_pairs_scored"],
         "inert_synapse_frac": cap["inert_synapse_frac"],

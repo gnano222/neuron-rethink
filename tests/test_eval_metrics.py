@@ -89,6 +89,69 @@ def test_neuron_activation_stats_no_hidden_neurons():
     s = metrics.neuron_activation_stats(net, [np.array([0.3, 0.7])])
     assert s["mean_neuron_activation"] == 0.0
     assert s["dead_unit_frac"] == 0.0
+    assert s["idle_unit_frac"] == 0.0
+
+
+def test_idle_unit_frac_counts_outputless_units():
+    # hidden 2 fires but has NO outgoing wires: it contributes nothing to the
+    # function => idle. hidden 3 fires and feeds the outputs => busy. This is
+    # the metric recycling cannot game (a recycled blank fires, so it is not
+    # "dead", but it stays idle until the market actually rehires it).
+    net = _net_2_2_2()
+    net.neurons[2].bias = 1.0
+    net.neurons[3].bias = 1.0
+    net.remove_synapse(2, 4)
+    net.remove_synapse(2, 5)
+    X = [np.array([0.5, 0.5])]
+    s = metrics.neuron_activation_stats(net, X)
+    assert s["dead_unit_frac"] == pytest.approx(0.0)   # both fire
+    assert s["idle_unit_frac"] == pytest.approx(0.5)   # but 2 is outputless
+
+
+def test_idle_unit_frac_counts_dead_units_even_when_fully_wired():
+    net = _net_2_2_2()
+    net.neurons[2].bias = -1e6          # dead, though all wires are live
+    net.neurons[3].bias = 1.0
+    X = [np.array([0.5, 0.5])]
+    s = metrics.neuron_activation_stats(net, X)
+    assert s["idle_unit_frac"] == pytest.approx(0.5)
+
+
+# -- recycling ----------------------------------------------------------------
+
+def test_recycle_metrics_counts_events_and_end_state_rehires():
+    # units 2 and 3 were both recycled during the run (3 events, 2 distinct).
+    # At the end: unit 2 fires and feeds the outputs (rehired); unit 3 fires
+    # but is outputless (still a blank) => rehired frac = 1/2.
+    net = _net_2_2_2()
+    net.neurons[2].bias = 0.15
+    net.neurons[3].bias = 0.15
+    net.remove_synapse(3, 4)
+    net.remove_synapse(3, 5)
+    events = [
+        {"step": 100, "type": "recycle", "edge": None, "neuron": 2},
+        {"step": 100, "type": "recycle", "edge": None, "neuron": 3},
+        {"step": 300, "type": "recycle", "edge": None, "neuron": 3},
+    ]
+    X = [np.array([0.5, 0.5])]
+    s = metrics.recycle_metrics(events, net, X)
+    assert s["n_recycle_events"] == 3
+    assert s["recycled_rehired_frac"] == pytest.approx(0.5)
+
+
+def test_recycle_metrics_nan_when_never_recycled():
+    # variants without recycling: activity 0, rehired frac undefined (NaN).
+    net = _net_2_2_2()
+    s = metrics.recycle_metrics([], net, [np.array([0.5, 0.5])])
+    assert s["n_recycle_events"] == 0
+    assert math.isnan(s["recycled_rehired_frac"])
+
+
+def test_recycle_metrics_are_registered():
+    for k in ("idle_unit_frac", "n_recycle_events", "recycled_rehired_frac"):
+        assert k in metrics.METRIC_DIRECTIONS
+        assert k in metrics.METRIC_DESCRIPTIONS
+    assert metrics.METRIC_DIRECTIONS["idle_unit_frac"] == "lower"
 
 
 # -- utility -----------------------------------------------------------------

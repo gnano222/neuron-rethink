@@ -30,6 +30,8 @@ KEY_METRICS = (
     "synapse_count_end", "effective_density",               # sparsity (cost/benefit)
     "ghost_dense_cost", "ghost_pairs_scored",               # grow-scan compute cost
     "mean_neuron_activation", "dead_unit_frac",             # "average neuron value"
+    "idle_unit_frac",                                       # honest capacity (recycling)
+    "n_recycle_events", "recycled_rehired_frac",            # recycling activity/outcome
     "max_grows_into_one_neuron", "oscillation_frac",
     "freeloader_frac", "conf_utility_corr", "dead_unit_count",
 )

@@ -1,8 +1,12 @@
-"""Tests for the settledness detector (sprout/sleep.py)."""
+"""Tests for the settledness detector and recycling (sprout/sleep.py)."""
 
 from __future__ import annotations
 
-from sprout.sleep import SettlednessDetector
+import numpy as np
+import pytest
+
+from sprout.network import Network
+from sprout.sleep import SettlednessDetector, dead_by_firing_rate, recycle_unit
 
 
 def test_not_settled_before_warmup():
@@ -49,3 +53,63 @@ def test_first_loss_seeds_the_ema():
     d = SettlednessDetector(beta=1.0, tol=0.01, patience=1, warmup=0)
     assert d.update(0.42, 0) is False
     assert d.loss_ema == 0.42
+
+
+# -- sleep-time recycling (apoptosis completes, then neurogenesis) ------------
+
+def _recycle_net():
+    """[2,2,2] fully connected: inputs 0,1 ; hidden 2,3 ; outputs 4,5."""
+    net = Network([2, 2, 2])
+    for pre in (0, 1):
+        for post in (2, 3):
+            net.add_synapse(pre, post, weight=0.5)
+    for pre in (2, 3):
+        for post in (4, 5):
+            net.add_synapse(pre, post, weight=0.5)
+    return net
+
+
+def test_dead_by_firing_rate_flags_collapsed_meter_hidden_only():
+    # only HIDDEN units are recyclable: a collapsed input/output meter is not a
+    # corpse (inputs hold raw data; outputs are softmax and always have delta).
+    net = _recycle_net()
+    for n in net.neurons:
+        n.firing_rate = 0.15
+    net.neurons[2].firing_rate = 0.0      # hidden corpse
+    net.neurons[0].firing_rate = 0.0      # input: ignored
+    net.neurons[4].firing_rate = 0.0      # output: ignored
+    assert dead_by_firing_rate(net) == [2]
+
+
+def test_dead_by_firing_rate_keeps_quiet_but_alive_units():
+    # a unit that fired recently has r many orders of magnitude above the floor;
+    # only a meter that has decayed for hundreds of silent steps qualifies.
+    net = _recycle_net()
+    for n in net.neurons:
+        n.firing_rate = 0.15
+    net.neurons[3].firing_rate = 1e-3     # quiet, but alive
+    assert dead_by_firing_rate(net) == []
+
+
+def test_recycle_unit_clears_all_wires_and_rebirths_as_blank():
+    # apoptosis completes: ALL wires go (incoming zombie + outgoing), and the
+    # unit is reborn as a blank firing at `bias` with its meter seeded there.
+    net = _recycle_net()
+    recycle_unit(net, 2, bias=0.15)
+    assert net.incoming[2] == [] and net.outgoing[2] == []
+    assert all(2 not in edge for edge in net.synapses)
+    assert net.neurons[2].bias == pytest.approx(0.15)
+    assert net.neurons[2].firing_rate == pytest.approx(0.15)
+
+
+def test_recycled_blank_fires_and_reenters_the_grow_market():
+    # the whole point: a blank fires at its bias, so it is in active_pre and the
+    # EXISTING grow scan prices ghost wires from it — no new growth machinery.
+    from sprout.currency import active_ghost_sets
+    net = _recycle_net()
+    recycle_unit(net, 2, bias=0.15)
+    net.forward(np.array([0.4, -0.2]))
+    assert net.neurons[2].activation == pytest.approx(0.15)
+    _, _, grad_b = net.backward(0)
+    active_pre, _ = active_ghost_sets(net, grad_b)
+    assert 2 in active_pre

@@ -87,6 +87,16 @@ class Config:
     # baseline + the validate.py guardrail. See the rewire step in Trainer.
     phasic_structure: bool = True
 
+    # --- sleep-time recycling (opt-in experiment; phasic path only) ---
+    # A dead ReLU unit is an absorbing state (delta = 0 => no updates, never
+    # ghost-scored as pre or post). When True, each phasic burst recycles
+    # corpses: clear all their wires (reclaiming the orphan-guard zombie) and
+    # rebirth them as faint blanks (bias = r_target) that re-enter active_pre
+    # and must out-bid the same grow bar as any candidate. Detection reuses the
+    # firing-rate EMA (free). See sprout/sleep.py and docs/superpowers/specs/
+    # 2026-06-11-sleep-recycling-design.md.
+    recycle_dead: bool = False
+
     # --- sleep consolidation (ON by default) ---
     # Prune AGGRESSIVELY only when the net has settled (a loss-EMA plateau),
     # instead of churning continuously. The lever is *timing*, not the criterion
@@ -332,6 +342,17 @@ class Trainer:
             for edge in pruned:
                 self.events.append({"step": self.step_idx, "type": "prune", "edge": edge})
             n_pruned = len(pruned)
+        if cfg.recycle_dead:                          # recycle corpses into blanks
+            # Before the grow scan, so wake-deaths and stillborns re-enter
+            # active_pre and bid in THIS burst's scan. Units silenced by this
+            # burst's prune still have a warm meter (it only decays during
+            # wake), so they are recycled one burst later — a built-in
+            # one-cycle refractory. See sprout/sleep.py.
+            from sprout.sleep import dead_by_firing_rate, recycle_unit
+            for nid in dead_by_firing_rate(net):
+                recycle_unit(net, nid, cfg.r_target)
+                self.events.append({"step": self.step_idx, "type": "recycle",
+                                    "edge": None, "neuron": nid})
         if cfg.enable_grow:                           # grow every above-bar ghost
             b = min(cfg.virt_batch, len(self.X))
             idx = self.rng.choice(len(self.X), size=b, replace=False)
