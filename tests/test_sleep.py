@@ -55,6 +55,117 @@ def test_first_loss_seeds_the_ema():
     assert d.loss_ema == 0.42
 
 
+# -- startle: the spike side of the detector ----------------------------------
+#
+# The spike baseline is a SLOW EMA (beta/10), not `best`: best is a min-ratchet
+# (one lucky downward noise excursion poisons it, and near zero loss the
+# typical EMA sits permanently "spiked" above its own trough — the smoke test
+# caught exactly that storm: 29 false alarms on a stationary task). Fast-vs-
+# slow is stable at stationarity and a real transition lifts fast ~10x before
+# slow moves. beta=1.0 in these tests => fast EMA = raw loss, slow beta = 0.1.
+
+def test_no_startle_during_monotone_descent():
+    # while improving, fast <= slow (the slow baseline lags ABOVE): never spiked.
+    d = SettlednessDetector(beta=1.0, tol=0.01, patience=100, warmup=0,
+                            spike_tol=0.5, spike_patience=3)
+    for s, loss in enumerate([1.0, 0.8, 0.6, 0.4, 0.3, 0.25, 0.2]):
+        d.update(loss, s)
+        assert d.startled is False
+
+
+def test_startled_after_sustained_spike_past_patience():
+    # settle at 0.1 (both EMAs converge there), then jump 4x: startled only
+    # once the spike has PERSISTED spike_patience steps (a one-sample
+    # transient cannot trip it). slow (beta 0.1) barely moves over 3 steps.
+    d = SettlednessDetector(beta=1.0, tol=0.01, patience=1000, warmup=0,
+                            spike_tol=0.5, spike_patience=3)
+    for s in range(5):
+        d.update(0.1, s)                  # slow baseline ~0.1
+    d.update(0.4, 5)
+    assert d.startled is False            # 1 step above: not yet
+    d.update(0.4, 6)
+    assert d.startled is False            # 2 steps: not yet
+    d.update(0.4, 7)
+    assert d.startled is True             # 3 sustained steps: alarm
+
+
+def test_startle_respects_warmup():
+    d = SettlednessDetector(beta=1.0, tol=0.01, patience=1000, warmup=100,
+                            spike_tol=0.5, spike_patience=2)
+    d.update(0.1, 0)
+    for s in range(1, 6):
+        d.update(0.9, s)                  # huge sustained spike, but pre-warmup
+    assert d.startled is False
+
+
+def test_plateau_wobble_below_tol_never_startles():
+    # wobble that stays under slow*(1+spike_tol) resets the spike counter.
+    d = SettlednessDetector(beta=1.0, tol=0.5, patience=1000, warmup=0,
+                            spike_tol=0.5, spike_patience=2)
+    for s, loss in enumerate([0.10, 0.10, 0.13, 0.14, 0.12, 0.14, 0.13]):
+        d.update(loss, s)                 # raw never exceeds 1.5x the slow EMA
+        assert d.startled is False
+
+
+def test_reset_rearms_the_startle():
+    # after the startle pass fires, reset() re-baselines the slow EMA to the
+    # spiked level: a stalled-high loss cannot re-fire (a stall is a plateau —
+    # sleep's job), only further deterioration can.
+    d = SettlednessDetector(beta=1.0, tol=0.01, patience=1000, warmup=0,
+                            spike_tol=0.5, spike_patience=2)
+    for s in range(4):
+        d.update(0.1, s)
+    d.update(0.6, 4)
+    d.update(0.6, 5)
+    assert d.startled is True
+    d.reset()                             # the startle pass fired
+    assert d.startled is False
+    d.update(0.6, 6)                      # stalled at the spike level
+    d.update(0.6, 7)
+    assert d.startled is False
+    d.update(1.2, 8)                      # escalating crisis: 2x the new base
+    d.update(1.2, 9)
+    assert d.startled is True
+
+
+def test_spike_below_absolute_floor_never_startles():
+    # measured failure mode: mid-training convergence waves and post-burst
+    # prune bumps are huge RELATIVE spikes (up to ~20x a tiny settled EMA) but
+    # tiny in ABSOLUTE terms (~0.1-0.17) — far below chance-level loss. The
+    # floor ("the net is actually in trouble") blocks them; real transitions
+    # (EMA 0.4-3.0) sail over it.
+    d = SettlednessDetector(beta=1.0, tol=0.01, patience=1000, warmup=0,
+                            spike_tol=0.5, spike_patience=2, spike_floor=0.35)
+    for s in range(4):
+        d.update(0.01, s)                 # deeply settled
+    d.update(0.15, 4)                     # 15x relative spike...
+    d.update(0.15, 5)
+    d.update(0.15, 6)
+    assert d.startled is False            # ...but absolutely tiny: a wave
+    d.update(0.9, 7)                      # a REAL transition
+    d.update(0.9, 8)
+    assert d.startled is True
+
+
+def test_reset_after_spike_fixes_false_settled_mid_descent():
+    # the artifact: post-transition the EMA never beats the OLD task's best,
+    # so since_improve counts through the descent and sleep fires mid-learning.
+    # reset() at the startle rebases best, so the descent registers as
+    # improvement and settled stays False until a TRUE plateau.
+    d = SettlednessDetector(beta=1.0, tol=0.01, patience=3, warmup=0,
+                            spike_tol=0.5, spike_patience=2)
+    for s in range(3):
+        d.update(0.05, s)                 # task A: settled-low best
+    d.update(0.9, 3)                      # transition
+    d.update(0.9, 4)
+    assert d.startled is True
+    d.reset()                             # startle pass fires here
+    # descending through the new task: improvements vs the REBASED best
+    settled_flags = [d.update(loss, 5 + i)
+                     for i, loss in enumerate([0.7, 0.5, 0.35, 0.25, 0.18])]
+    assert not any(settled_flags)         # no false settled mid-descent
+
+
 # -- sleep-time recycling (apoptosis completes, then neurogenesis) ------------
 
 def _recycle_net():

@@ -30,10 +30,27 @@ EMA). Startle is its mirror — same state, opposite threshold:
 * **settled** (existing): no `tol`-improvement for `patience` steps
   → sleep burst: **prune the weak + grow the wanted + recycle corpses**
   (scheduled maintenance, at `t_struct` ticks).
-* **startled** (new): `loss_ema > best × (1 + startle_tol)` sustained for
-  `startle_patience` consecutive steps, past warmup
+* **startled** (new): three conditions, all required —
+  1. *relative rise*: fast loss-EMA `> slow EMA × (1 + startle_tol)` (the
+     slow EMA, `beta/10`, is the "recent typical level" baseline);
+  2. *absolute trouble*: fast EMA `> startle_floor` (auto `ln(K)/2`, half of
+     chance-level CE for a K-class softmax — derived from the net, no tuning);
+  3. *sustained*: both held for `startle_patience` consecutive steps, past
+     warmup
   → startle pass: **grow only**, fired **immediately** (any step — it is an
   alarm, not maintenance).
+
+**Why three conditions (measured, not theorized):** the first build compared
+the EMA to `best` — a min-ratchet that one lucky downward excursion poisons;
+near-zero loss the typical EMA sits permanently "spiked" above its own
+trough: **29 false alarms on a stationary task** (smoke test). Switching the
+baseline to a slow EMA killed the ratchet but left ~4–5 false fires:
+mid-training *convergence waves* and *post-burst prune bumps* are huge
+relative spikes (up to ~20× a tiny settled EMA at 0.006) yet absolutely small
+(EMA 0.09–0.17). Real transitions push the EMA to ~0.4–3.0 — an order above
+chance/2 ≈ 0.35. With the floor: **0 false alarms on stationary, ~2 per
+transition-bearing run, sparsity preserved** (132 syn ≈ phasic's 123 on
+no-shift).
 
 This gives each structural operation its natural trigger: you know what is
 *useless* only when calm (utility meters are clean at a plateau); you know
@@ -68,17 +85,20 @@ After firing, `detector.reset()` — the same re-baseline a sleep burst does:
 ### Detector changes (sprout/sleep.py, backward-compatible)
 
 `SettlednessDetector(beta, tol, patience, warmup, spike_tol=0.5,
-spike_patience=50)` gains `since_spike` (incremented in `update()` while
-`loss_ema > best*(1+spike_tol)`, else zeroed) and a `startled` property
-(`last step ≥ warmup AND since_spike ≥ spike_patience`). `update()`'s
-signature/return are unchanged; `reset()` additionally zeroes `since_spike`.
-Variants with `startle=False` never read `startled` — bit-identical.
+spike_patience=50, spike_floor=0.0)` gains a slow EMA (`beta/10`),
+`since_spike` (incremented in `update()` while `loss_ema >
+loss_slow*(1+spike_tol)`, else zeroed) and a `startled` property (`last step
+≥ warmup AND since_spike ≥ spike_patience AND loss_ema > spike_floor`).
+`update()`'s signature/return are unchanged; `reset()` additionally zeroes
+`since_spike` and rebases the slow EMA. Variants with `startle=False` never
+read `startled` — bit-identical.
 
 ### Trainer changes (sprout/train.py, phasic-only)
 
-Three new `Config` fields: `startle: bool = False`, `startle_tol: float =
-0.5`, `startle_patience: int = 50`. In `_step_currency`, after the detector
-update and the (unchanged) `t_struct` rewire block:
+Four new `Config` fields: `startle: bool = False`, `startle_tol: float =
+0.5`, `startle_patience: int = 50`, `startle_floor: float | None = None`
+(None ⇒ auto `ln(K)/2` from the output layer). In `_step_currency`, after
+the detector update and the (unchanged) `t_struct` rewire block:
 
 ```
 if cfg.phasic_structure and cfg.startle and cfg.enable_grow \

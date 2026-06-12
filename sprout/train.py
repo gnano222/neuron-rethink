@@ -87,6 +87,25 @@ class Config:
     # baseline + the validate.py guardrail. See the rewire step in Trainer.
     phasic_structure: bool = True
 
+    # --- startle: demand-triggered growth (opt-in experiment; phasic only) ---
+    # The third phase: wake = learn, sleep = consolidate (prune + recycle at
+    # plateaus), startle = HIRE. Plateau-gated bursts are demand-blind (zero
+    # blank rehires + a b_learned loss on the continual regime, see
+    # docs/eval-runs/recycle-continual); the startle fires a grow-only pass
+    # ~spike_patience steps into a sustained loss-EMA spike — while the
+    # transition's deltas are still hot — then reset() re-baselines the
+    # detector (refractory + kills the false-settled-mid-descent artifact).
+    # An alarm, not maintenance: fires on ANY step, not just t_struct ticks.
+    # See docs/superpowers/specs/2026-06-11-startle-demand-triggered-growth-design.md.
+    startle: bool = False
+    startle_tol: float = 0.5       # spike = fast EMA above slow EMA * (1 + this)
+    startle_patience: int = 50     # sustained spike steps before the alarm
+    # absolute trouble floor for the alarm; None => auto ln(K)/2 from the
+    # net's output layer (half of chance-level CE). Blocks the measured false
+    # positives — mid-training convergence waves and post-burst prune bumps
+    # are huge RELATIVE spikes but sit far below chance-level loss.
+    startle_floor: float | None = None
+
     # --- sleep-time recycling (opt-in experiment; phasic path only) ---
     # A dead ReLU unit is an absorbing state (delta = 0 => no updates, never
     # ghost-scored as pre or post). When True, each phasic burst recycles
@@ -180,10 +199,16 @@ class Trainer:
         self.settled = False
         self.sleep_detector = None
         if cfg.enable_sleep or cfg.phasic_structure:
+            import math
             from sprout.sleep import SettlednessDetector
+            floor = (cfg.startle_floor if cfg.startle_floor is not None
+                     else 0.5 * math.log(len(net.layers[-1])))  # ln(K)/2
             self.sleep_detector = SettlednessDetector(
                 cfg.sleep_loss_beta, cfg.sleep_loss_tol,
-                cfg.sleep_patience, cfg.sleep_warmup)
+                cfg.sleep_patience, cfg.sleep_warmup,
+                spike_tol=cfg.startle_tol,
+                spike_patience=cfg.startle_patience,
+                spike_floor=floor)
 
         if cfg.init_firing_rate_at_target:
             for n in net.neurons:
@@ -268,6 +293,14 @@ class Trainer:
         n_pruned = n_grown = 0
         if (cfg.enable_prune or cfg.enable_grow) and self.step_idx % cfg.t_struct == 0:
             n_pruned, n_grown = self._rewire_currency()
+        # Startle (phasic-only): an ALARM, checked every step (not just t_struct
+        # ticks — hiring latency is the whole point). Placed AFTER the rewire so
+        # a sleep burst that just fired (and reset the detector) disarms it —
+        # `startled` reads live counters, so sleep + startle never share a tick.
+        if (cfg.phasic_structure and cfg.startle and cfg.enable_grow
+                and self.sleep_detector is not None
+                and self.sleep_detector.startled):
+            n_grown += self._startle_grow()
         return n_pruned, n_grown
 
     def _rewire_currency(self):
@@ -366,3 +399,29 @@ class Trainer:
         self.sleep_detector.reset()                   # require a fresh plateau
         self.settled = False
         return n_pruned, n_grown
+
+    def _startle_grow(self):
+        """The startle pass: hire NOW, while the demand spike is live.
+
+        Grow-only — pruning needs calm meters (spike-time load is stale and
+        demand transient; sleep owns prune + recycle). Reuses the burst grow
+        verbatim: uncapped over the same relative bar, which self-normalizes
+        during a spike (ref rises with the deltas, so only ghosts the loss
+        wants >> a typical live wire clear). Then reset(): refractory (a
+        stalled-high loss cannot re-fire — that plateau is sleep's job; only
+        further deterioration can) + the post-transition descent now counts
+        as improvement, so sleep waits for the new task's true plateau.
+        """
+        from sprout.currency import grow_currency, batch_edge_scores
+        cfg, net = self.cfg, self.net
+        self.events.append({"step": self.step_idx, "type": "startle", "edge": None})
+        b = min(cfg.virt_batch, len(self.X))
+        idx = self.rng.choice(len(self.X), size=b, replace=False)
+        ghost, ref = batch_edge_scores(net, self.X[idx], self.y[idx],
+                                       grow_demand_k=cfg.grow_demand_k)
+        grown = grow_currency(net, ghost, ref, len(ghost), cfg.grow_bar_frac)
+        for edge in grown:
+            self.events.append({"step": self.step_idx, "type": "grow", "edge": edge})
+        self.sleep_detector.reset()
+        self.settled = False
+        return len(grown)

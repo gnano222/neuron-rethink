@@ -32,6 +32,7 @@ KEY_METRICS = (
     "mean_neuron_activation", "dead_unit_frac",             # "average neuron value"
     "idle_unit_frac",                                       # honest capacity (recycling)
     "n_recycle_events", "recycled_rehired_frac",            # recycling activity/outcome
+    "n_startle_events",                                     # demand-spike hiring alarms
     "max_grows_into_one_neuron", "oscillation_frac",
     "freeloader_frac", "conf_utility_corr", "dead_unit_count",
 )

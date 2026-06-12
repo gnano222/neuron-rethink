@@ -258,6 +258,88 @@ def test_phasic_no_structural_event_before_warmup():
     assert not [e for e in tr.events if e["step"] < 2000]   # frozen before warmup
 
 
+# -- startle: demand-triggered growth (opt-in on the phasic path) -------------
+
+def test_default_config_startle_off():
+    cfg = Config()
+    assert cfg.startle is False
+    assert cfg.startle_tol == 0.5
+    assert cfg.startle_patience == 50
+    assert cfg.startle_floor is None       # None => auto ln(K)/2 from the net
+
+
+def test_startle_floor_auto_derives_from_output_layer():
+    # None => half of chance-level CE loss, ln(K)/2 — self-scaling, no tuning.
+    import math
+    net = build_graph([2, 12, 12, 8, 2], density=0.6, seed=0)
+    init_weights(net, seed=0)
+    X, y = generate_blobs(n=100, seed=0)
+    tr = Trainer(_phasic_cfg(startle=True), net, X, y, seed=0)
+    assert tr.sleep_detector.spike_floor == pytest.approx(math.log(2) / 2)
+
+
+def _spike_run(startle, sleep_warmup=1000, startle_patience=25, **cfg_kw):
+    """Train normally, then FORCE the settled-low precondition (best = 0.05)
+    so the unconverged test net's loss EMA (~0.6) reads as a sustained spike.
+
+    The detection logic itself (relative spike, persistence, warmup, re-arm)
+    is unit-tested in test_sleep.py with hand-fed losses; these runs test the
+    TRAINER wiring: alarm -> grow-only pass -> event log -> detector reset.
+    Sleep is disabled (huge patience) to isolate the startle path. Returns
+    (trainer, step at which the spike began).
+    """
+    from sprout.data import generate_spirals
+    net = build_graph([2, 12, 12, 8, 2], density=0.6, seed=0)
+    init_weights(net, seed=0)
+    X, y = generate_spirals(n=400, seed=0)
+    cfg = _phasic_cfg(startle=startle, sleep_warmup=sleep_warmup,
+                      startle_patience=startle_patience,
+                      sleep_patience=100000, **cfg_kw)
+    tr = Trainer(cfg, net, X, y, seed=0)
+    for _ in range(1500):
+        tr.step()
+    spike_step = tr.step_idx
+    tr.sleep_detector.loss_slow = 0.05       # a deeply-settled baseline: the
+    for _ in range(200):                     # EMA (~0.6) is now a 12x spike
+        tr.step()
+    return tr, spike_step
+
+
+def test_startle_fires_after_a_spike_not_during_calm_training():
+    tr, spike_step = _spike_run(startle=True)
+    startles = [e["step"] for e in tr.events if e["type"] == "startle"]
+    assert startles                                # the alarm fired
+    assert all(s >= spike_step for s in startles)  # never during calm training
+    # ...and it fired while the window was hot: ~patience steps in, NOT at a
+    # plateau hundreds of steps later (it is an alarm, not maintenance — note
+    # it fires off the t_struct grid).
+    assert min(startles) - spike_step <= 25 + 5
+    # exactly one: reset() re-baselined best to the spiked EMA (refractory)
+    assert len(startles) == 1
+
+
+def test_startle_grows_and_never_prunes():
+    # bar 0 so every scored ghost clears: the pass must GROW at the startle
+    # step and must never prune (pruning stays sleep-only; sleep is disabled).
+    tr, _ = _spike_run(startle=True, grow_bar_frac=0.0)
+    startle_steps = {e["step"] for e in tr.events if e["type"] == "startle"}
+    grow_steps = {e["step"] for e in tr.events if e["type"] == "grow"}
+    assert startle_steps
+    assert startle_steps <= grow_steps             # the alarm hired
+    assert not [e for e in tr.events if e["type"] == "prune"]
+
+
+def test_no_startle_events_when_flag_off():
+    tr, _ = _spike_run(startle=False)
+    assert not [e for e in tr.events if e["type"] == "startle"]
+
+
+def test_startle_respects_sleep_warmup():
+    # warmup longer than the whole run: even a huge spike must NOT fire.
+    tr, _ = _spike_run(startle=True, sleep_warmup=100000)
+    assert not [e for e in tr.events if e["type"] == "startle"]
+
+
 # -- sleep-time recycling (opt-in on the phasic path) ------------------------
 
 def test_default_config_recycling_off():

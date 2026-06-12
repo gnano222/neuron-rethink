@@ -154,6 +154,26 @@ def test_recycle_metrics_are_registered():
     assert metrics.METRIC_DIRECTIONS["idle_unit_frac"] == "lower"
 
 
+# -- startle ------------------------------------------------------------------
+
+def test_structural_metrics_count_startle_events():
+    events = [
+        {"step": 100, "type": "startle", "edge": None},
+        {"step": 100, "type": "grow", "edge": (0, 5)},
+        {"step": 400, "type": "startle", "edge": None},
+        {"step": 900, "type": "sleep", "edge": None},
+        {"step": 900, "type": "prune", "edge": (0, 5)},
+    ]
+    s = metrics.structural_metrics(events)
+    assert s["n_startle_events"] == 2
+    assert s["n_grow_events"] == 1            # startles are not grow events
+
+
+def test_startle_metric_is_registered():
+    assert metrics.METRIC_DIRECTIONS["n_startle_events"] == "neutral"
+    assert "n_startle_events" in metrics.METRIC_DESCRIPTIONS
+
+
 # -- utility -----------------------------------------------------------------
 
 def test_synapse_utilities_combine_weight_and_demand():

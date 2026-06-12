@@ -68,6 +68,30 @@ VARIANTS: dict[str, Callable[[], Config]] = {
         gamma_dec=0.001, t_struct=200, phasic_structure=True,
         recycle_dead=True,
     ),
+    # phasic + STARTLE: demand-triggered growth, the third phase (wake = learn,
+    # sleep = consolidate, startle = hire). A grow-only pass fires ~60 steps
+    # into a sustained loss-EMA spike — while the transition's deltas are hot —
+    # then re-baselines the detector. Targets phasic's continual losses
+    # (b_learned 0.973 vs currency 0.983 ▲; demand-blind plateau bursts, see
+    # docs/eval-runs/recycle-continual). Compare vs `phasic`. Spec:
+    # docs/superpowers/specs/2026-06-11-startle-demand-triggered-growth-design.md.
+    "phasic-startle": lambda: Config(
+        eta_base=0.02, grad_currency=True, enable_confidence=True,
+        enable_prune=True, enable_grow=True,
+        gamma_dec=0.001, t_struct=200, phasic_structure=True,
+        startle=True,
+    ),
+    # the full triad: startle hiring + sleep recycling. Blanks born at sleep
+    # bursts now get to bid into HOT startle windows — the configuration the
+    # recycling experiment said should finally rehire them (its zero-rehire
+    # failure was burst timing, not the re-entry path). Judge rehiring on
+    # recycled_rehired_frac + idle_unit_frac vs `phasic-recycle`'s 0.0 / 0.42.
+    "phasic-startle-recycle": lambda: Config(
+        eta_base=0.02, grad_currency=True, enable_confidence=True,
+        enable_prune=True, enable_grow=True,
+        gamma_dec=0.001, t_struct=200, phasic_structure=True,
+        startle=True, recycle_dead=True,
+    ),
     # aggressive sleep: bigger consolidation bursts that fire sooner and more
     # often, to probe whether the ~27% lossless headroom the offline one-shot
     # prune found is reachable online without churn (or where accuracy breaks).
