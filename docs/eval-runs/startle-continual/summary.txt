@@ -1,0 +1,51 @@
+metric                                      currency                  phasic          phasic-startle  phasic-startle-recycle
+----------------------------------------------------------------------------------------------------------------------------
+final_test_acc ↑                              0.919≈                   0.906                  0.903≈                  0.885≈
+max_test_acc ↑                                0.938≈                   0.921                  0.923≈                  0.921≈
+final_train_acc ↑                             0.928≈                   0.911                  0.909≈                  0.887▼
+final_test_loss ↓                             0.171≈                   0.201                  0.214≈                  0.243≈
+steps_to_90 ↓                                 32681?                       ∞                      ∞?                      ∞?
+steps_to_95 ↓                                     ∞?                       ∞                      ∞?                      ∞?
+auc_test_acc ↑                                0.860≈                   0.852                  0.853≈                  0.853≈
+final_acc_stability ↓                         0.015≈                   0.013                  0.012≈                  0.014≈
+a_peak ↑                                      0.998≈                   0.998                  0.998≈                  0.998≈
+b_learned ↑                                   0.983▲                   0.973                  0.979≈                  0.970≈
+forgetting ↓                                  0.267≈                   0.301                  0.288≈                  0.333≈
+consolidation ↑                               0.896≈                   0.868                  0.856≈                  0.839≈
+relearn_gap ↓                                 0.077≈                   0.124                  0.142≈                  0.131≈
+a_steps_to_80 ↓                                 200≈                     240                    240≈                    240≈
+a_steps_to_90 ↓                                 560≈                     560                    560≈                    560≈
+b_steps_to_80 ↓                                 200≈                     200                    200≈                    200≈
+b_steps_to_90 ↓                                 360≈                     320                    360≈                    600≈
+synapse_count_start                             244≈                     242                    242≈                    242≈
+synapse_count_peak                          246.200≈                     242                    242≈                    242≈
+synapse_count_end                           225.800≈                 106.200                106.400≈                 94.600≈
+n_grow_events                               174.800≈                  57.400                     59≈                 55.400≈
+n_prune_events                                  191≈                 193.200                194.600≈                182.400≈
+n_startle_events                                  0≈                       0                  1.800≈                  1.800≈
+distinct_neurons_grown                       22.200≈                  15.200                 15.600≈                 14.800≈
+turnover ↓                                    1.644≈                   1.622                  1.590≈                  1.627≈
+max_grows_into_one_neuron ↓                  20.400▼                  10.200                  9.400≈                  8.800≈
+mean_fan_in                                   4.516≈                   2.124                  2.128≈                  1.892≈
+mean_fan_out                                  4.516≈                   2.124                  2.128≈                  1.892≈
+effective_density                             0.392≈                   0.184                  0.185≈                  0.164≈
+p10_utility ↑                                 0.694≈                   0.740                  0.709≈                  0.815≈
+freeloader_frac ↓                             0.005▲                   0.032                  0.052▼                  0.038≈
+mean_survivor_age ↑                           32767≈                   33564                  33754≈                  31766≈
+median_survivor_age ↑                         40000≈                   40000                  40000≈                  40000≈
+mean_pruned_lifespan                           8111≈                   14004                  14730≈                  14932≈
+oscillation_frac ↓                            0.238▼                   0.127                  0.083≈                  0.057≈
+max_regrow ↓                                  4.200▼                   1.600                      1≈                  1.200≈
+conf_utility_corr ↑                           0.181≈                   0.154                  0.113≈                  0.225≈
+frozen_freeloader_frac ↓                          0≈                       0                      0≈                      0≈
+dead_unit_count ↓                             5.200≈                   7.800                  8.400≈                  0.200▲
+dead_unit_frac ↓                              0.108≈                   0.162                  0.175≈                  0.004▲
+idle_unit_frac ↓                              0.171▲                   0.338                  0.346≈                  0.400≈
+mean_neuron_activation                        0.243≈                   0.254                  0.237≈                  0.287≈
+inert_synapse_frac ↓                              0≈                       0                      0≈                      0≈
+used_vs_allocated                             0.933≈                   0.439                  0.440≈                  0.391≈
+n_recycle_events                                  0≈                       0                      0≈                 10.400≈
+recycled_rehired_frac                             —?                       —                      —?                      0?
+ghost_dense_cost                            738.200≈                 857.800                857.600≈                869.400≈
+ghost_pairs_scored                           86.769≈                  98.561                 84.713≈                123.384≈
+meter_fidelity ↑                              0.955≈                   0.954                  0.971≈                  0.922≈

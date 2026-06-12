@@ -1,10 +1,54 @@
 # Startle: demand-triggered growth (the third phase)
 
 **Date:** 2026-06-11
-**Status:** experiment (opt-in `Config.startle`; variants `phasic-startle`,
-`phasic-startle-recycle`; promotion decided by eval)
+**Status:** RESULTS IN — **not promoted** (kept opt-in; mixed: real wins on
+single+shift + a continual reliability win, but the headline `b_learned` gap
+did not clearly close — see Results)
 **Builds on:** phasic structural plasticity (2026-06-06) + the recycling
 negative result (2026-06-11 sleep-recycling spec)
+
+## Results (2026-06-11, 5 seeds each, baseline = phasic)
+
+* **Trigger quality (H1): PASSED.** 0 false alarms on stationary runs, 1–3
+  per transition-bearing run (single+shift 2.0, continual 1.8) — the
+  three-condition alarm is surgical.
+* **Single + shift** ([startle-vs-phasic](../../eval-runs/startle-vs-phasic/)):
+  accuracy/speed all ≈ (do-no-harm ✓) with real wins: `idle_unit_frac`
+  0.300 → 0.221 ▲ (startle growth recruits idle capacity), `turnover` ▲
+  (1.18 → 0.88), `final_acc_stability` 0.062 → 0.045 ≈ (the right
+  direction on phasic's post-shift wobble). Costs: ends denser (123 → 179
+  syn ≈, density 0.21 → 0.31) and the emergency hires read as low quality at
+  the end — `p10_utility` 0.77 → 0.39 ▼, `freeloader_frac` 0.024 → 0.124 ▼:
+  the 3k post-shift window fits only ~one hire→settle→prune cycle, so the
+  failed hires are not yet cleaned up.
+* **Continual A→B→A+B** ([startle-continual](../../eval-runs/startle-continual/)),
+  the primary: **H2 not confirmed.** `b_learned` 0.973 → 0.979 ≈ — the
+  direction is right (closes ~half the gap to currency's 0.983 ▲) and the
+  per-seed story is a real *reliability* win (worst seed 0.960 → 0.977,
+  spread 0.027 → 0.006) at **identical sparsity** (106 vs phasic's 106 syn —
+  later sleep bursts prune the emergency hires back; currency needs 226).
+  But the mean is not significant at 5 seeds, `consolidation`/`relearn_gap`
+  did not improve (H3 ✗), and `freeloader_frac` still ▼ (0.032 → 0.052).
+* **Recycling combo (H4): blanks STILL never rehired** (0 across all seeds,
+  both regimes) — even bidding into hot windows, `|delta|·r_target` cannot
+  out-bid live features (the bid-scale doubt in the spec was right; timing
+  was necessary but not sufficient). The combo does zero out dead units
+  (`dead_unit_frac` 0.004 ▲ continual) but ends with *more* idle blanks
+  (0.400 ≈) and a clear `final_train_acc` ▼ — recycling stays not-promoted.
+* **The deeper finding:** phasic's continual gap vs continuous does NOT live
+  at transition onset (all variants hit `b_steps_to_80` = 200 identically;
+  the startle's onset hires barely move it). It lives in the **refinement
+  tail** — currency grows ~175 times spread across the whole run, feeding
+  capacity to the last-1% fit, while phasic+startle concentrates ~60 grows
+  into a few events. One correctly-timed emergency hire ≠ sustained
+  refinement-phase growth.
+* **Follow-up lever (not built): an aroused WINDOW, not a one-shot pass** —
+  on startle, open an alarm state that re-enables growth every `t_struct`
+  while the loss remains above the floor (close on re-settle). Bounded
+  continuous growth during crisis + refinement; subsumes the one-shot pass
+  and directly targets the refinement-tail gap. Watch `freeloader_frac` (the
+  failed-hire cost compounds with more hiring) and keep the sleep cleanup
+  cycle in the loop.
 
 ## Problem: plateau-gated bursts are demand-blind
 

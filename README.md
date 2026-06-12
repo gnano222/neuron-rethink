@@ -125,10 +125,32 @@ was accuracy-safe and trivially zeroes `dead_unit_frac`, but the market never
 hired: **zero rehires on continual** (idle frac *worse* 0.34 → 0.42 ▼, final
 test loss ▼), because plateau-gated bursts are **demand-blind** — by the time
 the loss has re-settled enough to fire a burst, the transition's demand spike
-the blanks needed is gone. The honest lesson: the lever is burst *timing*
-relative to demand (e.g. a "startle" trigger on loss-EMA spikes), not corpse
-re-entry. See [recycle-vs-phasic](docs/eval-runs/recycle-vs-phasic/) and
+the blanks needed is gone. See
+[recycle-vs-phasic](docs/eval-runs/recycle-vs-phasic/) and
 `docs/superpowers/specs/2026-06-11-sleep-recycling-design.md`.
+
+**Startle — demand-triggered growth — fixes the timing, half-fixes the gap.**
+The follow-up experiment (`startle=True`, opt-in): a third phase alongside
+wake/sleep — a **grow-only pass fired ~60 steps into a loss spike**, while the
+transition's deltas are hot. The alarm is three-condition and measured-robust
+(fast-vs-slow loss EMA ×1.5, an absolute trouble floor auto-set to `ln(K)/2` ≈
+half chance-level CE, sustained 50 steps): **0 false alarms** on stationary
+runs, ~2 per transition, after the naive best-relative trigger stormed (29
+false alarms — convergence waves and post-burst prune bumps are huge
+*relative* spikes but sit far below chance-level loss). Measured (5 seeds,
+[startle-vs-phasic](docs/eval-runs/startle-vs-phasic/) +
+[startle-continual](docs/eval-runs/startle-continual/)): single+shift —
+`idle_unit_frac` 0.30 → 0.22 ▲, `turnover` ▲, accuracy ≈; continual —
+`b_learned` 0.973 → 0.979 ≈ (closes ~half the gap to continuous, and raises
+the worst seed 0.960 → 0.977) at **identical end sparsity** (~106 wires vs
+continuous's ~226). Honest costs: emergency hires read as freeloaders until a
+sleep cycle cleans them (`freeloader_frac` ▼), and the mean `b_learned` gain
+is *not significant* at 5 seeds — so startle stays **opt-in**. The residual
+gap vs continuous lives in **refinement-tail growth** (continuous grows ~175×
+spread over the run; one onset hire can't substitute), pointing at an *aroused
+window* (growth re-enabled while the loss stays above the floor) as the next
+lever. Spec + results:
+`docs/superpowers/specs/2026-06-11-startle-demand-triggered-growth-design.md`.
 
 ## Quick start
 
