@@ -106,9 +106,29 @@ higher-quality survivors (`p10_utility` ▲). Two honest costs: it roughly
 **doubles permanently-dead units** (`dead_unit_frac` 0.09 → 0.18 ▼) and slightly
 worsens post-shift accuracy stability — synapse sparsity is orthogonal to the
 ~47% per-input firing fraction (the win is lower fan-in, not fewer neurons
-firing), and the dead-unit cost to the **continual/forgetting** regime is not yet
-measured. `validate.py` and the `currency` / `sleep` baselines pin the continuous
+firing). `validate.py` and the `currency` / `sleep` baselines pin the continuous
 path (`phasic_structure=False`) as stable references.
+
+**The dead-unit cost is real on the continual regime — and recycling corpses
+didn't fix it.** An autopsy showed dead units are an *absorbing* state (~65%
+killed by uncapped sleep-burst prunes down to one inhibitory orphan-guard wire;
+`delta = 0` then freezes their parameters and hides them from the grow scan as
+both pre and post — permanent by construction). On the continual A→B→A+B
+benchmark (5 seeds, [recycle-continual](docs/eval-runs/recycle-continual/)),
+the continuous baseline keeps ~2× more capacity in service than phasic
+(`idle_unit_frac` 0.17 ▲ vs 0.34) and acquires task B slightly better
+(`b_learned` 0.983 ▲ vs 0.973): phasic's sparsity buys a small second-task
+acquisition cost. An opt-in **sleep-time recycling** experiment
+(`recycle_dead=True`: at each burst, clear a corpse's wires and rebirth it as a
+faint blank that re-enters `active_pre` and must out-bid the normal grow bar)
+was accuracy-safe and trivially zeroes `dead_unit_frac`, but the market never
+hired: **zero rehires on continual** (idle frac *worse* 0.34 → 0.42 ▼, final
+test loss ▼), because plateau-gated bursts are **demand-blind** — by the time
+the loss has re-settled enough to fire a burst, the transition's demand spike
+the blanks needed is gone. The honest lesson: the lever is burst *timing*
+relative to demand (e.g. a "startle" trigger on loss-EMA spikes), not corpse
+re-entry. See [recycle-vs-phasic](docs/eval-runs/recycle-vs-phasic/) and
+`docs/superpowers/specs/2026-06-11-sleep-recycling-design.md`.
 
 ## Quick start
 

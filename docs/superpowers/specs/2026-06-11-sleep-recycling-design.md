@@ -1,8 +1,42 @@
 # Sleep-time recycling: apoptosis completes, then neurogenesis
 
 **Date:** 2026-06-11
-**Status:** experiment (opt-in variant `phasic-recycle`; promotion decided by eval)
+**Status:** RESULTS IN — **not promoted** (kept opt-in; see Results below)
 **Builds on:** phasic structural plasticity (2026-06-06 consolidation spec)
+
+## Results (2026-06-11, 5 seeds each)
+
+* **Single + shift** ([recycle-vs-phasic](../../eval-runs/recycle-vs-phasic/)):
+  do-no-harm PASSED — accuracy/sparsity/churn all ≈ phasic;
+  `dead_unit_frac` 0.18 → 0.01 ▲ (partly trivial: blanks fire);
+  `idle_unit_frac` unchanged (0.30 → 0.32 ≈); rehiring bimodal
+  (1 seed 100%, 4 seeds 0% — depends on a burst landing inside the post-swap
+  demand window); grow-scan cost up ~80% (blanks add ghost candidates, still
+  tiny absolutely).
+* **Continual A→B→A+B** ([recycle-continual](../../eval-runs/recycle-continual/)),
+  the primary: **FAILED the promotion bar.** Zero rehires in all 5 seeds
+  (51/51 recycled units never out-bid the bar), `idle_unit_frac` *worse*
+  0.34 → 0.42 ▼, `final_test_loss` ▼; recycling degenerated to pure apoptosis
+  (corpse-wire cleanup → sparser net, fan-in 2.1 → 1.6, accuracy ≈).
+* **Why no hires:** plateau-gated bursts are **demand-blind**. A blank bids
+  `|delta_post| · r_target` (≈ 0.15) against `3 × mean(|delta·a_pre|)`
+  (typical `a_pre` ≈ 0.25–0.3), so it needs a post with ~5–6× the average
+  delta — those exist only during transition spikes, and by construction the
+  settledness gate fires bursts only after the spike has been learned away.
+  The label-swap regime keeps the input manifold (re-settling is fast enough
+  for one seed's burst to catch the hot window); the continual regime changes
+  the input distribution, so the window is always missed.
+* **Bonus (closes outstanding #1):** the dead-unit cost to the continual
+  regime is REAL — continuous `currency` beats phasic on second-task
+  acquisition (`b_learned` 0.983 ▲ vs 0.973) with ~2× more capacity in
+  service (`idle_unit_frac` 0.17 ▲ vs 0.34), at ~2× the synapses and worse
+  churn (`oscillation_frac` 0.24 ▼, `max_regrow` ▼). Phasic's sparsity is
+  not free under task transitions.
+* **Follow-up lever** (not built): burst *timing* vs demand — a "startle"
+  trigger (loss-EMA spike, the inverse of settledness) that fires a hiring
+  pass while the demand spike is live; recycling's re-entry path would then
+  have a market to bid into. Alternatives: blank bids at the mean live
+  activation instead of `r_target`; rebirth with random dendrites.
 
 ## Problem: dead units are an absorbing state
 

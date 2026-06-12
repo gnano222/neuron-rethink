@@ -1,0 +1,50 @@
+metric                              currency          phasic  phasic-recycle
+----------------------------------------------------------------------------
+final_test_acc ↑                      0.919≈           0.906          0.896≈
+max_test_acc ↑                        0.938≈           0.921          0.914≈
+final_train_acc ↑                     0.928≈           0.911          0.902≈
+final_test_loss ↓                     0.171≈           0.201          0.231▼
+steps_to_90 ↓                         32681?               ∞          32801?
+steps_to_95 ↓                             ∞?               ∞              ∞?
+auc_test_acc ↑                        0.860≈           0.852          0.855≈
+final_acc_stability ↓                 0.015≈           0.013          0.012≈
+a_peak ↑                              0.998≈           0.998          0.998≈
+b_learned ↑                           0.983▲           0.973          0.979≈
+forgetting ↓                          0.267≈           0.301          0.270≈
+consolidation ↑                       0.896≈           0.868          0.858≈
+relearn_gap ↓                         0.077≈           0.124          0.116≈
+a_steps_to_80 ↓                         200≈             240            240≈
+a_steps_to_90 ↓                         560≈             560            560≈
+b_steps_to_80 ↓                         200≈             200            200≈
+b_steps_to_90 ↓                         360≈             320            280≈
+synapse_count_start                     244≈             242            242≈
+synapse_count_peak                  246.200≈             242            242≈
+synapse_count_end                   225.800≈         106.200         81.200≈
+n_grow_events                       174.800≈          57.400         50.800≈
+n_prune_events                          191≈         193.200        190.800≈
+distinct_neurons_grown               22.200≈          15.200         14.400≈
+turnover ↓                            1.644≈           1.622          1.729≈
+max_grows_into_one_neuron ↓          20.400▼          10.200          9.400≈
+mean_fan_in                           4.516≈           2.124          1.624≈
+mean_fan_out                          4.516≈           2.124          1.624≈
+effective_density                     0.392≈           0.184          0.141≈
+p10_utility ↑                         0.694≈           0.740          0.765≈
+freeloader_frac ↓                     0.005▲           0.032          0.046≈
+mean_survivor_age ↑                   32767≈           33564          33665≈
+median_survivor_age ↑                 40000≈           40000          40000≈
+mean_pruned_lifespan                   8111≈           14004          14018≈
+oscillation_frac ↓                    0.238▼           0.127          0.075≈
+max_regrow ↓                          4.200▼           1.600          1.200≈
+conf_utility_corr ↑                   0.181≈           0.154          0.167≈
+frozen_freeloader_frac ↓                  0≈               0              0≈
+dead_unit_count ↓                     5.200≈           7.800              0▲
+dead_unit_frac ↓                      0.108≈           0.162              0▲
+idle_unit_frac ↓                      0.171▲           0.338          0.421▼
+mean_neuron_activation                0.243≈           0.254          0.298≈
+inert_synapse_frac ↓                      0≈               0              0≈
+used_vs_allocated                     0.933≈           0.439          0.336≈
+n_recycle_events                          0≈               0         10.200≈
+recycled_rehired_frac                     —?               —              0?
+ghost_dense_cost                    738.200≈         857.800        882.800≈
+ghost_pairs_scored                   86.769≈          98.561        131.224≈
+meter_fidelity ↑                      0.955≈           0.954          0.966≈
