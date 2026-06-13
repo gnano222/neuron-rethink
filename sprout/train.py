@@ -117,6 +117,12 @@ class Config:
     # are huge RELATIVE spikes but sit far below chance-level loss.
     startle_floor: float | None = None
 
+    # Optional refinement-tail growth after startle. A startle still fires the
+    # immediate grow-only alarm; this opens a short aroused window where grow-only
+    # passes may run on t_struct ticks while the loss EMA remains above the same
+    # absolute trouble floor. Zero keeps the promoted one-shot startle baseline.
+    arousal_steps: int = 0
+
     # --- sleep-time recycling (opt-in experiment; phasic path only) ---
     # A dead ReLU unit is an absorbing state (delta = 0 => no updates, never
     # ghost-scored as pre or post). When True, each phasic burst recycles
@@ -205,6 +211,7 @@ class Trainer:
         # A2: persistent EMA of the virtual gradient per candidate (ghost) wire,
         # carried across rewire cycles so growth reacts to a sustained signal.
         self.ghost_meter = {}  # (pre, post) -> ema score; only when cfg.ghost_meter
+        self.aroused_until = -1
         # settledness detector: the plateau gate for sleep consolidation AND the
         # trigger for phasic structural plasticity, so build it for either.
         self.settled = False
@@ -304,6 +311,10 @@ class Trainer:
         n_pruned = n_grown = 0
         if (cfg.enable_prune or cfg.enable_grow) and self.step_idx % cfg.t_struct == 0:
             n_pruned, n_grown = self._rewire_currency()
+        if (cfg.phasic_structure and cfg.enable_grow
+                and self.step_idx % cfg.t_struct == 0
+                and self._arousal_active()):
+            n_grown += self._arousal_grow()
         # Startle (phasic-only): an ALARM, checked every step (not just t_struct
         # ticks — hiring latency is the whole point). Placed AFTER the rewire so
         # a sleep burst that just fired (and reset the detector) disarms it —
@@ -313,6 +324,17 @@ class Trainer:
                 and self.sleep_detector.startled):
             n_grown += self._startle_grow()
         return n_pruned, n_grown
+
+    def _arousal_active(self):
+        """Whether the post-startle refinement window is open and still useful."""
+        if self.cfg.arousal_steps <= 0 or self.step_idx > self.aroused_until:
+            return False
+        if self.sleep_detector is None or self.sleep_detector.loss_ema is None:
+            return False
+        if self.sleep_detector.loss_ema <= self.sleep_detector.spike_floor:
+            self.aroused_until = -1
+            return False
+        return True
 
     def _rewire_currency(self):
         if self.cfg.phasic_structure:            # the C architecture: rewire only
@@ -409,7 +431,28 @@ class Trainer:
 
         self.sleep_detector.reset()                   # require a fresh plateau
         self.settled = False
+        self.aroused_until = -1                       # consolidation closes arousal
         return n_pruned, n_grown
+
+    def _arousal_grow(self):
+        """Grow during a short post-startle refinement window.
+
+        This is the same grow verb used by sleep/startle, but scheduled only on
+        structural ticks and without pruning. It gives a shifted task a few
+        follow-up hires after the first emergency pass, then stops by time,
+        loss floor, or the next sleep burst.
+        """
+        from sprout.currency import grow_currency, batch_edge_scores
+        cfg, net = self.cfg, self.net
+        self.events.append({"step": self.step_idx, "type": "arousal", "edge": None})
+        b = min(cfg.virt_batch, len(self.X))
+        idx = self.rng.choice(len(self.X), size=b, replace=False)
+        ghost, ref = batch_edge_scores(net, self.X[idx], self.y[idx],
+                                       grow_demand_k=cfg.grow_demand_k)
+        grown = grow_currency(net, ghost, ref, len(ghost), cfg.grow_bar_frac)
+        for edge in grown:
+            self.events.append({"step": self.step_idx, "type": "grow", "edge": edge})
+        return len(grown)
 
     def _startle_grow(self):
         """The startle pass: hire NOW, while the demand spike is live.
@@ -433,6 +476,9 @@ class Trainer:
         grown = grow_currency(net, ghost, ref, len(ghost), cfg.grow_bar_frac)
         for edge in grown:
             self.events.append({"step": self.step_idx, "type": "grow", "edge": edge})
+        if cfg.arousal_steps > 0:
+            self.aroused_until = max(self.aroused_until,
+                                     self.step_idx + cfg.arousal_steps)
         self.sleep_detector.reset()
         self.settled = False
         return len(grown)

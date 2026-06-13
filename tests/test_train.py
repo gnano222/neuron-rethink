@@ -272,6 +272,12 @@ def test_default_config_startle_on():
     assert cfg.startle_floor is None       # None => auto ln(K)/2 from the net
 
 
+def test_default_config_arousal_window_off():
+    # The promoted startle baseline is still one-shot unless an eval variant
+    # explicitly opens the refinement window.
+    assert Config().arousal_steps == 0
+
+
 def test_startle_floor_auto_derives_from_output_layer():
     # None => half of chance-level CE loss, ln(K)/2 — self-scaling, no tuning.
     import math
@@ -330,6 +336,25 @@ def test_startle_grows_and_never_prunes():
     grow_steps = {e["step"] for e in tr.events if e["type"] == "grow"}
     assert startle_steps
     assert startle_steps <= grow_steps             # the alarm hired
+    assert not [e for e in tr.events if e["type"] == "prune"]
+
+
+def test_startle_can_open_arousal_window():
+    tr, _ = _spike_run(startle=True, arousal_steps=400)
+    startle_steps = [e["step"] for e in tr.events if e["type"] == "startle"]
+    assert startle_steps
+    assert tr.aroused_until >= startle_steps[0] + 400
+
+
+def test_arousal_window_runs_grow_only_on_structural_ticks():
+    tr, _ = _spike_run(startle=True, startle_patience=10, t_struct=50,
+                       arousal_steps=180, grow_bar_frac=0.0)
+    startle_steps = [e["step"] for e in tr.events if e["type"] == "startle"]
+    arousal_steps = [e["step"] for e in tr.events if e["type"] == "arousal"]
+    assert startle_steps
+    assert arousal_steps
+    assert all(s % 50 == 0 for s in arousal_steps)
+    assert min(arousal_steps) > min(startle_steps)
     assert not [e for e in tr.events if e["type"] == "prune"]
 
 

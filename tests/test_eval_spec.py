@@ -305,6 +305,29 @@ def test_currency_bounded_is_currency_plus_demand_k():
     assert bounded.grow_bar_frac == base.grow_bar_frac
 
 
+def test_phasic_startle_research_variants_are_single_knob_extensions():
+    base = make_config("phasic-startle")
+    k4 = make_config("phasic-startle-k4")
+    aroused = make_config("phasic-startle-aroused")
+    both = make_config("phasic-startle-aroused-k4")
+
+    assert base.phasic_structure and base.startle
+    assert base.grow_demand_k is None
+    assert base.arousal_steps == 0
+
+    assert k4.phasic_structure and k4.startle
+    assert k4.grow_demand_k == 4
+    assert k4.arousal_steps == 0
+
+    assert aroused.phasic_structure and aroused.startle
+    assert aroused.grow_demand_k is None
+    assert aroused.arousal_steps == 1000
+
+    assert both.phasic_structure and both.startle
+    assert both.grow_demand_k == 4
+    assert both.arousal_steps == 1000
+
+
 def test_bounded_size_sweep_arms_match_widths_with_demand_k():
     from evals.spec import make_config
     widths = {"size-w4-k4": (2, 4, 4, 4, 2), "size-w6-k4": (2, 6, 6, 6, 2),

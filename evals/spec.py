@@ -51,9 +51,9 @@ VARIANTS: dict[str, Callable[[], Config]] = {
     # startle is PINNED OFF: the project default promoted startle=True
     # (2026-06-12), but this variant stays the stable sleep-only phasic
     # baseline every published startle/recycle run was measured against.
-    # The promoted default itself = `phasic-startle` below. sleep_* knobs
-    # inherit the promoted defaults (warmup 2500, patience 1500, floor 1.0,
-    # no cap).
+    # The current efficiency arm is `phasic-startle-k4` below; this no-startle
+    # baseline stays useful for isolating the alarm itself. sleep_* knobs inherit
+    # the promoted defaults (warmup 2500, patience 1500, floor 1.0, no cap).
     "phasic": lambda: Config(
         eta_base=0.02, grad_currency=True, enable_confidence=True,
         enable_prune=True, enable_grow=True,
@@ -74,19 +74,42 @@ VARIANTS: dict[str, Callable[[], Config]] = {
         gamma_dec=0.001, t_struct=200, phasic_structure=True,
         recycle_dead=True, startle=False,
     ),
-    # the PROMOTED DEFAULT (2026-06-12): phasic + STARTLE — demand-triggered
-    # growth, the third phase (wake = learn, sleep = consolidate, startle =
-    # hire). A grow-only pass fires ~60 steps into a sustained loss-EMA spike
-    # — while the transition's deltas are hot — then re-baselines the
-    # detector. Inert on stationary data (0 false alarms); under shifts it
-    # recruits idle capacity and raises the continual worst-seed floor.
-    # = `phasic` + the promoted startle default; compare vs `phasic`. Spec:
-    # docs/superpowers/specs/2026-06-11-startle-demand-triggered-growth-design.md.
+    # phasic + STARTLE with the original full grow scan. Kept as the stable
+    # one-shot/full-scan reference measured in startle-continual; the promoted
+    # efficiency arm is `phasic-startle-k4`.
     "phasic-startle": lambda: Config(
         eta_base=0.02, grad_currency=True, enable_confidence=True,
         enable_prune=True, enable_grow=True,
         gamma_dec=0.001, t_struct=200, phasic_structure=True,
         startle=True,
+    ),
+    # PROMOTED EFFICIENCY ARM: startle plus the bounded grow scan. Same
+    # architecture and scoring signal, but growth only scores ghosts into the
+    # top-k highest-|delta| post neurons. Shift guardrail: accuracy/recovery ≈,
+    # ghost_pairs_scored 80.97 -> 13.02, grow events 60.6 -> 15.6.
+    "phasic-startle-k4": lambda: Config(
+        eta_base=0.02, grad_currency=True, enable_confidence=True,
+        enable_prune=True, enable_grow=True,
+        gamma_dec=0.001, t_struct=200, phasic_structure=True,
+        startle=True, grow_demand_k=4,
+    ),
+    # Startle plus a short aroused refinement window: after the immediate alarm
+    # hire, allow grow-only passes on structural ticks for 1k steps while the
+    # loss remains above the same trouble floor. Tests whether phasic can recover
+    # continuous growth's refinement tail without continuous churn.
+    "phasic-startle-aroused": lambda: Config(
+        eta_base=0.02, grad_currency=True, enable_confidence=True,
+        enable_prune=True, enable_grow=True,
+        gamma_dec=0.001, t_struct=200, phasic_structure=True,
+        startle=True, arousal_steps=1000,
+    ),
+    # The likely scalable arm: aroused refinement, but with the bounded grow scan
+    # so the extra growth passes do not reintroduce quadratic scan cost.
+    "phasic-startle-aroused-k4": lambda: Config(
+        eta_base=0.02, grad_currency=True, enable_confidence=True,
+        enable_prune=True, enable_grow=True,
+        gamma_dec=0.001, t_struct=200, phasic_structure=True,
+        startle=True, arousal_steps=1000, grow_demand_k=4,
     ),
     # the full triad: startle hiring + sleep recycling. Blanks born at sleep
     # bursts now get to bid into HOT startle windows — the configuration the
