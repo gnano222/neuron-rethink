@@ -3,8 +3,8 @@
 Run a suite of variants across seeds (in parallel), aggregate with bootstrap
 verdicts vs a baseline, and write a scorecard + diagnostic plots.
 
-    python evaluate.py --variants currency,sleep,phasic --seeds 10 \
-        --dataset spirals --steps 15000 --shift 3000 --baseline currency
+    python evaluate.py --variants phasic-startle-k4,phasic-startle --seeds 10 \
+        --dataset spirals --steps 15000 --shift 3000 --baseline phasic-startle-k4
 """
 
 from __future__ import annotations
@@ -29,10 +29,11 @@ CACHE_DIR = os.path.join("output", "eval", "cache")
 
 def parse_args(argv=None):
     ap = argparse.ArgumentParser(description="SPROUT comparative evaluation")
-    ap.add_argument("--variants", default="currency,sleep",
+    ap.add_argument("--variants", default="phasic-startle-k4,phasic-startle",
                     help="comma-separated variant names")
     ap.add_argument("--seeds", type=int, default=5)
-    ap.add_argument("--dataset", default="spirals", choices=["spirals", "blobs"])
+    ap.add_argument("--dataset", default="spirals",
+                    choices=["spirals", "blobs", "digits"])
     ap.add_argument("--steps", type=int, default=15000)
     ap.add_argument("--shift", type=int, default=0,
                     help="concept-shift (label-swap) steps after the main run")
@@ -48,7 +49,7 @@ def parse_args(argv=None):
     ap.add_argument("--continual-turns", type=float, default=0.6,
                     help="continual: spiral turns (gentler => the 4-arm union "
                          "stays learnable, so consolidation has headroom)")
-    ap.add_argument("--baseline", default="currency")
+    ap.add_argument("--baseline", default="phasic-startle-k4")
     ap.add_argument("--jobs", type=int, default=None,
                     help="parallel workers (default: cpu count)")
     ap.add_argument("--record-every", type=int, default=200)

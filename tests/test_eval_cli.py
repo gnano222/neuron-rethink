@@ -11,12 +11,21 @@ from evals import cli
 
 def test_parse_args_defaults():
     args = cli.parse_args([])
-    assert args.variants == "currency,sleep"
+    assert args.variants == "phasic-startle-k4,phasic-startle"
     assert args.seeds == 5
     assert args.steps == 15000          # promoted single-task horizon
     assert args.shift == 0
-    assert args.baseline == "currency"
+    assert args.baseline == "phasic-startle-k4"
     assert args.dataset == "spirals"
+
+
+def test_cli_accepts_digits_dataset():
+    args = cli.parse_args(["--variants", "phasic-startle-k4,fully-connected",
+                           "--dataset", "digits", "--layers", "64,64,32,10",
+                           "--baseline", "phasic-startle-k4"])
+    spec = cli.build_spec(args)
+    assert spec.dataset == "digits"
+    assert spec.layers == (64, 64, 32, 10)
 
 
 def test_build_spec_parses_lists_and_layers():
