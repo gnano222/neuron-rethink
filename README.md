@@ -12,10 +12,11 @@ once into one shared per-wire state — **load** `|w|/w̄` and **demand** `M/M̄
 and read it through three lenses: **confidence** (freeze a wire that is
 *important and settled*), **pruning** (delete a wire weak in *both* load and
 demand), **growth** (add the missing wire the loss most wishes existed, when it
-clears a *selective* bar — RigL-style). The promoted run preset bounds that grow
-scan to the top-4 highest-demand post neurons, preserving the same signal while
-making the candidate scan scale like `k * active_pre` instead of all active
-pre/post pairs. See [sprout/currency.py](sprout/currency.py).
+clears a *selective* bar — RigL-style). The baseline default is
+**phasic-startle-k4**: growth scans only the top-4 highest-demand post neurons,
+preserving the same signal while making the candidate scan scale like
+`k * active_pre` instead of all active pre/post pairs. See
+[sprout/currency.py](sprout/currency.py).
 
 Structural change is **phasic** *(default)*, in three phases driven by one
 smoothed-loss state machine: the net **learns while awake** (pure gated-SGD +
@@ -51,11 +52,11 @@ replaced by the one gradient-aware signal.
 | ![step 0](docs/assets/spirals_step0.png) | ![final](docs/assets/spirals_final.png) |
 | acc ≈ 0.5, every synapse blue (c=0) | acc ≈ 1.0, working pathways red (frozen) |
 
-## Honest comparison: where currency stands
+## Honest comparison: where the default stands
 
-Currency is the **default architecture and the baseline** other variants are
-measured against. The honest truths, all multi-seed (full scorecards under
-[docs/eval-runs/](docs/eval-runs/)):
+The default architecture is **phasic-startle-k4**: gradient-as-currency,
+2D confidence, phasic sleep rewiring, startle hiring, and demand-bounded growth.
+The honest truths, all multi-seed (full scorecards under [docs/eval-runs/](docs/eval-runs/)):
 
 **Accuracy vs the old legacy stack was a lateral move, not an upgrade.** Currency
 matched legacy's ~0.97–0.99 on spirals from a *single* signal and deleted three
@@ -165,7 +166,7 @@ pre-startle references; the promoted efficiency arm is now
 substitute). Spec + results:
 `docs/superpowers/specs/2026-06-11-startle-demand-triggered-growth-design.md`.
 
-**Demand-bounded startle is the current efficiency architecture.** The growth
+**Demand-bounded startle is the baseline default.** The growth
 scan already had a clean bound (`grow_demand_k=4`): score ghosts only into the
 top-4 highest-|delta| post neurons. Promoting that bound on top of startle kept
 single+shift accuracy/recovery ≈ while cutting the scored ghost pairs
@@ -180,18 +181,31 @@ clear `b_learned` or consolidation win. The settled architecture is therefore
 simple: phasic sleep + startle hiring + demand-bounded growth; no aroused window,
 no recycling, no extra confidence rule.
 
+**Compute efficiency is real for inference and edge-work, but the baseline stays
+density 0.4.** A fresh fully-connected comparison at w16 found
+`phasic-startle-k4` reaches the same final accuracy while ending at **141 vs 576
+edges** (~24% density), with **3.19M vs 8.64M** train edge-steps and lower
+training-loop wall time ([compute-efficiency-finalists](docs/eval-runs/compute-efficiency-finalists/)).
+Fully connected still reaches accuracy thresholds in fewer SGD steps, so the
+right training metric is edge-steps-to-threshold, not raw steps. A lower initial
+density probe (`eff-density30`) was faster and sparser on the stationary task,
+but the shift guardrail rejected it: recovered accuracy fell **0.964 → 0.923**
+and dead units increased **0.150 → 0.208** ([compute-efficiency-density30-shift](docs/eval-runs/compute-efficiency-density30-shift/)).
+Lazy meters were exact but slower in wall-clock, and top-k/WTA activation sparsity
+did not produce enough active-edge savings to justify an event-driven rewrite yet.
+
 ## Quick start
 
 ```bash
 python3 -m venv .venv && source .venv/bin/activate
-pip install numpy matplotlib pytest pillow
+pip install numpy matplotlib pytest pillow scikit-learn   # scikit-learn: 8x8 digits dataset
 
-pytest -q                                   # 219 unit + integration tests
+pytest -q                                   # unit + integration tests
 
 python run.py --preset currency --dataset spirals --steps 15000 --density 0.4
 python validate.py                          # currency, all 7 criteria + plots
 
-python evaluate.py --variants currency,phasic,phasic-startle --baseline currency --seeds 5 --shift 3000
+python evaluate.py --variants phasic-startle-k4,phasic-startle --baseline phasic-startle-k4 --seeds 5 --shift 3000
                                             # multi-seed comparative scorecard
 ```
 
@@ -205,7 +219,7 @@ Artifacts land in `output/<preset>_<dataset>/` (`animation.gif`, frames,
 |---|---|---|
 | `core` | plain sparse backprop | all mechanisms off |
 | `currency-conf` | currency: + confidence | edges auto-coloured by gradient **demand** |
-| **`currency`** *(default)* | currency: confidence + prune + grow, **phasic** structure | the architecture (2D calibrated confidence + softened cliff + selective grow bar + demand-bounded growth + phasic structural plasticity — wake learns, sleep rewires, startle hires — on by default) |
+| **`currency`** *(default)* | phasic-startle-k4 currency model | the baseline architecture (2D calibrated confidence + softened cliff + selective grow bar + demand-bounded growth — wake learns, sleep rewires, startle hires) |
 
 ## What you can watch
 
@@ -251,7 +265,7 @@ lenses on it (one source of truth, [sprout/currency.py](sprout/currency.py)'s
   their *virtual* gradient `δ_j·a_i`; grow only those wanted **far more than a
   typical live wire** (`grow_bar_frac=3.0` — a *selective* hiring bar that keeps
   rewiring calm and sparse and tames the grow↔prune oscillation), born at weight
-  0. The promoted preset uses `grow_demand_k=4`, so each grow scan only prices
+  0. The baseline default uses `grow_demand_k=4`, so each grow scan only prices
   ghosts into the top-4 highest-|δ| post neurons; previous full-scan variants are
   kept as A/B references. Dead neurons (`δ_j=0`) score ~0 and are never grown.
   Optional:
