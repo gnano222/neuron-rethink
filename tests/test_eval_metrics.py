@@ -11,7 +11,8 @@ import math
 import numpy as np
 import pytest
 
-from sprout.network import Network
+from sprout.network import Network, build_graph, init_weights
+from sprout.data import generate_blobs
 from evals import metrics
 
 
@@ -64,6 +65,113 @@ def test_dead_unit_count_zero_when_all_fire():
     net.neurons[3].bias = 1.0
     X = [np.array([0.5, 0.5])]
     assert metrics.dead_unit_count(net, X) == 0
+
+
+def test_neuron_activation_stats_average_and_dead_fraction():
+    # "average neuron value": mean hidden-neuron ReLU output over the data,
+    # averaged per-neuron-then-over-neurons (equal weight per neuron).
+    # hidden 2 has bias -1e6 (never fires); hidden 3 has bias 0.5. Each hidden
+    # neuron has incoming 0->h (w=0.5) and 1->h (w=0.5).
+    net = _net_2_2_2()
+    net.neurons[2].bias = -1e6
+    net.neurons[3].bias = 0.5
+    X = [np.array([1.0, 1.0]), np.array([0.0, 0.0])]
+    # neuron 2: ReLU(<0) = 0 on both samples -> per-neuron mean 0.0
+    # neuron 3: ReLU(0.5+1.0)=1.5 ; ReLU(0.5+0.0)=0.5 -> per-neuron mean 1.0
+    # mean over the two hidden neurons = (0.0 + 1.0) / 2 = 0.5
+    s = metrics.neuron_activation_stats(net, X)
+    assert s["mean_neuron_activation"] == pytest.approx(0.5)
+    assert s["dead_unit_frac"] == pytest.approx(0.5)   # neuron 2 of {2,3} dead
+
+
+def test_neuron_activation_stats_no_hidden_neurons():
+    net = Network([2, 2])               # no hidden layer
+    s = metrics.neuron_activation_stats(net, [np.array([0.3, 0.7])])
+    assert s["mean_neuron_activation"] == 0.0
+    assert s["dead_unit_frac"] == 0.0
+    assert s["idle_unit_frac"] == 0.0
+
+
+def test_idle_unit_frac_counts_outputless_units():
+    # hidden 2 fires but has NO outgoing wires: it contributes nothing to the
+    # function => idle. hidden 3 fires and feeds the outputs => busy. This is
+    # the metric recycling cannot game (a recycled blank fires, so it is not
+    # "dead", but it stays idle until the market actually rehires it).
+    net = _net_2_2_2()
+    net.neurons[2].bias = 1.0
+    net.neurons[3].bias = 1.0
+    net.remove_synapse(2, 4)
+    net.remove_synapse(2, 5)
+    X = [np.array([0.5, 0.5])]
+    s = metrics.neuron_activation_stats(net, X)
+    assert s["dead_unit_frac"] == pytest.approx(0.0)   # both fire
+    assert s["idle_unit_frac"] == pytest.approx(0.5)   # but 2 is outputless
+
+
+def test_idle_unit_frac_counts_dead_units_even_when_fully_wired():
+    net = _net_2_2_2()
+    net.neurons[2].bias = -1e6          # dead, though all wires are live
+    net.neurons[3].bias = 1.0
+    X = [np.array([0.5, 0.5])]
+    s = metrics.neuron_activation_stats(net, X)
+    assert s["idle_unit_frac"] == pytest.approx(0.5)
+
+
+# -- recycling ----------------------------------------------------------------
+
+def test_recycle_metrics_counts_events_and_end_state_rehires():
+    # units 2 and 3 were both recycled during the run (3 events, 2 distinct).
+    # At the end: unit 2 fires and feeds the outputs (rehired); unit 3 fires
+    # but is outputless (still a blank) => rehired frac = 1/2.
+    net = _net_2_2_2()
+    net.neurons[2].bias = 0.15
+    net.neurons[3].bias = 0.15
+    net.remove_synapse(3, 4)
+    net.remove_synapse(3, 5)
+    events = [
+        {"step": 100, "type": "recycle", "edge": None, "neuron": 2},
+        {"step": 100, "type": "recycle", "edge": None, "neuron": 3},
+        {"step": 300, "type": "recycle", "edge": None, "neuron": 3},
+    ]
+    X = [np.array([0.5, 0.5])]
+    s = metrics.recycle_metrics(events, net, X)
+    assert s["n_recycle_events"] == 3
+    assert s["recycled_rehired_frac"] == pytest.approx(0.5)
+
+
+def test_recycle_metrics_nan_when_never_recycled():
+    # variants without recycling: activity 0, rehired frac undefined (NaN).
+    net = _net_2_2_2()
+    s = metrics.recycle_metrics([], net, [np.array([0.5, 0.5])])
+    assert s["n_recycle_events"] == 0
+    assert math.isnan(s["recycled_rehired_frac"])
+
+
+def test_recycle_metrics_are_registered():
+    for k in ("idle_unit_frac", "n_recycle_events", "recycled_rehired_frac"):
+        assert k in metrics.METRIC_DIRECTIONS
+        assert k in metrics.METRIC_DESCRIPTIONS
+    assert metrics.METRIC_DIRECTIONS["idle_unit_frac"] == "lower"
+
+
+# -- startle ------------------------------------------------------------------
+
+def test_structural_metrics_count_startle_events():
+    events = [
+        {"step": 100, "type": "startle", "edge": None},
+        {"step": 100, "type": "grow", "edge": (0, 5)},
+        {"step": 400, "type": "startle", "edge": None},
+        {"step": 900, "type": "sleep", "edge": None},
+        {"step": 900, "type": "prune", "edge": (0, 5)},
+    ]
+    s = metrics.structural_metrics(events)
+    assert s["n_startle_events"] == 2
+    assert s["n_grow_events"] == 1            # startles are not grow events
+
+
+def test_startle_metric_is_registered():
+    assert metrics.METRIC_DIRECTIONS["n_startle_events"] == "neutral"
+    assert "n_startle_events" in metrics.METRIC_DESCRIPTIONS
 
 
 # -- utility -----------------------------------------------------------------
@@ -268,3 +376,111 @@ def test_recovery_steps_inf_when_never_regained():
     acc = [0.5, 0.9, 0.95, 0.4, 0.6]     # never back to 0.95
     r = metrics.recovery_metrics(rec, acc, shift_start_index=3)
     assert r["recovery_steps"] == math.inf
+
+
+# -- continual-learning (forgetting) metrics ---------------------------------
+
+def _continual_series():
+    # phase A learns A to 0.95; phase B trains only B, so A erodes to 0.40 while
+    # B climbs to 0.95; phase A+B consolidates both back up.
+    return {
+        "phase":           ["A",  "A",  "B",  "B",  "AB", "AB"],
+        "test_accuracy_A": [0.50, 0.95, 0.60, 0.40, 0.70, 0.92],
+        "test_accuracy_B": [0.50, 0.50, 0.70, 0.95, 0.80, 0.90],
+    }
+
+
+def test_continual_metrics_forgetting_and_consolidation():
+    m = metrics.continual_metrics(_continual_series())
+    assert m["a_peak"] == pytest.approx(0.95)            # A at end of phase A
+    assert m["b_learned"] == pytest.approx(0.95)         # B at end of phase B
+    assert m["forgetting"] == pytest.approx(0.95 - 0.40)  # A's drop during B
+    assert m["consolidation"] == pytest.approx(0.90)     # min(A,B) at end of A+B
+    assert m["relearn_gap"] == pytest.approx(0.95 - 0.92)  # A not fully restored
+
+
+def test_phase_steps_to_threshold_measures_from_phase_start():
+    series = {"phase": ["A", "A", "B", "B"], "rec_step": [0, 100, 200, 300],
+              "test_accuracy_B": [0.4, 0.4, 0.7, 0.95]}
+    # phase B begins at step 200; B first reaches 0.90 at step 300 => 100 steps in
+    assert metrics.phase_steps_to_threshold(
+        series, "B", "test_accuracy_B", 0.90) == pytest.approx(100.0)
+    # threshold never cleared within the phase => inf
+    assert math.isinf(metrics.phase_steps_to_threshold(
+        series, "B", "test_accuracy_B", 0.99))
+    # a phase that never occurs => inf
+    assert math.isinf(metrics.phase_steps_to_threshold(
+        series, "C", "test_accuracy_B", 0.5))
+
+
+def test_continual_metrics_report_per_task_learning_speed():
+    # how quickly each task is learned, measured from the start of its phase.
+    series = {
+        "phase":           ["A",  "A",  "A",  "B",  "B",  "B"],
+        "rec_step":        [0,    100,  200,  300,  400,  500],
+        "test_accuracy_A": [0.50, 0.70, 0.92, 0.92, 0.60, 0.55],
+        "test_accuracy_B": [0.50, 0.50, 0.50, 0.55, 0.85, 0.95],
+    }
+    m = metrics.continual_metrics(series)
+    # task A (first task): >=0.80 and >=0.90 both first hit at step 200, phase A
+    # began at step 0
+    assert m["a_steps_to_80"] == pytest.approx(200.0)
+    assert m["a_steps_to_90"] == pytest.approx(200.0)
+    # task B (the second task): phase B began at step 300; >=0.80 at 400 (=> 100),
+    # >=0.90 at 500 (=> 200)
+    assert m["b_steps_to_80"] == pytest.approx(100.0)
+    assert m["b_steps_to_90"] == pytest.approx(200.0)
+
+
+def test_continual_steps_to_threshold_inf_when_bar_or_phase_missing():
+    series = {
+        "phase":           ["A",  "A"],
+        "rec_step":        [0,    100],
+        "test_accuracy_A": [0.50, 0.60],   # task A never reaches 0.80
+        "test_accuracy_B": [0.50, 0.50],
+    }
+    m = metrics.continual_metrics(series)
+    assert math.isinf(m["a_steps_to_80"])   # bar never cleared in phase A
+    assert math.isinf(m["b_steps_to_80"])   # phase B never occurs
+
+
+def test_continual_metrics_nan_when_phase_missing():
+    # No A+B phase recorded -> consolidation/relearn are nan, not a crash.
+    series = {
+        "phase":           ["A",  "A",  "B",  "B"],
+        "test_accuracy_A": [0.50, 0.95, 0.60, 0.40],
+        "test_accuracy_B": [0.50, 0.50, 0.70, 0.95],
+    }
+    m = metrics.continual_metrics(series)
+    assert m["forgetting"] == pytest.approx(0.55)
+    assert math.isnan(m["consolidation"])
+
+
+# -- compute cost: grow-scan candidate counts --------------------------------
+
+def test_ghost_scan_cost_scored_le_dense_and_dense_matches_bruteforce():
+    net = build_graph([2, 4, 4, 2], density=0.5, seed=7)
+    init_weights(net, seed=7)
+    X, y = generate_blobs(n=16, seed=4)
+    out = metrics.ghost_scan_cost(net, X, y)
+    brute_dense = sum(1 for j in range(net.num_neurons)
+                      for i in range(net.num_neurons)
+                      if net.neurons[i].layer < net.neurons[j].layer
+                      and (i, j) not in net.synapses)
+    assert out["ghost_dense_cost"] == float(brute_dense)
+    assert 0.0 <= out["ghost_pairs_scored"] <= out["ghost_dense_cost"]
+
+
+def test_ghost_scan_cost_empty_set_is_zero_scored():
+    net = build_graph([2, 3, 2], density=0.5, seed=8)
+    out = metrics.ghost_scan_cost(net, [], [])
+    assert out["ghost_pairs_scored"] == 0.0
+    assert out["ghost_dense_cost"] > 0.0
+
+
+def test_cost_metrics_are_registered_neutral_and_in_compute_family():
+    for k in ("ghost_dense_cost", "ghost_pairs_scored"):
+        assert metrics.METRIC_DIRECTIONS[k] == "neutral"
+        assert k in metrics.METRIC_DESCRIPTIONS
+    assert metrics.METRIC_FAMILIES["Compute cost"] == (
+        "ghost_dense_cost", "ghost_pairs_scored")

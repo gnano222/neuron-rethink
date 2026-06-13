@@ -9,7 +9,7 @@ following the build order in §10. Produces:
 
 Usage:
     python run.py --preset step1 --dataset blobs --steps 4000
-    python run.py --preset full  --dataset spirals --steps 30000
+    python run.py --preset full  --dataset spirals --steps 15000
 """
 
 from __future__ import annotations
@@ -26,40 +26,16 @@ from sprout.train import Config, Trainer, accuracy
 from sprout import viz
 
 
-# Presets. The gradient-as-currency stack is now the DEFAULT architecture: one
-# metered signal (the per-synapse backprop gradient) drives confidence, pruning
-# and growth (see sprout/currency.py). The v1 eligibility build-order is kept
-# verbatim as the ``legacy-*`` presets - it is still the better-tuned system on
-# spirals today (see the honest comparison in README), and the step-by-step
-# legacy presets remain the most legible way to watch each mechanism in turn.
+# Presets for the gradient-as-currency architecture: one metered signal (the
+# per-synapse backprop gradient) drives confidence, pruning and growth (see
+# sprout/currency.py). With every readout off, this is plain sparse backprop.
 PRESETS = {
-    # --- current architecture: gradient-as-currency ---
     "core": dict(),                          # plain sparse backprop (all off)
-    "currency-conf": dict(grad_currency=True, enable_confidence=True),
-    "currency": dict(grad_currency=True, enable_confidence=True,
-                     enable_prune=True, enable_grow=True),
-
-    # --- legacy v1: eligibility / three-factor build-order (§10) ---
-    "legacy-step1": dict(),
-    "legacy-step2": dict(enable_eligibility=True),
-    "legacy-step3": dict(enable_eligibility=True, enable_confidence=True),
-    "legacy-step4": dict(enable_eligibility=True, enable_confidence=True,
-                         enable_prune=True),
-    "legacy-step5": dict(enable_eligibility=True, enable_confidence=True,
-                         enable_prune=True, enable_grow=True),
-    # homeostasis is opt-in: the spec's weight-rescaling form is unstable with
-    # ReLU and the net is stable without it, so the full legacy stack omits it.
-    "legacy-step6": dict(enable_eligibility=True, enable_confidence=True,
-                         enable_prune=True, enable_grow=True, enable_homeostasis=True),
-    "legacy-full": dict(enable_eligibility=True, enable_confidence=True,
-                        enable_prune=True, enable_grow=True),
+    "currency-conf": dict(enable_confidence=True),
+    "currency": dict(enable_confidence=True, enable_prune=True, enable_grow=True),
 }
 
 DEFAULT_PRESET = "currency"
-
-# presets that use the legacy eligibility pruner (need theta_prune + warmup
-# tuning on spirals); the currency pruner is gradient-aware and needs neither.
-_LEGACY_PRUNE_PRESETS = ("legacy-step4", "legacy-step5", "legacy-step6", "legacy-full")
 
 
 def make_config(preset, **overrides):
@@ -75,12 +51,10 @@ def run(preset=DEFAULT_PRESET, dataset="blobs", steps=4000, seed=0,
         cfg_overrides=None, render=True, edge_mode=None,
         turns=1.0, noise=0.10):
     # pick the most informative edge colouring per preset:
-    #   legacy-step2 has no confidence yet  -> eligibility "glow"
-    #   currency-conf isolates the meter     -> gradient "demand"
-    #   everything else                      -> confidence (blue->red)
+    #   currency-conf isolates the meter -> gradient "demand"
+    #   everything else                  -> confidence (blue->red)
     if edge_mode is None:
-        edge_mode = {"legacy-step2": "eligibility",
-                     "currency-conf": "demand"}.get(preset, "confidence")
+        edge_mode = {"currency-conf": "demand"}.get(preset, "confidence")
     out = out or os.path.join("output", f"{preset}_{dataset}")
     os.makedirs(out, exist_ok=True)
 
@@ -117,17 +91,14 @@ def run(preset=DEFAULT_PRESET, dataset="blobs", steps=4000, seed=0,
 def summarise(trainer, net, final_acc, cfg):
     h = trainer.history
     confs = [s.confidence for s in net.synapses.values()]
-    elig = [s.eligibility for s in net.synapses.values()]
     n_prune_events = sum(1 for e in trainer.events if e["type"] == "prune")
     n_grow_events = sum(1 for e in trainer.events if e["type"] == "grow")
     syn = h["synapse_count"]
     return {
         "preset_flags": {
-            "eligibility": cfg.enable_eligibility,
             "confidence": cfg.enable_confidence,
             "prune": cfg.enable_prune,
             "grow": cfg.enable_grow,
-            "homeostasis": cfg.enable_homeostasis,
         },
         "final_accuracy": final_acc,
         "max_accuracy": max(h["accuracy"]) if h["accuracy"] else None,
@@ -137,7 +108,6 @@ def summarise(trainer, net, final_acc, cfg):
         "synapse_count_min": min(syn) if syn else None,
         "confidence_max": max(confs) if confs else 0.0,
         "confidence_mean": float(np.mean(confs)) if confs else 0.0,
-        "eligibility_max": max(elig) if elig else 0.0,
         "n_prune_events": n_prune_events,
         "n_grow_events": n_grow_events,
         "n_neurons": net.num_neurons,
@@ -155,11 +125,9 @@ if __name__ == "__main__":
     ap.add_argument("--steps", type=int, default=4000)
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--layers", type=_parse_layers, default=None,
-                    help="comma-separated, e.g. 2,10,10,8,2")
+                    help="comma-separated, e.g. 2,16,16,16,2")
     ap.add_argument("--density", type=float, default=0.5)
     ap.add_argument("--eta", type=float, default=None)
-    ap.add_argument("--theta-prune", type=float, default=None)
-    ap.add_argument("--prune-warmup", type=int, default=None)
     ap.add_argument("--turns", type=float, default=1.0)
     ap.add_argument("--noise", type=float, default=0.10)
     ap.add_argument("--record-every", type=int, default=100)
@@ -171,19 +139,9 @@ if __name__ == "__main__":
 
     # sensible defaults for the harder spirals task
     spirals = args.dataset == "spirals"
-    layers = args.layers or ((2, 10, 10, 8, 2) if spirals else (2, 8, 8, 6, 2))
+    layers = args.layers or ((2, 16, 16, 16, 2) if spirals else (2, 8, 8, 6, 2))
     overrides = {}
     overrides["eta_base"] = args.eta if args.eta is not None else (0.02 if spirals else 0.05)
-    # theta_prune + prune_warmup only matter for the legacy eligibility pruner;
-    # the currency pruner is gradient-aware and ignores both.
-    if args.theta_prune is not None:
-        overrides["theta_prune"] = args.theta_prune
-    elif spirals and args.preset in _LEGACY_PRUNE_PRESETS:
-        overrides["theta_prune"] = 0.001
-    if args.prune_warmup is not None:
-        overrides["prune_warmup"] = args.prune_warmup
-    elif spirals and args.preset in _LEGACY_PRUNE_PRESETS:
-        overrides["prune_warmup"] = 6000
 
     _, _, metrics, out = run(
         preset=args.preset, dataset=args.dataset, steps=args.steps, seed=args.seed,

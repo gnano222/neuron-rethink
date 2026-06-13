@@ -1,0 +1,34 @@
+metric                        currency-2dconf  currency-2dsoft
+--------------------------------------------------------------
+final_test_acc ↑                        0.996           0.996≈
+max_test_acc ↑                          0.999           0.998≈
+final_train_acc ↑                       0.998           0.998≈
+final_test_loss ↓                       0.015           0.015≈
+steps_to_90 ↓                            3001            3174≈
+steps_to_95 ↓                            3974            3921≈
+auc_test_acc ↑                          0.954           0.953≈
+final_acc_stability ↓                   0.006           0.010≈
+synapse_count_start                   103.533         103.533≈
+synapse_count_peak                    136.067         136.667≈
+synapse_count_end                     125.467         125.467≈
+n_grow_events                             220         212.933≈
+n_prune_events                        196.067             189≈
+distinct_neurons_grown                 14.933          14.200≈
+turnover ↓                              3.349           3.215≈
+max_grows_into_one_neuron ↓            37.800          37.600≈
+mean_fan_in                             4.182           4.182≈
+mean_fan_out                            4.182           4.182≈
+effective_density                       0.581           0.581≈
+p10_utility ↑                           0.662           0.671≈
+freeloader_frac ↓                       0.036           0.032≈
+mean_survivor_age ↑                     25915           26217≈
+median_survivor_age ↑                   29973           29986≈
+mean_pruned_lifespan                     2575            2580≈
+oscillation_frac ↓                      0.397           0.368≈
+max_regrow ↓                           10.867              11≈
+conf_utility_corr ↑                     0.207           0.314▲
+frozen_freeloader_frac ↓                    0               0≈
+dead_unit_count ↓                       3.400           3.600≈
+inert_synapse_frac ↓                        0               0≈
+used_vs_allocated                       1.236           1.236≈
+meter_fidelity ↑                        0.675           0.657≈

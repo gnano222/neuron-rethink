@@ -3,8 +3,8 @@
 Run a suite of variants across seeds (in parallel), aggregate with bootstrap
 verdicts vs a baseline, and write a scorecard + diagnostic plots.
 
-    python evaluate.py --variants currency,legacy-full,core --seeds 10 \
-        --dataset spirals --steps 30000 --shift 6000 --baseline legacy-full
+    python evaluate.py --variants currency,sleep,phasic --seeds 10 \
+        --dataset spirals --steps 15000 --shift 3000 --baseline currency
 """
 
 from __future__ import annotations
@@ -23,20 +23,32 @@ from evals.report import write_report, build_table
 from evals.publish import publish_run
 from evals.metrics import METRIC_DIRECTIONS
 
-DEFAULT_LAYERS = (2, 10, 10, 8, 2)
+DEFAULT_LAYERS = (2, 16, 16, 16, 2)   # w16: the width-sweep sweet spot
 CACHE_DIR = os.path.join("output", "eval", "cache")
 
 
 def parse_args(argv=None):
     ap = argparse.ArgumentParser(description="SPROUT comparative evaluation")
-    ap.add_argument("--variants", default="currency,legacy-full",
+    ap.add_argument("--variants", default="currency,sleep",
                     help="comma-separated variant names")
     ap.add_argument("--seeds", type=int, default=5)
     ap.add_argument("--dataset", default="spirals", choices=["spirals", "blobs"])
-    ap.add_argument("--steps", type=int, default=30000)
+    ap.add_argument("--steps", type=int, default=15000)
     ap.add_argument("--shift", type=int, default=0,
                     help="concept-shift (label-swap) steps after the main run")
-    ap.add_argument("--baseline", default="legacy-full")
+    ap.add_argument("--regime", default="single", choices=["single", "continual"],
+                    help="single (task + optional label-swap) or continual "
+                         "(A->B->A+B forgetting benchmark, two offset spirals)")
+    ap.add_argument("--steps-a", type=int, default=15000,
+                    help="continual phase A steps (learn the left spiral)")
+    ap.add_argument("--steps-b", type=int, default=15000,
+                    help="continual phase B steps (right spiral only; A erodes)")
+    ap.add_argument("--steps-ab", type=int, default=10000,
+                    help="continual phase A+B steps (interleaved consolidation)")
+    ap.add_argument("--continual-turns", type=float, default=0.6,
+                    help="continual: spiral turns (gentler => the 4-arm union "
+                         "stays learnable, so consolidation has headroom)")
+    ap.add_argument("--baseline", default="currency")
     ap.add_argument("--jobs", type=int, default=None,
                     help="parallel workers (default: cpu count)")
     ap.add_argument("--record-every", type=int, default=200)
@@ -65,6 +77,8 @@ def build_spec(args) -> SuiteSpec:
         steps=args.steps, shift_steps=args.shift,
         record_every=args.record_every, baseline=args.baseline,
         layers=layers, density=args.density, n_points=args.points,
+        regime=args.regime, steps_a=args.steps_a, steps_b=args.steps_b,
+        steps_ab=args.steps_ab, continual_turns=args.continual_turns,
     )
 
 
@@ -84,9 +98,12 @@ def main(argv=None):
         "output", "eval", f"{spec.dataset}_{time.strftime('%Y%m%d_%H%M%S')}")
     cache_dir = None if args.no_cache else CACHE_DIR
 
+    if spec.regime == "continual":
+        steps_desc = f"A->B->A+B {spec.steps_a}+{spec.steps_b}+{spec.steps_ab} steps"
+    else:
+        steps_desc = f"{spec.steps}+{spec.shift_steps} steps"
     print(f"running {len(spec.variants)} variant(s) x {spec.seeds} seed(s) "
-          f"= {len(spec.variants) * spec.seeds} runs "
-          f"({spec.steps}+{spec.shift_steps} steps each) ...")
+          f"= {len(spec.variants) * spec.seeds} runs ({steps_desc} each) ...")
     results = run_suite(spec, jobs=args.jobs, cache_dir=cache_dir,
                         use_cache=not args.no_cache)
     agg = aggregate_suite(results, baseline=spec.baseline,

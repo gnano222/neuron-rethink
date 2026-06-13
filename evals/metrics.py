@@ -125,6 +125,70 @@ def dead_unit_count(net, X, eps: float = EPS) -> int:
     return sum(1 for nid in hidden if max_act[nid] < eps)
 
 
+def neuron_activation_stats(net, X, eps: float = EPS) -> dict:
+    """The "average neuron value": how much hidden neurons actually output.
+
+    ``mean_neuron_activation`` is each hidden neuron's mean ReLU activation over
+    ``X``, then averaged over neurons (equal weight per neuron) — so it stays
+    comparable as the layer width changes. ``dead_unit_frac`` is the fraction of
+    hidden neurons that never fire (the scale-free companion to the absolute
+    ``dead_unit_count``). ``idle_unit_frac`` is the honest capacity readout:
+    hidden neurons that never fire OR have no outgoing wires — recycling turns
+    corpses into firing blanks (so they stop counting as *dead*), but a blank
+    stays *idle* until the grow market actually rehires it. All are 0.0 for a
+    net with no hidden layer.
+    """
+    last = len(net.layers) - 1
+    hidden = [nid for L in range(1, last) for nid in net.layers[L]]
+    if not hidden or len(X) == 0:
+        return {"mean_neuron_activation": 0.0, "dead_unit_frac": 0.0,
+                "idle_unit_frac": 0.0}
+    sum_act = {nid: 0.0 for nid in hidden}
+    max_act = {nid: 0.0 for nid in hidden}
+    for xi in X:
+        net.forward(xi)
+        for nid in hidden:
+            a = net.neurons[nid].activation
+            sum_act[nid] += a
+            if a > max_act[nid]:
+                max_act[nid] = a
+    per_neuron_mean = [sum_act[nid] / len(X) for nid in hidden]
+    dead = sum(1 for nid in hidden if max_act[nid] < eps)
+    idle = sum(1 for nid in hidden
+               if max_act[nid] < eps or not net.outgoing[nid])
+    return {
+        "mean_neuron_activation": float(np.mean(per_neuron_mean)),
+        "dead_unit_frac": dead / len(hidden),
+        "idle_unit_frac": idle / len(hidden),
+    }
+
+
+# ---------------------------------------------------------------------------
+# E. compute cost — grow-scan candidate counts
+# ---------------------------------------------------------------------------
+
+def ghost_scan_cost(net, X, y, grow_demand_k=None) -> dict:
+    """Compute cost of one grow scan on this net: candidate ghost wires.
+
+    ``ghost_dense_cost`` is the activity-independent count of valid candidates
+    (~N^2); ``ghost_pairs_scored`` is the mean per-sample count actually evaluated
+    after activity + demand pruning. Reuses the *same* candidate helpers the
+    trainer's grow scan uses, so the measurement cannot drift from behaviour.
+    """
+    from sprout.currency import (active_ghost_sets, iter_ghost_candidates,
+                                  dense_ghost_count)
+    dense = float(dense_ghost_count(net))
+    if len(X) == 0:
+        return {"ghost_pairs_scored": 0.0, "ghost_dense_cost": dense}
+    total = 0
+    for xi, yi in zip(X, y):
+        net.forward(xi)
+        _, _, grad_b = net.backward(int(yi))
+        ap, apo = active_ghost_sets(net, grad_b, grow_demand_k)
+        total += sum(1 for _ in iter_ghost_candidates(net, ap, apo))
+    return {"ghost_pairs_scored": total / len(X), "ghost_dense_cost": dense}
+
+
 # ---------------------------------------------------------------------------
 # C. synapse structure — event-log derived
 # ---------------------------------------------------------------------------
@@ -148,6 +212,7 @@ def structural_metrics(events) -> dict:
     return {
         "n_grow_events": len(grow),
         "n_prune_events": len(prune),
+        "n_startle_events": sum(1 for e in events if e["type"] == "startle"),
         "distinct_neurons_grown": len(grows_per_target),
         "max_grows_into_one_neuron": max(grows_per_target.values(), default=0),
     }
@@ -246,6 +311,83 @@ def recovery_metrics(rec_step, acc_series, shift_start_index: int) -> dict:
             "recovery_gap": pre - recovered, "recovery_steps": rec_steps}
 
 
+def phase_steps_to_threshold(series, phase_label, track_key,
+                             threshold: float) -> float:
+    """Steps *within a phase* to first reach ``threshold`` on a task's held-out
+    accuracy track, measured from that phase's first recorded step.
+
+    This is the per-task learning *speed*: how quickly a model reaches a given
+    accuracy bar once a task's phase begins. ``inf`` if the bar is never cleared
+    in the phase (or the phase never occurs).
+    """
+    rec = series.get("rec_step", [])
+    phase = series.get("phase", [])
+    track = series.get(track_key, [])
+    n = min(len(rec), len(phase), len(track))
+    t0 = None
+    for i in range(n):
+        if phase[i] != phase_label:
+            continue
+        if t0 is None:
+            t0 = rec[i]                 # this phase's first recorded step
+        if track[i] >= threshold:
+            return float(rec[i] - t0)
+    return math.inf
+
+
+def continual_metrics(series) -> dict:
+    """Forgetting / consolidation from a continual run's dual-task series.
+
+    Reads the per-snapshot ``phase`` label ("A"/"B"/"AB") and the two held-out
+    accuracy tracks. Measured at phase boundaries so each signal stays clean:
+    ``forgetting`` is read at the A->B boundary, *before* any consolidation.
+
+        a_peak        = A accuracy at the end of phase A
+        b_learned     = B accuracy at the end of phase B (forward learning)
+        forgetting    = a_peak - A accuracy at the end of phase B   (lower=better)
+        consolidation = min(A, B) at the end of phase A+B           (can it hold both)
+        relearn_gap   = a_peak - A accuracy at the end of phase A+B
+        {a,b}_steps_to_{80,90} = steps into each task's phase to reach that bar
+                                 (per-task learning speed; lower=faster)
+    """
+    nan = float("nan")
+    phase = series.get("phase", [])
+    a = series.get("test_accuracy_A", [])
+    b = series.get("test_accuracy_B", [])
+
+    def last_in(ph, track):
+        vals = [track[i] for i in range(min(len(phase), len(track)))
+                if phase[i] == ph]
+        return float(vals[-1]) if vals else nan
+
+    def diff(x, y):
+        return (x - y) if not (math.isnan(x) or math.isnan(y)) else nan
+
+    a_peak = last_in("A", a)
+    a_after_b = last_in("B", a)
+    b_learned = last_in("B", b)
+    cons_a = last_in("AB", a)
+    cons_b = last_in("AB", b)
+    consolidation = (min(cons_a, cons_b)
+                     if not (math.isnan(cons_a) or math.isnan(cons_b)) else nan)
+
+    out = {
+        "a_peak": a_peak,
+        "b_learned": b_learned,
+        "forgetting": diff(a_peak, a_after_b),
+        "consolidation": consolidation,
+        "relearn_gap": diff(a_peak, cons_a),
+    }
+    # per-task learning speed: steps into each phase to reach the bar
+    for thr in (0.80, 0.90):
+        tag = f"{int(round(thr * 100))}"
+        out[f"a_steps_to_{tag}"] = phase_steps_to_threshold(
+            series, "A", "test_accuracy_A", thr)
+        out[f"b_steps_to_{tag}"] = phase_steps_to_threshold(
+            series, "B", "test_accuracy_B", thr)
+    return out
+
+
 # ---------------------------------------------------------------------------
 # C. synapse structure — fan / density (end state)
 # ---------------------------------------------------------------------------
@@ -292,6 +434,37 @@ def capacity_metrics(net, X, initial_count: int, eps: float = EPS) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# D. synapse quality — recycling (sleep-time corpse re-entry)
+# ---------------------------------------------------------------------------
+
+def recycle_metrics(events, net, X, eps: float = EPS) -> dict:
+    """Recycling activity + outcome.
+
+    ``n_recycle_events`` counts recycle firings (a unit can be recycled more
+    than once). ``recycled_rehired_frac`` is the end-state outcome: of the
+    *distinct* units ever recycled, the fraction ending the run non-idle —
+    firing AND with outgoing wires, i.e. actually back in service. NaN when
+    nothing was ever recycled (variants without the mechanism).
+    """
+    recycled = {e["neuron"] for e in events if e["type"] == "recycle"}
+    if not recycled:
+        return {"n_recycle_events": 0, "recycled_rehired_frac": float("nan")}
+    max_act = {nid: 0.0 for nid in recycled}
+    for xi in X:
+        net.forward(xi)
+        for nid in recycled:
+            a = net.neurons[nid].activation
+            if a > max_act[nid]:
+                max_act[nid] = a
+    rehired = sum(1 for nid in recycled
+                  if max_act[nid] >= eps and net.outgoing[nid])
+    return {
+        "n_recycle_events": sum(1 for e in events if e["type"] == "recycle"),
+        "recycled_rehired_frac": rehired / len(recycled),
+    }
+
+
+# ---------------------------------------------------------------------------
 # sanity: metered signal fidelity (currency only)
 # ---------------------------------------------------------------------------
 
@@ -328,12 +501,23 @@ METRIC_DIRECTIONS: dict[str, str] = {
     "recovered_test_acc": "higher",
     "recovery_gap": "lower",
     "recovery_steps": "lower",
+    # B. continual learning (forgetting regime)
+    "a_peak": "higher",
+    "b_learned": "higher",
+    "forgetting": "lower",
+    "consolidation": "higher",
+    "relearn_gap": "lower",
+    "a_steps_to_80": "lower",
+    "a_steps_to_90": "lower",
+    "b_steps_to_80": "lower",
+    "b_steps_to_90": "lower",
     # C. synapse structure
     "synapse_count_start": "neutral",
     "synapse_count_peak": "neutral",
     "synapse_count_end": "neutral",
     "n_grow_events": "neutral",
     "n_prune_events": "neutral",
+    "n_startle_events": "neutral",
     "distinct_neurons_grown": "neutral",
     "turnover": "lower",
     "max_grows_into_one_neuron": "lower",
@@ -353,10 +537,18 @@ METRIC_DIRECTIONS: dict[str, str] = {
     "conf_utility_corr": "higher",
     "frozen_freeloader_frac": "lower",
     "dead_unit_count": "lower",
+    "dead_unit_frac": "lower",
+    "idle_unit_frac": "lower",
+    "mean_neuron_activation": "neutral",
     "inert_synapse_frac": "lower",
     "used_vs_allocated": "neutral",
+    "n_recycle_events": "neutral",
+    "recycled_rehired_frac": "neutral",
     # sanity (currency)
     "meter_fidelity": "higher",
+    # E. compute cost (descriptive: the scaling story is the chart, not verdicts)
+    "ghost_dense_cost": "neutral",
+    "ghost_pairs_scored": "neutral",
 }
 
 # one-line plain-language description per metric (shown in the key-metrics
@@ -376,12 +568,23 @@ METRIC_DESCRIPTIONS: dict[str, str] = {
     "recovered_test_acc": "test accuracy at the end, after the label swap",
     "recovery_gap": "accuracy lost vs pre-shift and not yet regained",
     "recovery_steps": "steps after the shift to return to pre-shift accuracy",
+    # B. continual learning (forgetting regime)
+    "a_peak": "accuracy on task A at the end of phase A (its peak)",
+    "b_learned": "accuracy on task B at the end of phase B (forward learning)",
+    "forgetting": "task A accuracy lost while learning B (lower=better)",
+    "consolidation": "min(A, B) accuracy after interleaved A+B (holds both?)",
+    "relearn_gap": "task A accuracy not restored by the A+B phase",
+    "a_steps_to_80": "steps into phase A to reach 80% on task A (first-task speed)",
+    "a_steps_to_90": "steps into phase A to reach 90% on task A (first-task speed)",
+    "b_steps_to_80": "steps into phase B to reach 80% on task B (second-task speed)",
+    "b_steps_to_90": "steps into phase B to reach 90% on task B (second-task speed)",
     # C. synapse structure
     "synapse_count_start": "live synapses at initialization",
     "synapse_count_peak": "max live synapses during the run",
     "synapse_count_end": "live synapses at the end",
     "n_grow_events": "total synapses grown over the run",
     "n_prune_events": "total synapses pruned over the run",
+    "n_startle_events": "demand-spike hiring alarms fired (startle growth)",
     "distinct_neurons_grown": "how many neurons received grown wires",
     "turnover": "(grows + prunes) per average synapse — rewiring rate",
     "max_grows_into_one_neuron": "most times one neuron was grown into (churn)",
@@ -399,10 +602,18 @@ METRIC_DESCRIPTIONS: dict[str, str] = {
     "conf_utility_corr": "corr of confidence with real utility (calibration)",
     "frozen_freeloader_frac": "high-confidence but low-utility synapses",
     "dead_unit_count": "hidden neurons that never fire on test data",
+    "dead_unit_frac": "fraction of hidden neurons that never fire (scale-free)",
+    "idle_unit_frac": "fraction of hidden neurons dead OR outputless (not in service)",
+    "mean_neuron_activation": "avg hidden-neuron ReLU output on test data (neuron value)",
     "inert_synapse_frac": "fraction of synapses with ~zero weight",
     "used_vs_allocated": "live edges vs edges present at init",
+    "n_recycle_events": "dead-unit recycles fired over the run (sleep recycling)",
+    "recycled_rehired_frac": "of recycled units, fraction back in service at the end",
     # sanity
     "meter_fidelity": "corr of metered vs fresh gradient (currency only)",
+    # E. compute cost
+    "ghost_dense_cost": "candidate ghost wires the grow-scan must consider (~N²)",
+    "ghost_pairs_scored": "candidate wires actually scored after activity+demand pruning",
 }
 
 # which metric belongs to which family, for grouped scorecard rendering
@@ -413,16 +624,22 @@ METRIC_FAMILIES: dict[str, tuple[str, ...]] = {
         "steps_to_90", "steps_to_95", "auc_test_acc", "final_acc_stability",
         "pre_shift_test_acc", "recovered_test_acc", "recovery_gap",
         "recovery_steps"),
+    "Continual learning": (
+        "a_peak", "b_learned", "forgetting", "consolidation", "relearn_gap",
+        "a_steps_to_80", "a_steps_to_90", "b_steps_to_80", "b_steps_to_90"),
     "Synapse structure": (
         "synapse_count_start", "synapse_count_peak", "synapse_count_end",
-        "n_grow_events", "n_prune_events", "distinct_neurons_grown", "turnover",
-        "max_grows_into_one_neuron", "mean_fan_in", "mean_fan_out",
-        "effective_density"),
+        "n_grow_events", "n_prune_events", "n_startle_events",
+        "distinct_neurons_grown", "turnover", "max_grows_into_one_neuron",
+        "mean_fan_in", "mean_fan_out", "effective_density"),
     "Synapse quality": (
         "p10_utility", "freeloader_frac", "mean_survivor_age",
         "median_survivor_age", "mean_pruned_lifespan", "oscillation_frac",
         "max_regrow", "conf_utility_corr", "frozen_freeloader_frac",
-        "dead_unit_count", "inert_synapse_frac", "used_vs_allocated"),
+        "dead_unit_count", "dead_unit_frac", "idle_unit_frac",
+        "mean_neuron_activation", "inert_synapse_frac", "used_vs_allocated",
+        "n_recycle_events", "recycled_rehired_frac"),
+    "Compute cost": ("ghost_dense_cost", "ghost_pairs_scored"),
     "Signal sanity": ("meter_fidelity",),
 }
 
@@ -443,6 +660,10 @@ def final_snapshot(net, X_test, y_test, events, initial_edges, series,
     lifes = pruned_lifespans(events, initial_edges)
     fans = fan_stats(net)
     cap = capacity_metrics(net, X_test, initial_count=len(initial_edges))
+    nact = neuron_activation_stats(net, X_test)
+    recyc = recycle_metrics(events, net, X_test)
+    scan = ghost_scan_cost(net, X_test, y_test,
+                           getattr(cfg, "grow_demand_k", None))
     ages = survivor_age_stats(net)
 
     rec = series["rec_step"]
@@ -468,6 +689,7 @@ def final_snapshot(net, X_test, y_test, events, initial_edges, series,
         "synapse_count_end": float(sc[-1]) if sc else 0.0,
         "n_grow_events": struct["n_grow_events"],
         "n_prune_events": struct["n_prune_events"],
+        "n_startle_events": struct["n_startle_events"],
         "distinct_neurons_grown": struct["distinct_neurons_grown"],
         "turnover": turnover,
         "max_grows_into_one_neuron": struct["max_grows_into_one_neuron"],
@@ -484,6 +706,13 @@ def final_snapshot(net, X_test, y_test, events, initial_edges, series,
         "conf_utility_corr": cal["conf_utility_corr"],
         "frozen_freeloader_frac": cal["frozen_freeloader_frac"],
         "dead_unit_count": cap["dead_unit_count"],
+        "dead_unit_frac": nact["dead_unit_frac"],
+        "idle_unit_frac": nact["idle_unit_frac"],
+        "mean_neuron_activation": nact["mean_neuron_activation"],
+        "n_recycle_events": recyc["n_recycle_events"],
+        "recycled_rehired_frac": recyc["recycled_rehired_frac"],
+        "ghost_dense_cost": scan["ghost_dense_cost"],
+        "ghost_pairs_scored": scan["ghost_pairs_scored"],
         "inert_synapse_frac": cap["inert_synapse_frac"],
         "used_vs_allocated": cap["used_vs_allocated"],
         "meter_fidelity": meter_fidelity(net, demand),

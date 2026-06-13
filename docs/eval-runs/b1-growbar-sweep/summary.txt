@@ -1,0 +1,34 @@
+metric                              currency    currency-gb2    currency-gb3
+----------------------------------------------------------------------------
+final_test_acc ↑                       0.996          0.993≈          0.994≈
+max_test_acc ↑                         0.998          0.999≈          0.998≈
+final_train_acc ↑                      0.998          0.997≈          0.996≈
+final_test_loss ↓                      0.015          0.020≈          0.019≈
+steps_to_90 ↓                           3174           3241≈           3374≈
+steps_to_95 ↓                           3921           3948≈           4201≈
+auc_test_acc ↑                         0.953          0.952≈          0.949≈
+final_acc_stability ↓                  0.010          0.006≈          0.007≈
+synapse_count_start                  103.533        103.533≈        103.533≈
+synapse_count_peak                   136.667        126.200≈        110.533≈
+synapse_count_end                    125.467        115.200≈         99.067≈
+n_grow_events                        212.933        166.133≈         98.067≈
+n_prune_events                           189        152.467≈        100.533≈
+distinct_neurons_grown                14.200         13.600≈         12.333≈
+turnover ↓                             3.215          2.747▲          1.963▲
+max_grows_into_one_neuron ↓           37.600         30.400▲         18.800▲
+mean_fan_in                            4.182          3.840≈          3.302≈
+mean_fan_out                           4.182          3.840≈          3.302≈
+effective_density                      0.581          0.533≈          0.459≈
+p10_utility ↑                          0.671          0.697≈          0.704≈
+freeloader_frac ↓                      0.032          0.028≈          0.020≈
+mean_survivor_age ↑                    26217          26321≈          26893▲
+median_survivor_age ↑                  29986          30000≈          30000≈
+mean_pruned_lifespan                    2580           3104≈           3961≈
+oscillation_frac ↓                     0.368          0.331≈          0.277▲
+max_regrow ↓                              11          9.467▲          6.533▲
+conf_utility_corr ↑                    0.314          0.350≈          0.322≈
+frozen_freeloader_frac ↓                   0              0≈              0≈
+dead_unit_count ↓                      3.600          3.933≈          4.067≈
+inert_synapse_frac ↓                       0              0≈              0≈
+used_vs_allocated                      1.236          1.135≈          0.976≈
+meter_fidelity ↑                       0.657          0.618≈          0.711≈

@@ -24,6 +24,13 @@ def tiny_spec(**kw):
     return SuiteSpec(**base)
 
 
+def test_run_result_reports_neuron_count():
+    spec = tiny_spec(variants=("core",), seeds=1, steps=20, record_every=10,
+                     layers=(2, 3, 2), n_points=40)
+    res = runner.run_one("core", 0, spec)
+    assert res["n_neurons"] == 2 + 3 + 2
+
+
 def test_run_one_returns_wellformed_result():
     spec = tiny_spec()
     res = runner.run_one("currency", seed=0, spec=spec)
@@ -41,12 +48,43 @@ def test_run_one_returns_wellformed_result():
                 "final_acc_stability", "n_grow_events", "turnover",
                 "max_grows_into_one_neuron", "oscillation_frac", "max_regrow",
                 "p10_utility", "freeloader_frac", "conf_utility_corr",
-                "dead_unit_count", "effective_density", "mean_survivor_age"):
+                "dead_unit_count", "dead_unit_frac", "mean_neuron_activation",
+                "effective_density", "mean_survivor_age"):
         assert key in res["final"], key
 
     # distributions for the diagnostic plots
     for key in ("utilities", "confidences", "ages", "pruned_lifespans"):
         assert key in res["dist"], key
+
+
+def test_runner_honors_per_variant_init_density():
+    # the fully-connected arm pins init_density=1.0, so its initial graph is
+    # dense (all-to-all) regardless of the suite --density. For (2,4,4,2) the
+    # full edge count is 2*4 + 4*4 + 4*2 = 32.
+    spec = tiny_spec(variants=("fully-connected", "currency"),
+                     baseline="currency", layers=(2, 4, 4, 2), density=0.5,
+                     steps=4, record_every=2)
+    fc = runner.run_one("fully-connected", 0, spec)
+    assert fc["final"]["synapse_count_start"] == 32
+    assert fc["final"]["effective_density"] == 1.0
+    # the sparse arm at the SAME suite density starts well below fully connected
+    cur = runner.run_one("currency", 0, spec)
+    assert cur["final"]["synapse_count_start"] < 32
+
+
+def test_runner_honors_per_variant_init_layers():
+    # a size-sweep arm pins its own neuron counts via init_layers, overriding the
+    # suite --layers. The built graph must match build_graph on the OVERRIDE layers
+    # (not the suite's), at the suite density/seed.
+    from sprout.network import build_graph
+    spec = tiny_spec(variants=("size-w4", "size-w10"), baseline="size-w10",
+                     layers=(2, 8, 8, 2), density=0.5, steps=4, record_every=2)
+    res = runner.run_one("size-w4", 0, spec)
+    expected = build_graph([2, 4, 4, 4, 2], density=spec.density, seed=0)
+    assert res["initial_edge_count"] == len(expected.synapses)
+    # and it is NOT the suite-layer graph (proves the override actually fired)
+    suite_graph = build_graph([2, 8, 8, 2], density=spec.density, seed=0)
+    assert res["initial_edge_count"] != len(suite_graph.synapses)
 
 
 def test_run_one_is_deterministic():
@@ -101,3 +139,55 @@ def test_parallel_matches_serial():
                 for r in rs}
 
     assert by_key(serial) == by_key(parallel)
+
+
+# -- continual (forgetting) regime -------------------------------------------
+
+def tiny_continual_spec(**kw):
+    base = dict(variants=("currency", "core"), seeds=2, dataset="spirals",
+                regime="continual", steps_a=120, steps_b=120, steps_ab=80,
+                record_every=40, layers=(2, 4, 4, 2), density=0.5, n_points=60,
+                baseline="core")
+    base.update(kw)
+    return SuiteSpec(**base)
+
+
+def test_run_one_continual_wellformed():
+    spec = tiny_continual_spec()
+    res = runner.run_one_continual("currency", seed=0, spec=spec)
+
+    assert res["variant"] == "currency" and res["regime"] == "continual"
+    s = res["series"]
+    rec = s["rec_step"]
+    assert len(rec) >= 3
+    for key in ("phase", "test_accuracy_A", "test_accuracy_B", "test_accuracy",
+                "train_accuracy", "synapse_count", "mean_confidence",
+                "cum_grow", "cum_prune"):
+        assert len(s[key]) == len(rec), key
+
+    # phases run in order A -> B -> AB
+    phases = s["phase"]
+    assert phases[0] == "A"
+    assert phases.index("A") < phases.index("B") < phases.index("AB")
+
+    # every final metric is known; continual + structural metrics both present
+    assert set(res["final"]) <= set(metrics.METRIC_DIRECTIONS)
+    for key in ("a_peak", "b_learned", "forgetting", "consolidation",
+                "relearn_gap", "final_test_acc", "conf_utility_corr"):
+        assert key in res["final"], key
+
+
+def test_run_one_continual_is_deterministic():
+    spec = tiny_continual_spec()
+    a = runner.run_one_continual("currency", 0, spec)
+    b = runner.run_one_continual("currency", 0, spec)
+    assert a["series"]["test_accuracy_A"] == b["series"]["test_accuracy_A"]
+    assert a["series"]["test_accuracy_B"] == b["series"]["test_accuracy_B"]
+
+
+def test_run_suite_dispatches_to_continual():
+    spec = tiny_continual_spec(variants=("core",), seeds=1)
+    results = runner.run_suite(spec, jobs=1, cache_dir=None, use_cache=False)
+    assert len(results) == 1
+    assert results[0]["regime"] == "continual"
+    assert "forgetting" in results[0]["final"]

@@ -17,10 +17,23 @@ from evals import report
 from evals.metrics import METRIC_DESCRIPTIONS
 
 
-# the curated headline metrics shown at the top of each run + in chat replies
+# the curated headline metrics shown at the top of each run + in chat replies.
+# Continual-only and shift-only metrics are listed too; build_highlight_table
+# silently skips any that a given run didn't produce.
 KEY_METRICS = (
-    "final_test_acc", "pre_shift_test_acc", "recovered_test_acc",
-    "auc_test_acc", "max_grows_into_one_neuron", "oscillation_frac",
+    "final_test_acc",
+    "steps_to_90", "steps_to_95", "auc_test_acc",           # training speed (single)
+    "a_peak", "a_steps_to_90",                              # continual: task A level+speed
+    "b_learned", "b_steps_to_90",                           # continual: task B level+speed
+    "forgetting", "consolidation",                          # continual: retention
+    "pre_shift_test_acc", "recovered_test_acc",             # label-swap regime
+    "synapse_count_end", "effective_density",               # sparsity (cost/benefit)
+    "ghost_dense_cost", "ghost_pairs_scored",               # grow-scan compute cost
+    "mean_neuron_activation", "dead_unit_frac",             # "average neuron value"
+    "idle_unit_frac",                                       # honest capacity (recycling)
+    "n_recycle_events", "recycled_rehired_frac",            # recycling activity/outcome
+    "n_startle_events",                                     # demand-spike hiring alarms
+    "max_grows_into_one_neuron", "oscillation_frac",
     "freeloader_frac", "conf_utility_corr", "dead_unit_count",
 )
 

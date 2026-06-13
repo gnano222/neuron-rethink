@@ -1,0 +1,38 @@
+metric                               currency  currency-2dconf
+--------------------------------------------------------------
+final_test_acc ↑                        0.967           0.971≈
+max_test_acc ↑                          0.996           0.998≈
+final_train_acc ↑                       0.971           0.976≈
+final_test_loss ↓                       0.111           0.092≈
+steps_to_90 ↓                            4121            3121▲
+steps_to_95 ↓                            5521            4641≈
+auc_test_acc ↑                          0.926           0.943▲
+final_acc_stability ↓                   0.022           0.024≈
+pre_shift_test_acc ↑                    0.993           0.995≈
+recovered_test_acc ↑                    0.967           0.971≈
+recovery_gap ↓                          0.027           0.024≈
+recovery_steps ↓                            ∞               ∞?
+synapse_count_start                       104             104≈
+synapse_count_peak                    138.600         143.800≈
+synapse_count_end                         119         114.400≈
+n_grow_events                             207         244.600≈
+n_prune_events                            190         232.200≈
+distinct_neurons_grown                 15.800          17.200≈
+turnover ↓                              3.160           3.688▼
+max_grows_into_one_neuron ↓            29.800          36.200≈
+mean_fan_in                             3.967           3.813≈
+mean_fan_out                            3.967           3.813≈
+effective_density                       0.551           0.530≈
+p10_utility ↑                           0.628           0.645≈
+freeloader_frac ↓                       0.023           0.022≈
+mean_survivor_age ↑                     30145           31215≈
+median_survivor_age ↑                   36000           36000≈
+mean_pruned_lifespan                     4905            4807≈
+oscillation_frac ↓                      0.333           0.395▼
+max_regrow ↓                               10          11.200≈
+conf_utility_corr ↑                    -0.172           0.020▲
+frozen_freeloader_frac ↓                0.009               0▲
+dead_unit_count ↓                       4.400           4.600≈
+inert_synapse_frac ↓                        0               0≈
+used_vs_allocated                       1.167           1.122≈
+meter_fidelity ↑                        0.880           0.872≈

@@ -1,0 +1,43 @@
+metric                               currency  fully-connected   static-matched
+-------------------------------------------------------------------------------
+final_test_acc ↑                        0.895           0.899≈           0.898≈
+max_test_acc ↑                          0.907           0.919≈           0.912≈
+final_train_acc ↑                       0.899           0.899≈           0.899≈
+final_test_loss ↓                       0.213           0.209≈           0.211≈
+steps_to_90 ↓                               ∞               ∞?               ∞?
+steps_to_95 ↓                               ∞               ∞?               ∞?
+auc_test_acc ↑                          0.854           0.859≈           0.857≈
+final_acc_stability ↓                   0.010           0.013≈           0.013≈
+a_peak ↑                                0.999           0.999≈           0.999≈
+b_learned ↑                             0.981           0.983≈           0.978≈
+forgetting ↓                            0.293           0.249▲           0.256≈
+consolidation ↑                         0.862           0.868≈           0.868≈
+relearn_gap ↓                           0.125           0.112≈           0.116≈
+a_steps_to_80 ↓                           400         266.667≈         466.667≈
+a_steps_to_90 ↓                          1360         533.333▲            1507≈
+b_steps_to_80 ↓                           200             200≈         186.667≈
+b_steps_to_90 ↓                       413.333         306.667≈             360≈
+synapse_count_start                   103.533             216≈         101.533≈
+synapse_count_peak                    108.867             216≈         101.533≈
+synapse_count_end                     101.467             216≈         101.533≈
+n_grow_events                          79.333               0≈               0≈
+n_prune_events                         79.400               0≈               0≈
+distinct_neurons_grown                 13.133               0≈               0≈
+turnover ↓                              1.640               0▲               0▲
+max_grows_into_one_neuron ↓            13.733               0▲               0▲
+mean_fan_in                             3.382           7.200≈           3.384≈
+mean_fan_out                            3.382           7.200≈           3.384≈
+effective_density                       0.470               1≈           0.470≈
+p10_utility ↑                           0.720           0.225▼           0.251▼
+freeloader_frac ↓                       0.011           0.239▼           0.221▼
+mean_survivor_age ↑                     33566           40000▲           40000▲
+median_survivor_age ↑                   40000           40000≈           40000≈
+mean_pruned_lifespan                     6222               0≈               0≈
+oscillation_frac ↓                      0.201               0▲               0▲
+max_regrow ↓                            4.267               0▲               0▲
+conf_utility_corr ↑                     0.225               —?               —?
+frozen_freeloader_frac ↓                    0               0≈               0≈
+dead_unit_count ↓                           4           1.267▲           2.533≈
+inert_synapse_frac ↓                        0               0≈               0≈
+used_vs_allocated                       0.999               1≈               1≈
+meter_fidelity ↑                        0.962               —?               —?

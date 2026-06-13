@@ -1,0 +1,38 @@
+metric                                currency      currency-gb2    currency-ghost  currency-grace1k
+----------------------------------------------------------------------------------------------------
+final_test_acc ↑                         0.972            0.942≈            0.949≈            0.959≈
+max_test_acc ↑                           0.998            0.999≈            0.999≈            0.999≈
+final_train_acc ↑                        0.973            0.945≈            0.950≈            0.957≈
+final_test_loss ↓                        0.088            0.171≈            0.165≈            0.153≈
+steps_to_90 ↓                             3174             3241≈             3228≈             3041≈
+steps_to_95 ↓                             3921             3948≈             4121≈             3868≈
+auc_test_acc ↑                           0.945            0.941≈            0.940≈            0.945≈
+final_acc_stability ↓                    0.025            0.031≈            0.037≈            0.024≈
+pre_shift_test_acc ↑                     0.996            0.993≈            0.994≈            0.993≈
+recovered_test_acc ↑                     0.972            0.942≈            0.949≈            0.959≈
+recovery_gap ↓                           0.023            0.051≈            0.045≈            0.035≈
+recovery_steps ↓                             ∞                ∞?                ∞?                ∞?
+synapse_count_start                    103.533          103.533≈          103.467≈          103.533≈
+synapse_count_peak                     137.133          126.200≈          135.400≈          142.333≈
+synapse_count_end                      120.400          106.067≈          118.800≈          123.200≈
+n_grow_events                          241.733          187.333≈          204.400≈          231.867≈
+n_prune_events                         222.867          182.800≈          187.133≈          210.200≈
+distinct_neurons_grown                      15           14.400≈           15.067≈           15.933≈
+turnover ↓                               3.733            3.223▲            3.205▲            3.425▲
+max_grows_into_one_neuron ↓             39.067           31.800▲           26.733▲           35.600≈
+mean_fan_in                              4.013            3.536≈            3.960≈            4.107≈
+mean_fan_out                             4.013            3.536≈            3.960≈            4.107≈
+effective_density                        0.557            0.491≈            0.550≈            0.570≈
+p10_utility ↑                            0.679            0.667≈            0.660≈            0.646≈
+freeloader_frac ↓                        0.016            0.019≈            0.019≈            0.032▼
+mean_survivor_age ↑                      29741            30732≈            29641≈            29543≈
+median_survivor_age ↑                    35893            36000▲            35940≈            35933≈
+mean_pruned_lifespan                      4207             5011≈             4984≈             4964≈
+oscillation_frac ↓                       0.381            0.342▲            0.385≈            0.401≈
+max_regrow ↓                            11.333            9.867▲            6.467▲            8.067▲
+conf_utility_corr ↑                      0.125            0.096≈            0.141≈            0.109≈
+frozen_freeloader_frac ↓                     0                0≈                0≈                0≈
+dead_unit_count ↓                        5.400            5.933≈            5.267≈            4.933≈
+inert_synapse_frac ↓                         0                0≈                0≈                0≈
+used_vs_allocated                        1.186            1.045≈            1.169≈            1.213≈
+meter_fidelity ↑                         0.871            0.838≈            0.844≈            0.892≈
