@@ -29,12 +29,13 @@ OUT = os.path.join("output", "validation")
 
 def _make_config():
     # validate.py is a FIXED guardrail of the core currency mechanics
-    # (confidence/prune/grow) running CONTINUOUSLY. Sleep + phasic structure are
-    # pinned OFF here so this 7/7 guardrail stays a stable reference of the base
-    # learning loop (those are validated separately under docs/eval-runs).
+    # (confidence/prune/grow) running CONTINUOUSLY. Sleep + phasic structure +
+    # startle are pinned OFF here so this 7/7 guardrail stays a stable
+    # reference of the base learning loop (those are validated separately
+    # under docs/eval-runs).
     return Config(eta_base=0.02, enable_confidence=True, enable_prune=True,
                   enable_grow=True, gamma_dec=0.001, t_struct=200,
-                  enable_sleep=False, phasic_structure=False)
+                  enable_sleep=False, phasic_structure=False, startle=False)
 
 
 def main():

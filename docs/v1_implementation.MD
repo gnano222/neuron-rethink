@@ -315,8 +315,10 @@ Pure NumPy is enough and keeps the per-synapse object model transparent. PyTorch
 ## Phasic structural plasticity (default mechanism)
 
 Structural change is **phasic** and on by default (`Config.phasic_structure =
-True`): the net **learns while awake** (confidence + gated-SGD + gradient metering
-every step, *no* rewiring) and **rewires while it sleeps**. "Sleep" is a
+True`), in **three phases driven by one smoothed-loss state machine**: the net
+**learns while awake** (confidence + gated-SGD + gradient metering every step,
+*no* rewiring), **rewires while it sleeps**, and **hires when startled**
+(`Config.startle = True`, default since 2026-06-12 — see below). "Sleep" is a
 **settledness** plateau, detected by an EMA of the training loss
 (`sprout/sleep.py`, `SettlednessDetector` — early-stopping-style "patience" on the
 smoothed loss, past a warmup). Loss is the signal because it is the only clean
@@ -354,15 +356,45 @@ re-grow (`max_regrow` 3.4 → 0.4) and higher-quality survivors (`p10_utility` �
 also beats the old continuous+sleep default on accuracy, dead units and
 oscillation at comparable sparsity.
 
+**Startle: the hiring alarm (default since 2026-06-12).** Plateau-gated rewiring
+is **demand-blind**: the grow signal (ghost virtual gradients) is loudest during
+a transition's loss spike, which the settledness gate by construction waits out —
+measured consequences were conservative growth and a second-task acquisition gap
+vs the continuous baseline (`b_learned` 0.973 vs 0.983, `docs/eval-runs/
+recycle-continual`). The startle is the mirror threshold on the same detector: a
+**grow-only pass fired immediately** (any step, off the `t_struct` grid) once the
+loss spike alarm trips, then `reset()` re-baselines the detector (refractory +
+fixes a false-settled-mid-descent artifact). The alarm requires three conditions
+together, each defeating a measured false-positive source: a **relative rise**
+(fast EMA > slow `beta/10` EMA × 1.5 — *not* vs `best`, a min-ratchet that one
+lucky noise trough poisons: 29 false alarms/run), an **absolute trouble floor**
+(auto `ln(K)/2`, half chance-level CE — mid-training convergence waves and
+post-burst prune bumps are up to ~20× *relative* but only ~0.1–0.17 absolute),
+and **persistence** (50 consecutive steps). Result: **0 false alarms on
+stationary runs** (the default is inert until the world changes), ~2 per
+transition, firing ~60 steps in while `b_steps_to_80` ≈ 200. Measured
+(`docs/eval-runs/startle-vs-phasic` + `startle-continual`): idle capacity
+recruited (`idle_unit_frac` 0.30 → 0.22 ▲), churn down (`turnover` ▲), and the
+continual worst seed raised 0.960 → 0.977 at end sparsity identical to sleep-only
+phasic — but the *mean* `b_learned` gain is ≈ at 5 seeds (the residual gap vs
+continuous is **refinement-tail growth**, not onset timing), and emergency hires
+read as freeloaders until a sleep cycle cleans them. Sleep-only phasic is
+retained behind `startle=False` (pinned in the eval `phasic`/`phasic-recycle`
+variants and `validate.py`).
+
 **Honest caveats.** (1) Phasic cuts *edges*, not *neurons* and not the firing
 fraction — the ~47% of neurons that fire per input is unchanged (synapse sparsity
 ⊥ activation sparsity); the compute win is lower fan-in. (2) It roughly **doubles
 the dead-unit fraction** (~0.09 → ~0.18) and slightly worsens post-shift accuracy
-stability — capacity that is permanently silent. Single-task and label-swap
-accuracy are preserved, but the dead-unit cost to the **continual/forgetting**
-regime is not yet measured — that is the outstanding validation. `validate.py` and
-the eval `currency`/`sleep` baselines pin `phasic_structure=False` as fixed
-references.
+stability — capacity that is permanently silent. The dead-unit cost **was
+measured on the continual regime** (`docs/eval-runs/recycle-continual`): the
+continuous baseline keeps ~2× more capacity in service and wins second-task
+acquisition (`b_learned` ▲), so phasic's sparsity is not free under task
+transitions; startle (above) recovers about half that gap. A sleep-time
+*recycling* re-entry path for dead units was tried and **rejected** (zero
+rehires — a blank's bid cannot out-compete live features; see the 2026-06-11
+recycling spec). `validate.py` and the eval `currency`/`sleep` baselines pin
+`phasic_structure=False` as fixed references.
 
 ## Research roadmap: compute efficiency
 

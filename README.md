@@ -14,15 +14,21 @@ and read it through three lenses: **confidence** (freeze a wire that is
 demand), **growth** (add the missing wire the loss most wishes existed, when it
 clears a *selective* bar — RigL-style). See [sprout/currency.py](sprout/currency.py).
 
-Structural change is **phasic** *(default)*: the net **learns while awake** (pure
-gated-SGD + metering, no rewiring) and **rewires while it sleeps** — one
-prune-the-weak + grow-the-wanted pass, fired only once the loss has *settled*
-onto a plateau, then it must re-settle before the next. One signal, one
-operation, one trigger: this subsumes the older always-on churn (and its
-anti-oscillation patches) and ends a net ~45% sparser at no single-task accuracy
-cost. See [sprout/sleep.py](sprout/sleep.py) and `_rewire_phasic` in
-[sprout/train.py](sprout/train.py). The continuous path is retained behind
-`phasic_structure=False` as the pinned A/B baseline.
+Structural change is **phasic** *(default)*, in three phases driven by one
+smoothed-loss state machine: the net **learns while awake** (pure gated-SGD +
+metering, no rewiring), **rewires while it sleeps** — one prune-the-weak +
+grow-the-wanted pass, fired only once the loss has *settled* onto a plateau,
+then it must re-settle before the next — and **hires when startled** *(default
+since 2026-06-12)*: a grow-only emergency pass fired ~60 steps into a sustained
+loss *spike* (a real regime change), while the demand signal is hot. The
+startle alarm is deliberately hard to trip (relative rise × absolute
+trouble-floor × persistence) — it fires **zero times** on stationary data, so
+the default costs nothing until the world actually changes. This subsumes the
+older always-on churn (and its anti-oscillation patches) and ends a net ~45%
+sparser at no single-task accuracy cost. See [sprout/sleep.py](sprout/sleep.py)
+and `_rewire_phasic` / `_startle_grow` in [sprout/train.py](sprout/train.py).
+The continuous path is retained behind `phasic_structure=False` as the pinned
+A/B baseline; sleep-only phasic behind `startle=False`.
 
 > An earlier **legacy v1** stack (Hebbian eligibility + three-factor confidence +
 > `|w|·r` pruning + activity-chasing growth) was removed once gradient-as-currency
@@ -129,27 +135,31 @@ the blanks needed is gone. See
 [recycle-vs-phasic](docs/eval-runs/recycle-vs-phasic/) and
 `docs/superpowers/specs/2026-06-11-sleep-recycling-design.md`.
 
-**Startle — demand-triggered growth — fixes the timing, half-fixes the gap.**
-The follow-up experiment (`startle=True`, opt-in): a third phase alongside
-wake/sleep — a **grow-only pass fired ~60 steps into a loss spike**, while the
-transition's deltas are hot. The alarm is three-condition and measured-robust
-(fast-vs-slow loss EMA ×1.5, an absolute trouble floor auto-set to `ln(K)/2` ≈
-half chance-level CE, sustained 50 steps): **0 false alarms** on stationary
-runs, ~2 per transition, after the naive best-relative trigger stormed (29
-false alarms — convergence waves and post-burst prune bumps are huge
-*relative* spikes but sit far below chance-level loss). Measured (5 seeds,
+**Startle — demand-triggered growth — fixes the timing, half-fixes the gap;
+now the default.** The third phase alongside wake/sleep: a **grow-only pass
+fired ~60 steps into a loss spike**, while the transition's deltas are hot.
+The alarm is three-condition and measured-robust (fast-vs-slow loss EMA ×1.5,
+an absolute trouble floor auto-set to `ln(K)/2` ≈ half chance-level CE,
+sustained 50 steps): **0 false alarms** on stationary runs, ~2 per transition,
+after the naive best-relative trigger stormed (29 false alarms — convergence
+waves and post-burst prune bumps are huge *relative* spikes but sit far below
+chance-level loss). Measured (5 seeds,
 [startle-vs-phasic](docs/eval-runs/startle-vs-phasic/) +
 [startle-continual](docs/eval-runs/startle-continual/)): single+shift —
 `idle_unit_frac` 0.30 → 0.22 ▲, `turnover` ▲, accuracy ≈; continual —
 `b_learned` 0.973 → 0.979 ≈ (closes ~half the gap to continuous, and raises
 the worst seed 0.960 → 0.977) at **identical end sparsity** (~106 wires vs
-continuous's ~226). Honest costs: emergency hires read as freeloaders until a
-sleep cycle cleans them (`freeloader_frac` ▼), and the mean `b_learned` gain
-is *not significant* at 5 seeds — so startle stays **opt-in**. The residual
-gap vs continuous lives in **refinement-tail growth** (continuous grows ~175×
-spread over the run; one onset hire can't substitute), pointing at an *aroused
-window* (growth re-enabled while the loss stays above the floor) as the next
-lever. Spec + results:
+continuous's ~226). **Promoted to the default (2026-06-12)** on the
+cheap-insurance argument: inert until the world changes, reliability win when
+it does. Honest residuals, unchanged by promotion: emergency hires read as
+freeloaders until a sleep cycle cleans them (`freeloader_frac` ▼), and the
+mean `b_learned` gain is *not significant* at 5 seeds. `validate.py` and the
+eval `phasic` / `phasic-recycle` variants pin `startle=False` as fixed
+pre-startle references; the `phasic-startle` variant *is* the promoted
+default. The residual gap vs continuous lives in **refinement-tail growth**
+(continuous grows ~175× spread over the run; one onset hire can't
+substitute), pointing at an *aroused window* (growth re-enabled while the
+loss stays above the floor) as the next lever. Spec + results:
 `docs/superpowers/specs/2026-06-11-startle-demand-triggered-growth-design.md`.
 
 ## Quick start
@@ -163,7 +173,7 @@ pytest -q                                   # 219 unit + integration tests
 python run.py --preset currency --dataset spirals --steps 15000 --density 0.4
 python validate.py                          # currency, all 7 criteria + plots
 
-python evaluate.py --variants currency,sleep,phasic --baseline currency --seeds 5 --shift 3000
+python evaluate.py --variants currency,phasic,phasic-startle --baseline currency --seeds 5 --shift 3000
                                             # multi-seed comparative scorecard
 ```
 

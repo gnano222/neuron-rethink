@@ -30,6 +30,7 @@ VARIANTS: dict[str, Callable[[], Config]] = {
         eta_base=0.02, grad_currency=True, enable_confidence=True,
         enable_prune=True, enable_grow=True,
         gamma_dec=0.001, t_struct=200, enable_sleep=False, phasic_structure=False,
+        startle=False,   # pinned (inert on the continuous path anyway)
     ),
     # the PROMOTED DEFAULT: currency + settledness-gated sleep consolidation at
     # floor 1.0 / no cap (inherited from Config defaults). Prunes aggressively
@@ -40,40 +41,46 @@ VARIANTS: dict[str, Callable[[], Config]] = {
         eta_base=0.02, grad_currency=True, enable_confidence=True,
         enable_prune=True, enable_grow=True,
         gamma_dec=0.001, t_struct=200, enable_sleep=True, phasic_structure=False,
+        startle=False,   # pinned (inert on the continuous path anyway)
     ),
-    # the NEW default architecture (C): PHASIC structural plasticity. Wake = pure
+    # PHASIC structural plasticity (C), WITHOUT the startle alarm. Wake = pure
     # gated-SGD + meter the gradient (no structural change); sleep = ONE rewire
     # pass (prune the weak + grow the wanted) fired only at a settledness plateau.
     # Subsumes the sleep overlay and removes continuous grow<->prune churn — the
     # ghost-meter refractory and inflated grow bar are no longer load-bearing.
-    # Compare vs the continuous+sleep `sleep` (the old default) and the no-sleep
-    # `currency` reference. sleep_* knobs inherit the promoted defaults
-    # (warmup 2500, patience 1500, floor 1.0, no cap).
+    # startle is PINNED OFF: the project default promoted startle=True
+    # (2026-06-12), but this variant stays the stable sleep-only phasic
+    # baseline every published startle/recycle run was measured against.
+    # The promoted default itself = `phasic-startle` below. sleep_* knobs
+    # inherit the promoted defaults (warmup 2500, patience 1500, floor 1.0,
+    # no cap).
     "phasic": lambda: Config(
         eta_base=0.02, grad_currency=True, enable_confidence=True,
         enable_prune=True, enable_grow=True,
         gamma_dec=0.001, t_struct=200, phasic_structure=True,
+        startle=False,
     ),
     # phasic + sleep-time RECYCLING of dead units: each burst clears a corpse's
     # remaining wires (reclaiming the orphan-guard zombie) and rebirths it as a
     # faint blank (bias = r_target) that re-enters active_pre and must out-bid
-    # the same grow bar to be rehired. Targets phasic's dead-unit cost
-    # (dead_unit_frac 0.09 -> 0.18 in phasic-vs-continuous); judge it on
-    # idle_unit_frac + the continual metrics, NOT dead_unit_frac (blanks fire,
-    # so that drops trivially). See docs/superpowers/specs/
-    # 2026-06-11-sleep-recycling-design.md. Compare vs `phasic`.
+    # the same grow bar to be rehired. NEGATIVE result (zero rehires — bid
+    # scale binds, not timing; see the 2026-06-11 recycling spec); kept as the
+    # published historical arm with startle PINNED OFF as it was measured.
+    # Judge on idle_unit_frac, NOT dead_unit_frac (blanks fire, so that drops
+    # trivially). Compare vs `phasic`.
     "phasic-recycle": lambda: Config(
         eta_base=0.02, grad_currency=True, enable_confidence=True,
         enable_prune=True, enable_grow=True,
         gamma_dec=0.001, t_struct=200, phasic_structure=True,
-        recycle_dead=True,
+        recycle_dead=True, startle=False,
     ),
-    # phasic + STARTLE: demand-triggered growth, the third phase (wake = learn,
-    # sleep = consolidate, startle = hire). A grow-only pass fires ~60 steps
-    # into a sustained loss-EMA spike — while the transition's deltas are hot —
-    # then re-baselines the detector. Targets phasic's continual losses
-    # (b_learned 0.973 vs currency 0.983 ▲; demand-blind plateau bursts, see
-    # docs/eval-runs/recycle-continual). Compare vs `phasic`. Spec:
+    # the PROMOTED DEFAULT (2026-06-12): phasic + STARTLE — demand-triggered
+    # growth, the third phase (wake = learn, sleep = consolidate, startle =
+    # hire). A grow-only pass fires ~60 steps into a sustained loss-EMA spike
+    # — while the transition's deltas are hot — then re-baselines the
+    # detector. Inert on stationary data (0 false alarms); under shifts it
+    # recruits idle capacity and raises the continual worst-seed floor.
+    # = `phasic` + the promoted startle default; compare vs `phasic`. Spec:
     # docs/superpowers/specs/2026-06-11-startle-demand-triggered-growth-design.md.
     "phasic-startle": lambda: Config(
         eta_base=0.02, grad_currency=True, enable_confidence=True,

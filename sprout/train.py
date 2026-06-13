@@ -87,7 +87,7 @@ class Config:
     # baseline + the validate.py guardrail. See the rewire step in Trainer.
     phasic_structure: bool = True
 
-    # --- startle: demand-triggered growth (opt-in experiment; phasic only) ---
+    # --- startle: demand-triggered growth (ON by default; phasic only) ---
     # The third phase: wake = learn, sleep = consolidate (prune + recycle at
     # plateaus), startle = HIRE. Plateau-gated bursts are demand-blind (zero
     # blank rehires + a b_learned loss on the continual regime, see
@@ -96,8 +96,19 @@ class Config:
     # transition's deltas are still hot — then reset() re-baselines the
     # detector (refractory + kills the false-settled-mid-descent artifact).
     # An alarm, not maintenance: fires on ANY step, not just t_struct ticks.
-    # See docs/superpowers/specs/2026-06-11-startle-demand-triggered-growth-design.md.
-    startle: bool = False
+    # PROMOTED to the default (2026-06-12): inert on stationary data (0 false
+    # alarms measured — the three-condition trigger never fires without a real
+    # regime change, so the default costs nothing), and under shifts it
+    # recruits idle capacity (idle_unit_frac 0.30->0.22), cuts churn
+    # (turnover ▲) and raises the continual worst-seed floor (b_learned
+    # 0.960->0.977) at ~half continuous growth's wires. The honest residuals:
+    # the mean continual b_learned gain is ≈ at 5 seeds, and emergency hires
+    # read as freeloaders until a sleep cycle cleans them. validate.py and
+    # the eval `phasic`/`phasic-recycle` variants pin startle=False as fixed
+    # pre-startle references. See docs/eval-runs/startle-vs-phasic +
+    # startle-continual and docs/superpowers/specs/
+    # 2026-06-11-startle-demand-triggered-growth-design.md.
+    startle: bool = True
     startle_tol: float = 0.5       # spike = fast EMA above slow EMA * (1 + this)
     startle_patience: int = 50     # sustained spike steps before the alarm
     # absolute trouble floor for the alarm; None => auto ln(K)/2 from the

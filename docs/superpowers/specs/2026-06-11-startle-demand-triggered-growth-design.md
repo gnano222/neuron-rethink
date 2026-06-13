@@ -1,9 +1,14 @@
 # Startle: demand-triggered growth (the third phase)
 
 **Date:** 2026-06-11
-**Status:** RESULTS IN — **not promoted** (kept opt-in; mixed: real wins on
-single+shift + a continual reliability win, but the headline `b_learned` gap
-did not clearly close — see Results)
+**Status:** **PROMOTED to the default** (2026-06-12, user decision:
+`Config.startle = True`). The eval had left it opt-in (the mean continual
+`b_learned` gain was ≈ at 5 seeds); the promotion rationale is
+cheap insurance — the alarm is measured-inert on stationary data (0 false
+alarms), and under real shifts it recruits idle capacity, cuts churn and
+raises the continual worst-seed floor. Pinned `startle=False` references:
+`validate.py`, eval `phasic` + `phasic-recycle` variants; `phasic-startle`
+*is* the promoted default.
 **Builds on:** phasic structural plasticity (2026-06-06) + the recycling
 negative result (2026-06-11 sleep-recycling spec)
 

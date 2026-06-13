@@ -180,9 +180,11 @@ def test_default_config_is_phasic():
 
 
 def _phasic_cfg(**kw):
+    # startle pinned OFF: these tests pin the sleep-only phasic mechanics
+    # (the startle default flipped True 2026-06-12; startle tests opt back in).
     base = dict(eta_base=0.02, enable_confidence=True, enable_prune=True,
                 enable_grow=True, gamma_dec=0.001, t_struct=100,
-                phasic_structure=True)
+                phasic_structure=True, startle=False)
     base.update(kw)
     return Config(**base)
 
@@ -260,9 +262,11 @@ def test_phasic_no_structural_event_before_warmup():
 
 # -- startle: demand-triggered growth (opt-in on the phasic path) -------------
 
-def test_default_config_startle_off():
+def test_default_config_startle_on():
+    # PROMOTED DEFAULT (2026-06-12): the alarm is inert on stationary data
+    # (0 false alarms measured) and hires into hot demand windows under shifts.
     cfg = Config()
-    assert cfg.startle is False
+    assert cfg.startle is True
     assert cfg.startle_tol == 0.5
     assert cfg.startle_patience == 50
     assert cfg.startle_floor is None       # None => auto ln(K)/2 from the net
