@@ -1,0 +1,47 @@
+metric                           phasic-startle  phasic-startle-k4
+------------------------------------------------------------------
+final_test_acc ↑                          0.967             0.964≈
+max_test_acc ↑                            0.997             0.997≈
+final_train_acc ↑                         0.971             0.959≈
+final_test_loss ↓                         0.103             0.109≈
+steps_to_90 ↓                              1721              1721≈
+steps_to_95 ↓                              2681              2681≈
+auc_test_acc ↑                            0.933             0.928≈
+final_acc_stability ↓                     0.045             0.055≈
+pre_shift_test_acc ↑                      0.981             0.991≈
+recovered_test_acc ↑                      0.967             0.964≈
+recovery_gap ↓                            0.014             0.027≈
+recovery_steps ↓                              ∞                 ∞?
+synapse_count_start                         242               242≈
+synapse_count_peak                          242               242≈
+synapse_count_end                       179.200               141≈
+n_grow_events                            60.600            15.600≈
+n_prune_events                          123.400           116.600≈
+n_startle_events                              2             1.600≈
+n_arousal_events                              0                 0≈
+distinct_neurons_grown                   16.800             4.400≈
+turnover ↓                                0.878             0.671▲
+max_grows_into_one_neuron ↓              10.600                 6▲
+mean_fan_in                               3.584             2.820≈
+mean_fan_out                              3.584             2.820≈
+effective_density                         0.311             0.245≈
+p10_utility ↑                             0.394             0.479≈
+freeloader_frac ↓                         0.124             0.102≈
+mean_survivor_age ↑                       14490             16832▲
+median_survivor_age ↑                     18000             18000≈
+mean_pruned_lifespan                      10452             10977≈
+oscillation_frac ↓                        0.058                 0≈
+max_regrow ↓                              0.200                 0≈
+conf_utility_corr ↑                       0.085             0.045≈
+frozen_freeloader_frac ↓                      0                 0≈
+dead_unit_count ↓                         6.600             7.200≈
+dead_unit_frac ↓                          0.138             0.150≈
+idle_unit_frac ↓                          0.221             0.250≈
+mean_neuron_activation                    0.276             0.302≈
+inert_synapse_frac ↓                          0                 0≈
+used_vs_allocated                         0.740             0.583≈
+n_recycle_events                              0                 0≈
+recycled_rehired_frac                         —                 —?
+ghost_dense_cost                        784.800               823≈
+ghost_pairs_scored                       80.972            13.023≈
+meter_fidelity ↑                          0.901             0.951≈

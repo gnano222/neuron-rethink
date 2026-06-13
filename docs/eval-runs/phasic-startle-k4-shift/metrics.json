@@ -1,0 +1,1479 @@
+{
+  "aggregate": {
+    "variants": [
+      "phasic-startle",
+      "phasic-startle-k4"
+    ],
+    "baseline": "phasic-startle",
+    "directions": {
+      "final_test_acc": "higher",
+      "max_test_acc": "higher",
+      "final_train_acc": "higher",
+      "final_test_loss": "lower",
+      "steps_to_90": "lower",
+      "steps_to_95": "lower",
+      "auc_test_acc": "higher",
+      "final_acc_stability": "lower",
+      "pre_shift_test_acc": "higher",
+      "recovered_test_acc": "higher",
+      "recovery_gap": "lower",
+      "recovery_steps": "lower",
+      "a_peak": "higher",
+      "b_learned": "higher",
+      "forgetting": "lower",
+      "consolidation": "higher",
+      "relearn_gap": "lower",
+      "a_steps_to_80": "lower",
+      "a_steps_to_90": "lower",
+      "b_steps_to_80": "lower",
+      "b_steps_to_90": "lower",
+      "synapse_count_start": "neutral",
+      "synapse_count_peak": "neutral",
+      "synapse_count_end": "neutral",
+      "n_grow_events": "neutral",
+      "n_prune_events": "neutral",
+      "n_startle_events": "neutral",
+      "n_arousal_events": "neutral",
+      "distinct_neurons_grown": "neutral",
+      "turnover": "lower",
+      "max_grows_into_one_neuron": "lower",
+      "mean_fan_in": "neutral",
+      "mean_fan_out": "neutral",
+      "effective_density": "neutral",
+      "p10_utility": "higher",
+      "freeloader_frac": "lower",
+      "mean_survivor_age": "higher",
+      "median_survivor_age": "higher",
+      "mean_pruned_lifespan": "neutral",
+      "oscillation_frac": "lower",
+      "max_regrow": "lower",
+      "conf_utility_corr": "higher",
+      "frozen_freeloader_frac": "lower",
+      "dead_unit_count": "lower",
+      "dead_unit_frac": "lower",
+      "idle_unit_frac": "lower",
+      "mean_neuron_activation": "neutral",
+      "inert_synapse_frac": "lower",
+      "used_vs_allocated": "neutral",
+      "n_recycle_events": "neutral",
+      "recycled_rehired_frac": "neutral",
+      "meter_fidelity": "higher",
+      "ghost_dense_cost": "neutral",
+      "ghost_pairs_scored": "neutral"
+    },
+    "metrics": {
+      "final_test_acc": {
+        "phasic-startle": {
+          "mean": 0.967,
+          "std": 0.017682382946499778,
+          "ci_low": 0.9513333333333334,
+          "ci_high": 0.9816666666666667,
+          "n": 5
+        },
+        "phasic-startle-k4": {
+          "mean": 0.9640000000000001,
+          "std": 0.019765289440498112,
+          "ci_low": 0.9483333333333333,
+          "ci_high": 0.9829999999999999,
+          "n": 5,
+          "diff_mean": -0.0029999999999998916,
+          "diff_ci_low": -0.02499999999999991,
+          "diff_ci_high": 0.021008333333333334,
+          "verdict": "\u2248"
+        }
+      },
+      "max_test_acc": {
+        "phasic-startle": {
+          "mean": 0.9973333333333334,
+          "std": 0.0022607766610417625,
+          "ci_low": 0.9950000000000001,
+          "ci_high": 0.999,
+          "n": 5
+        },
+        "phasic-startle-k4": {
+          "mean": 0.9973333333333334,
+          "std": 0.0024944382578493043,
+          "ci_low": 0.9953333333333333,
+          "ci_high": 0.9993333333333332,
+          "n": 5,
+          "diff_mean": 0.0,
+          "diff_ci_low": -0.0030000000000000027,
+          "diff_ci_high": 0.0029999999999998916,
+          "verdict": "\u2248"
+        }
+      },
+      "final_train_acc": {
+        "phasic-startle": {
+          "mean": 0.9710000000000001,
+          "std": 0.019339079605813696,
+          "ci_low": 0.9523333333333334,
+          "ci_high": 0.9863333333333333,
+          "n": 5
+        },
+        "phasic-startle-k4": {
+          "mean": 0.9586666666666666,
+          "std": 0.01916014381759988,
+          "ci_low": 0.9423333333333332,
+          "ci_high": 0.9743333333333334,
+          "n": 5,
+          "diff_mean": -0.01233333333333353,
+          "diff_ci_low": -0.03566666666666651,
+          "diff_ci_high": 0.011999999999999903,
+          "verdict": "\u2248"
+        }
+      },
+      "final_test_loss": {
+        "phasic-startle": {
+          "mean": 0.10301148930030254,
+          "std": 0.032341986178374575,
+          "ci_low": 0.07860972475871371,
+          "ci_high": 0.1343288277114312,
+          "n": 5
+        },
+        "phasic-startle-k4": {
+          "mean": 0.1092261675592163,
+          "std": 0.02942248791624071,
+          "ci_low": 0.08496544353171154,
+          "ci_high": 0.1331287966782546,
+          "n": 5,
+          "diff_mean": 0.006214678258913753,
+          "diff_ci_low": -0.03332795016585338,
+          "diff_ci_high": 0.04281790512399071,
+          "verdict": "\u2248"
+        }
+      },
+      "steps_to_90": {
+        "phasic-startle": {
+          "mean": 1721.0,
+          "std": 587.8775382679628,
+          "ci_low": 1201.0,
+          "ci_high": 2241.0,
+          "n": 5
+        },
+        "phasic-startle-k4": {
+          "mean": 1721.0,
+          "std": 587.8775382679628,
+          "ci_low": 1201.0,
+          "ci_high": 2241.0,
+          "n": 5,
+          "diff_mean": 0.0,
+          "diff_ci_low": -720.0,
+          "diff_ci_high": 720.0,
+          "verdict": "\u2248"
+        }
+      },
+      "steps_to_95": {
+        "phasic-startle": {
+          "mean": 2681.0,
+          "std": 881.8163074019441,
+          "ci_low": 1961.0,
+          "ci_high": 3401.0,
+          "n": 5
+        },
+        "phasic-startle-k4": {
+          "mean": 2681.0,
+          "std": 881.8163074019441,
+          "ci_low": 1921.0,
+          "ci_high": 3401.0,
+          "n": 5,
+          "diff_mean": 0.0,
+          "diff_ci_low": -1080.0,
+          "diff_ci_high": 1120.0,
+          "verdict": "\u2248"
+        }
+      },
+      "auc_test_acc": {
+        "phasic-startle": {
+          "mean": 0.932985184362094,
+          "std": 0.022561952981510813,
+          "ci_low": 0.9138726225531049,
+          "ci_high": 0.9517913865585124,
+          "n": 5
+        },
+        "phasic-startle-k4": {
+          "mean": 0.9276162101598237,
+          "std": 0.018604570958325184,
+          "ci_low": 0.9124516362020112,
+          "ci_high": 0.9441814082263826,
+          "n": 5,
+          "diff_mean": -0.005368974202270338,
+          "diff_ci_low": -0.02994357672648461,
+          "diff_ci_high": 0.01998584180602614,
+          "verdict": "\u2248"
+        }
+      },
+      "final_acc_stability": {
+        "phasic-startle": {
+          "mean": 0.04462209475110086,
+          "std": 0.01867995937484872,
+          "ci_low": 0.026801259488614254,
+          "ci_high": 0.05855999753037996,
+          "n": 5
+        },
+        "phasic-startle-k4": {
+          "mean": 0.05458828013716281,
+          "std": 0.022336758555747214,
+          "ci_low": 0.03597178920951182,
+          "ci_high": 0.07557184460621594,
+          "n": 5,
+          "diff_mean": 0.009966185386061949,
+          "diff_ci_low": -0.014487180527109319,
+          "diff_ci_high": 0.036886577770641575,
+          "verdict": "\u2248"
+        }
+      },
+      "synapse_count_start": {
+        "phasic-startle": {
+          "mean": 242.0,
+          "std": 0.8944271909999159,
+          "ci_low": 241.2,
+          "ci_high": 242.8,
+          "n": 5
+        },
+        "phasic-startle-k4": {
+          "mean": 242.0,
+          "std": 0.8944271909999159,
+          "ci_low": 241.2,
+          "ci_high": 242.8,
+          "n": 5,
+          "diff_mean": 0.0,
+          "diff_ci_low": -1.1999999999999886,
+          "diff_ci_high": 1.1999999999999886,
+          "verdict": "\u2248"
+        }
+      },
+      "synapse_count_peak": {
+        "phasic-startle": {
+          "mean": 242.0,
+          "std": 0.8944271909999159,
+          "ci_low": 241.2,
+          "ci_high": 242.8,
+          "n": 5
+        },
+        "phasic-startle-k4": {
+          "mean": 242.0,
+          "std": 0.8944271909999159,
+          "ci_low": 241.2,
+          "ci_high": 242.8,
+          "n": 5,
+          "diff_mean": 0.0,
+          "diff_ci_low": -1.1999999999999886,
+          "diff_ci_high": 1.1999999999999886,
+          "verdict": "\u2248"
+        }
+      },
+      "synapse_count_end": {
+        "phasic-startle": {
+          "mean": 179.2,
+          "std": 31.485869846647084,
+          "ci_low": 153.6,
+          "ci_high": 208.4,
+          "n": 5
+        },
+        "phasic-startle-k4": {
+          "mean": 141.0,
+          "std": 25.67489045740994,
+          "ci_low": 120.8,
+          "ci_high": 163.8,
+          "n": 5,
+          "diff_mean": -38.19999999999999,
+          "diff_ci_low": -74.79999999999998,
+          "diff_ci_high": -3.5999999999999943,
+          "verdict": "\u2248"
+        }
+      },
+      "n_grow_events": {
+        "phasic-startle": {
+          "mean": 60.6,
+          "std": 8.039900496896712,
+          "ci_low": 52.6,
+          "ci_high": 66.0,
+          "n": 5
+        },
+        "phasic-startle-k4": {
+          "mean": 15.6,
+          "std": 7.002856560004639,
+          "ci_low": 9.8,
+          "ci_high": 22.0,
+          "n": 5,
+          "diff_mean": -45.0,
+          "diff_ci_low": -53.400000000000006,
+          "diff_ci_high": -35.199999999999996,
+          "verdict": "\u2248"
+        }
+      },
+      "n_prune_events": {
+        "phasic-startle": {
+          "mean": 123.4,
+          "std": 27.10424321024293,
+          "ci_low": 98.0,
+          "ci_high": 146.0,
+          "n": 5
+        },
+        "phasic-startle-k4": {
+          "mean": 116.6,
+          "std": 22.096153511414606,
+          "ci_low": 97.8,
+          "ci_high": 134.8,
+          "n": 5,
+          "diff_mean": -6.800000000000011,
+          "diff_ci_low": -37.0,
+          "diff_ci_high": 24.0,
+          "verdict": "\u2248"
+        }
+      },
+      "n_startle_events": {
+        "phasic-startle": {
+          "mean": 2.0,
+          "std": 0.6324555320336759,
+          "ci_low": 1.4,
+          "ci_high": 2.6,
+          "n": 5
+        },
+        "phasic-startle-k4": {
+          "mean": 1.6,
+          "std": 0.4898979485566356,
+          "ci_low": 1.2,
+          "ci_high": 2.0,
+          "n": 5,
+          "diff_mean": -0.3999999999999999,
+          "diff_ci_low": -1.1999999999999997,
+          "diff_ci_high": 0.20000000000000018,
+          "verdict": "\u2248"
+        }
+      },
+      "n_arousal_events": {
+        "phasic-startle": {
+          "mean": 0.0,
+          "std": 0.0,
+          "ci_low": 0.0,
+          "ci_high": 0.0,
+          "n": 5
+        },
+        "phasic-startle-k4": {
+          "mean": 0.0,
+          "std": 0.0,
+          "ci_low": 0.0,
+          "ci_high": 0.0,
+          "n": 5,
+          "diff_mean": 0.0,
+          "diff_ci_low": 0.0,
+          "diff_ci_high": 0.0,
+          "verdict": "\u2248"
+        }
+      },
+      "distinct_neurons_grown": {
+        "phasic-startle": {
+          "mean": 16.8,
+          "std": 1.5999999999999999,
+          "ci_low": 15.2,
+          "ci_high": 18.0,
+          "n": 5
+        },
+        "phasic-startle-k4": {
+          "mean": 4.4,
+          "std": 1.2,
+          "ci_low": 3.4,
+          "ci_high": 5.4,
+          "n": 5,
+          "diff_mean": -12.4,
+          "diff_ci_low": -14.2,
+          "diff_ci_high": -10.6,
+          "verdict": "\u2248"
+        }
+      },
+      "turnover": {
+        "phasic-startle": {
+          "mean": 0.8775341168912328,
+          "std": 0.16829517760101226,
+          "ci_low": 0.7296197813005992,
+          "ci_high": 1.021827835208959,
+          "n": 5
+        },
+        "phasic-startle-k4": {
+          "mean": 0.6714604877173971,
+          "std": 0.14982170828886676,
+          "ci_low": 0.5418844297824852,
+          "ci_high": 0.7992410319964464,
+          "n": 5,
+          "diff_mean": -0.20607362917383576,
+          "diff_ci_low": -0.4008582908678087,
+          "diff_ci_high": -0.009601751751320275,
+          "verdict": "better"
+        }
+      },
+      "max_grows_into_one_neuron": {
+        "phasic-startle": {
+          "mean": 10.6,
+          "std": 3.006659275674582,
+          "ci_low": 8.2,
+          "ci_high": 13.6,
+          "n": 5
+        },
+        "phasic-startle-k4": {
+          "mean": 6.0,
+          "std": 1.4142135623730951,
+          "ci_low": 4.8,
+          "ci_high": 7.2,
+          "n": 5,
+          "diff_mean": -4.6,
+          "diff_ci_low": -7.6000000000000005,
+          "diff_ci_high": -1.9999999999999991,
+          "verdict": "better"
+        }
+      },
+      "mean_fan_in": {
+        "phasic-startle": {
+          "mean": 3.5840000000000005,
+          "std": 0.6297173969329415,
+          "ci_low": 3.072,
+          "ci_high": 4.168000000000001,
+          "n": 5
+        },
+        "phasic-startle-k4": {
+          "mean": 2.82,
+          "std": 0.5134978091481989,
+          "ci_low": 2.3880000000000003,
+          "ci_high": 3.2640000000000002,
+          "n": 5,
+          "diff_mean": -0.7640000000000007,
+          "diff_ci_low": -1.4920000000000004,
+          "diff_ci_high": -0.07600000000000007,
+          "verdict": "\u2248"
+        }
+      },
+      "mean_fan_out": {
+        "phasic-startle": {
+          "mean": 3.5840000000000005,
+          "std": 0.6297173969329415,
+          "ci_low": 3.072,
+          "ci_high": 4.183999999999999,
+          "n": 5
+        },
+        "phasic-startle-k4": {
+          "mean": 2.82,
+          "std": 0.5134978091481989,
+          "ci_low": 2.3880000000000003,
+          "ci_high": 3.2640000000000002,
+          "n": 5,
+          "diff_mean": -0.7640000000000007,
+          "diff_ci_low": -1.4879999999999995,
+          "diff_ci_high": -0.06400000000000006,
+          "verdict": "\u2248"
+        }
+      },
+      "effective_density": {
+        "phasic-startle": {
+          "mean": 0.3111111111111111,
+          "std": 0.05466296848376229,
+          "ci_low": 0.2666666666666667,
+          "ci_high": 0.3631944444444445,
+          "n": 5
+        },
+        "phasic-startle-k4": {
+          "mean": 0.24479166666666666,
+          "std": 0.044574462599670024,
+          "ci_low": 0.20729166666666665,
+          "ci_high": 0.2833333333333333,
+          "n": 5,
+          "diff_mean": -0.06631944444444446,
+          "diff_ci_low": -0.12986111111111107,
+          "diff_ci_high": -0.0065972222222222526,
+          "verdict": "\u2248"
+        }
+      },
+      "p10_utility": {
+        "phasic-startle": {
+          "mean": 0.39448041277170054,
+          "std": 0.11899741465544827,
+          "ci_low": 0.2896493882600256,
+          "ci_high": 0.4993114372833755,
+          "n": 5
+        },
+        "phasic-startle-k4": {
+          "mean": 0.47851416109984657,
+          "std": 0.06196032538420711,
+          "ci_low": 0.42590003496051043,
+          "ci_high": 0.5300304566642249,
+          "n": 5,
+          "diff_mean": 0.08403374832814603,
+          "diff_ci_low": -0.032073932401598615,
+          "diff_ci_high": 0.20247767780774514,
+          "verdict": "\u2248"
+        }
+      },
+      "freeloader_frac": {
+        "phasic-startle": {
+          "mean": 0.12375258146932706,
+          "std": 0.026918925254682907,
+          "ci_low": 0.10156973461321288,
+          "ci_high": 0.14899009900990098,
+          "n": 5
+        },
+        "phasic-startle-k4": {
+          "mean": 0.10184955141476881,
+          "std": 0.019733277688512494,
+          "ci_low": 0.08462732919254659,
+          "ci_high": 0.11782608695652175,
+          "n": 5,
+          "diff_mean": -0.02190303005455825,
+          "diff_ci_low": -0.05245655009600342,
+          "diff_ci_high": 0.0058234519104084235,
+          "verdict": "\u2248"
+        }
+      },
+      "mean_survivor_age": {
+        "phasic-startle": {
+          "mean": 14490.086002452419,
+          "std": 702.3924382506469,
+          "ci_low": 13800.57590459046,
+          "ci_high": 15083.27609486166,
+          "n": 5
+        },
+        "phasic-startle-k4": {
+          "mean": 16831.516288438957,
+          "std": 491.009292008794,
+          "ci_low": 16378.639361001318,
+          "ci_high": 17190.950572046997,
+          "n": 5,
+          "diff_mean": 2341.4302859865384,
+          "diff_ci_low": 1576.685230467945,
+          "diff_ci_high": 3096.474784533464,
+          "verdict": "better"
+        }
+      },
+      "median_survivor_age": {
+        "phasic-startle": {
+          "mean": 18000.0,
+          "std": 0.0,
+          "ci_low": 18000.0,
+          "ci_high": 18000.0,
+          "n": 5
+        },
+        "phasic-startle-k4": {
+          "mean": 18000.0,
+          "std": 0.0,
+          "ci_low": 18000.0,
+          "ci_high": 18000.0,
+          "n": 5,
+          "diff_mean": 0.0,
+          "diff_ci_low": 0.0,
+          "diff_ci_high": 0.0,
+          "verdict": "\u2248"
+        }
+      },
+      "mean_pruned_lifespan": {
+        "phasic-startle": {
+          "mean": 10451.928104575163,
+          "std": 1863.9874093798098,
+          "ci_low": 9145.522875816994,
+          "ci_high": 12324.183006535948,
+          "n": 5
+        },
+        "phasic-startle-k4": {
+          "mean": 10977.384013835628,
+          "std": 1603.4777519090594,
+          "ci_low": 9841.864801864804,
+          "ci_high": 12490.71734716896,
+          "n": 5,
+          "diff_mean": 525.455909260465,
+          "diff_ci_low": -1640.9738149263776,
+          "diff_ci_high": 2656.7921146953395,
+          "verdict": "\u2248"
+        }
+      },
+      "oscillation_frac": {
+        "phasic-startle": {
+          "mean": 0.058333333333333334,
+          "std": 0.11666666666666667,
+          "ci_low": 0.0,
+          "ci_high": 0.175,
+          "n": 5
+        },
+        "phasic-startle-k4": {
+          "mean": 0.0,
+          "std": 0.0,
+          "ci_low": 0.0,
+          "ci_high": 0.0,
+          "n": 5,
+          "diff_mean": -0.058333333333333334,
+          "diff_ci_low": -0.175,
+          "diff_ci_high": 0.0,
+          "verdict": "\u2248"
+        }
+      },
+      "max_regrow": {
+        "phasic-startle": {
+          "mean": 0.2,
+          "std": 0.4000000000000001,
+          "ci_low": 0.0,
+          "ci_high": 0.6,
+          "n": 5
+        },
+        "phasic-startle-k4": {
+          "mean": 0.0,
+          "std": 0.0,
+          "ci_low": 0.0,
+          "ci_high": 0.0,
+          "n": 5,
+          "diff_mean": -0.2,
+          "diff_ci_low": -0.6,
+          "diff_ci_high": 0.0,
+          "verdict": "\u2248"
+        }
+      },
+      "conf_utility_corr": {
+        "phasic-startle": {
+          "mean": 0.08508298372087822,
+          "std": 0.05175679000155106,
+          "ci_low": 0.03966878331507373,
+          "ci_high": 0.1304971841266827,
+          "n": 5
+        },
+        "phasic-startle-k4": {
+          "mean": 0.04451655288202732,
+          "std": 0.02640899104727753,
+          "ci_low": 0.024197969274325083,
+          "ci_high": 0.0683414556714366,
+          "n": 5,
+          "diff_mean": -0.0405664308388509,
+          "diff_ci_low": -0.09190620255203462,
+          "diff_ci_high": 0.009718092408350799,
+          "verdict": "\u2248"
+        }
+      },
+      "frozen_freeloader_frac": {
+        "phasic-startle": {
+          "mean": 0.0,
+          "std": 0.0,
+          "ci_low": 0.0,
+          "ci_high": 0.0,
+          "n": 5
+        },
+        "phasic-startle-k4": {
+          "mean": 0.0,
+          "std": 0.0,
+          "ci_low": 0.0,
+          "ci_high": 0.0,
+          "n": 5,
+          "diff_mean": 0.0,
+          "diff_ci_low": 0.0,
+          "diff_ci_high": 0.0,
+          "verdict": "\u2248"
+        }
+      },
+      "dead_unit_count": {
+        "phasic-startle": {
+          "mean": 6.6,
+          "std": 1.3564659966250536,
+          "ci_low": 5.4,
+          "ci_high": 7.8,
+          "n": 5
+        },
+        "phasic-startle-k4": {
+          "mean": 7.2,
+          "std": 1.9390719429665317,
+          "ci_low": 5.4,
+          "ci_high": 8.8,
+          "n": 5,
+          "diff_mean": 0.6000000000000005,
+          "diff_ci_low": -1.4000000000000004,
+          "diff_ci_high": 2.5999999999999996,
+          "verdict": "\u2248"
+        }
+      },
+      "dead_unit_frac": {
+        "phasic-startle": {
+          "mean": 0.1375,
+          "std": 0.028259708263021942,
+          "ci_low": 0.1125,
+          "ci_high": 0.16249999999999998,
+          "n": 5
+        },
+        "phasic-startle-k4": {
+          "mean": 0.15,
+          "std": 0.04039733214513608,
+          "ci_low": 0.1125,
+          "ci_high": 0.18333333333333332,
+          "n": 5,
+          "diff_mean": 0.012499999999999983,
+          "diff_ci_low": -0.03333333333333331,
+          "diff_ci_high": 0.054166666666666655,
+          "verdict": "\u2248"
+        }
+      },
+      "idle_unit_frac": {
+        "phasic-startle": {
+          "mean": 0.2208333333333333,
+          "std": 0.05034602488997738,
+          "ci_low": 0.17083333333333334,
+          "ci_high": 0.2541666666666667,
+          "n": 5
+        },
+        "phasic-startle-k4": {
+          "mean": 0.25,
+          "std": 0.054326686710022075,
+          "ci_low": 0.2,
+          "ci_high": 0.29583333333333334,
+          "n": 5,
+          "diff_mean": 0.029166666666666702,
+          "diff_ci_low": -0.033333333333333326,
+          "diff_ci_high": 0.09583333333333333,
+          "verdict": "\u2248"
+        }
+      },
+      "mean_neuron_activation": {
+        "phasic-startle": {
+          "mean": 0.27573412792998175,
+          "std": 0.08672686685699459,
+          "ci_low": 0.2031182298334079,
+          "ci_high": 0.35258460722173784,
+          "n": 5
+        },
+        "phasic-startle-k4": {
+          "mean": 0.3020098911213066,
+          "std": 0.04742056913990534,
+          "ci_low": 0.25884348338740526,
+          "ci_high": 0.3383326622456266,
+          "n": 5,
+          "diff_mean": 0.026275763191324852,
+          "diff_ci_low": -0.061913168751876704,
+          "diff_ci_high": 0.11138160210851844,
+          "verdict": "\u2248"
+        }
+      },
+      "n_recycle_events": {
+        "phasic-startle": {
+          "mean": 0.0,
+          "std": 0.0,
+          "ci_low": 0.0,
+          "ci_high": 0.0,
+          "n": 5
+        },
+        "phasic-startle-k4": {
+          "mean": 0.0,
+          "std": 0.0,
+          "ci_low": 0.0,
+          "ci_high": 0.0,
+          "n": 5,
+          "diff_mean": 0.0,
+          "diff_ci_low": 0.0,
+          "diff_ci_high": 0.0,
+          "verdict": "\u2248"
+        }
+      },
+      "recycled_rehired_frac": {
+        "phasic-startle": {
+          "mean": NaN,
+          "std": NaN,
+          "ci_low": NaN,
+          "ci_high": NaN,
+          "n": 5
+        },
+        "phasic-startle-k4": {
+          "mean": NaN,
+          "std": NaN,
+          "ci_low": NaN,
+          "ci_high": NaN,
+          "n": 5,
+          "diff_mean": NaN,
+          "diff_ci_low": NaN,
+          "diff_ci_high": NaN,
+          "verdict": "n/a"
+        }
+      },
+      "ghost_dense_cost": {
+        "phasic-startle": {
+          "mean": 784.8,
+          "std": 31.48586984664708,
+          "ci_low": 754.8,
+          "ci_high": 810.4,
+          "n": 5
+        },
+        "phasic-startle-k4": {
+          "mean": 823.0,
+          "std": 25.67489045740994,
+          "ci_low": 800.8,
+          "ci_high": 843.2,
+          "n": 5,
+          "diff_mean": 38.200000000000045,
+          "diff_ci_low": 3.199999999999932,
+          "diff_ci_high": 74.59999999999991,
+          "verdict": "\u2248"
+        }
+      },
+      "ghost_pairs_scored": {
+        "phasic-startle": {
+          "mean": 80.97233333333334,
+          "std": 19.655185366151542,
+          "ci_low": 62.56033333333333,
+          "ci_high": 96.56566666666667,
+          "n": 5
+        },
+        "phasic-startle-k4": {
+          "mean": 13.023000000000001,
+          "std": 2.425351612538777,
+          "ci_low": 10.903,
+          "ci_high": 15.143,
+          "n": 5,
+          "diff_mean": -67.94933333333334,
+          "diff_ci_low": -83.74854166666665,
+          "diff_ci_high": -49.536891666666676,
+          "verdict": "\u2248"
+        }
+      },
+      "inert_synapse_frac": {
+        "phasic-startle": {
+          "mean": 0.0,
+          "std": 0.0,
+          "ci_low": 0.0,
+          "ci_high": 0.0,
+          "n": 5
+        },
+        "phasic-startle-k4": {
+          "mean": 0.0,
+          "std": 0.0,
+          "ci_low": 0.0,
+          "ci_high": 0.0,
+          "n": 5,
+          "diff_mean": 0.0,
+          "diff_ci_low": 0.0,
+          "diff_ci_high": 0.0,
+          "verdict": "\u2248"
+        }
+      },
+      "used_vs_allocated": {
+        "phasic-startle": {
+          "mean": 0.7403969702473412,
+          "std": 0.12931749212113597,
+          "ci_low": 0.6346920029471688,
+          "ci_high": 0.8600174171405154,
+          "n": 5
+        },
+        "phasic-startle-k4": {
+          "mean": 0.5825603365902624,
+          "std": 0.10529894263162644,
+          "ci_low": 0.49924834779187427,
+          "ci_high": 0.6758977511397982,
+          "n": 5,
+          "diff_mean": -0.15783663365707878,
+          "diff_ci_low": -0.30502882041420964,
+          "diff_ci_high": -0.014929392278401359,
+          "verdict": "\u2248"
+        }
+      },
+      "meter_fidelity": {
+        "phasic-startle": {
+          "mean": 0.9006503633555619,
+          "std": 0.07312664620013166,
+          "ci_low": 0.8329565459324746,
+          "ci_high": 0.9560425172444307,
+          "n": 5
+        },
+        "phasic-startle-k4": {
+          "mean": 0.9510753638915983,
+          "std": 0.02665699086327257,
+          "ci_low": 0.9281979577169361,
+          "ci_high": 0.9742202645393974,
+          "n": 5,
+          "diff_mean": 0.05042500053603638,
+          "diff_ci_low": -0.011652668764273929,
+          "diff_ci_high": 0.12298640324100003,
+          "verdict": "\u2248"
+        }
+      },
+      "pre_shift_test_acc": {
+        "phasic-startle": {
+          "mean": 0.9806666666666667,
+          "std": 0.027051391420364657,
+          "ci_low": 0.9533333333333334,
+          "ci_high": 0.9953333333333333,
+          "n": 5
+        },
+        "phasic-startle-k4": {
+          "mean": 0.9913333333333334,
+          "std": 0.003858612300930086,
+          "ci_low": 0.9879916666666666,
+          "ci_high": 0.9946666666666667,
+          "n": 5,
+          "diff_mean": 0.010666666666666713,
+          "diff_ci_low": -0.005666666666666487,
+          "diff_ci_high": 0.03833333333333355,
+          "verdict": "\u2248"
+        }
+      },
+      "recovered_test_acc": {
+        "phasic-startle": {
+          "mean": 0.967,
+          "std": 0.017682382946499778,
+          "ci_low": 0.9513333333333334,
+          "ci_high": 0.9826666666666666,
+          "n": 5
+        },
+        "phasic-startle-k4": {
+          "mean": 0.9640000000000001,
+          "std": 0.019765289440498112,
+          "ci_low": 0.9483333333333333,
+          "ci_high": 0.9829999999999999,
+          "n": 5,
+          "diff_mean": -0.0029999999999998916,
+          "diff_ci_low": -0.025000000000000022,
+          "diff_ci_high": 0.020999999999999693,
+          "verdict": "\u2248"
+        }
+      },
+      "recovery_gap": {
+        "phasic-startle": {
+          "mean": 0.013666666666666693,
+          "std": 0.02122367650630878,
+          "ci_low": -0.003999999999999959,
+          "ci_high": 0.03366666666666664,
+          "n": 5
+        },
+        "phasic-startle-k4": {
+          "mean": 0.02733333333333334,
+          "std": 0.018366636418607862,
+          "ci_low": 0.010000000000000031,
+          "ci_high": 0.042333333333333334,
+          "n": 5,
+          "diff_mean": 0.013666666666666648,
+          "diff_ci_low": -0.010666666666666623,
+          "diff_ci_high": 0.03733333333333333,
+          "verdict": "\u2248"
+        }
+      },
+      "recovery_steps": {
+        "phasic-startle": {
+          "mean": Infinity,
+          "std": NaN,
+          "ci_low": NaN,
+          "ci_high": NaN,
+          "n": 5
+        },
+        "phasic-startle-k4": {
+          "mean": Infinity,
+          "std": NaN,
+          "ci_low": NaN,
+          "ci_high": NaN,
+          "n": 5,
+          "diff_mean": NaN,
+          "diff_ci_low": NaN,
+          "diff_ci_high": NaN,
+          "verdict": "n/a"
+        }
+      }
+    }
+  },
+  "runs": [
+    {
+      "variant": "phasic-startle",
+      "seed": 0,
+      "final": {
+        "final_test_acc": 0.9483333333333334,
+        "max_test_acc": 0.9983333333333333,
+        "final_train_acc": 0.9633333333333334,
+        "final_test_loss": 0.11721734692882779,
+        "steps_to_90": 1201.0,
+        "steps_to_95": 1601.0,
+        "auc_test_acc": 0.9534279219215881,
+        "final_acc_stability": 0.01034944979750667,
+        "synapse_count_start": 243.0,
+        "synapse_count_peak": 243.0,
+        "synapse_count_end": 154.0,
+        "n_grow_events": 64,
+        "n_prune_events": 153,
+        "n_startle_events": 2,
+        "n_arousal_events": 0,
+        "distinct_neurons_grown": 18,
+        "turnover": 1.0936181867981376,
+        "max_grows_into_one_neuron": 10,
+        "mean_fan_in": 3.08,
+        "mean_fan_out": 3.08,
+        "effective_density": 0.2673611111111111,
+        "p10_utility": 0.5228869275744369,
+        "freeloader_frac": 0.09740259740259741,
+        "mean_survivor_age": 14395.59090909091,
+        "median_survivor_age": 18000.0,
+        "mean_pruned_lifespan": 9020.915032679739,
+        "oscillation_frac": 0.0,
+        "max_regrow": 0,
+        "conf_utility_corr": 0.031224622146169556,
+        "frozen_freeloader_frac": 0.0,
+        "dead_unit_count": 8,
+        "dead_unit_frac": 0.16666666666666666,
+        "idle_unit_frac": 0.2708333333333333,
+        "mean_neuron_activation": 0.24848513069742215,
+        "n_recycle_events": 0,
+        "recycled_rehired_frac": NaN,
+        "ghost_dense_cost": 810.0,
+        "ghost_pairs_scored": 82.58666666666667,
+        "inert_synapse_frac": 0.0,
+        "used_vs_allocated": 0.6337448559670782,
+        "meter_fidelity": 0.7702441651157266,
+        "pre_shift_test_acc": 0.9933333333333333,
+        "recovered_test_acc": 0.9483333333333334,
+        "recovery_gap": 0.04499999999999993,
+        "recovery_steps": Infinity
+      }
+    },
+    {
+      "variant": "phasic-startle",
+      "seed": 1,
+      "final": {
+        "final_test_acc": 0.9833333333333333,
+        "max_test_acc": 0.9933333333333333,
+        "final_train_acc": 0.9833333333333333,
+        "final_test_loss": 0.07360695563033345,
+        "steps_to_90": 2401.0,
+        "steps_to_95": 4001.0,
+        "auc_test_acc": 0.8965797173917069,
+        "final_acc_stability": 0.0593625864216399,
+        "synapse_count_start": 241.0,
+        "synapse_count_peak": 241.0,
+        "synapse_count_end": 202.0,
+        "n_grow_events": 64,
+        "n_prune_events": 103,
+        "n_startle_events": 2,
+        "n_arousal_events": 0,
+        "distinct_neurons_grown": 18,
+        "turnover": 0.733120198501694,
+        "max_grows_into_one_neuron": 11,
+        "mean_fan_in": 4.04,
+        "mean_fan_out": 4.04,
+        "effective_density": 0.3506944444444444,
+        "p10_utility": 0.23837287654557135,
+        "freeloader_frac": 0.16831683168316833,
+        "mean_survivor_age": 13300.712871287129,
+        "median_survivor_age": 18000.0,
+        "mean_pruned_lifespan": 14000.0,
+        "oscillation_frac": 0.0,
+        "max_regrow": 0,
+        "conf_utility_corr": 0.12584527146520533,
+        "frozen_freeloader_frac": 0.0,
+        "dead_unit_count": 7,
+        "dead_unit_frac": 0.14583333333333334,
+        "idle_unit_frac": 0.22916666666666666,
+        "mean_neuron_activation": 0.22487407625067424,
+        "n_recycle_events": 0,
+        "recycled_rehired_frac": NaN,
+        "ghost_dense_cost": 762.0,
+        "ghost_pairs_scored": 46.34,
+        "inert_synapse_frac": 0.0,
+        "used_vs_allocated": 0.8381742738589212,
+        "meter_fidelity": 0.9775556616758311,
+        "pre_shift_test_acc": 0.9916666666666667,
+        "recovered_test_acc": 0.9833333333333333,
+        "recovery_gap": 0.008333333333333415,
+        "recovery_steps": Infinity
+      }
+    },
+    {
+      "variant": "phasic-startle",
+      "seed": 2,
+      "final": {
+        "final_test_acc": 0.945,
+        "max_test_acc": 1.0,
+        "final_train_acc": 0.9383333333333334,
+        "final_test_loss": 0.16027327866599822,
+        "steps_to_90": 1001.0,
+        "steps_to_95": 1801.0,
+        "auc_test_acc": 0.9600425949589793,
+        "final_acc_stability": 0.04652239604033021,
+        "synapse_count_start": 242.0,
+        "synapse_count_peak": 242.0,
+        "synapse_count_end": 160.0,
+        "n_grow_events": 62,
+        "n_prune_events": 144,
+        "n_startle_events": 2,
+        "n_arousal_events": 0,
+        "distinct_neurons_grown": 14,
+        "turnover": 0.9994726294694652,
+        "max_grows_into_one_neuron": 16,
+        "mean_fan_in": 3.2,
+        "mean_fan_out": 3.2,
+        "effective_density": 0.2777777777777778,
+        "p10_utility": 0.5107908409512634,
+        "freeloader_frac": 0.1,
+        "mean_survivor_age": 14705.15,
+        "median_survivor_age": 18000.0,
+        "mean_pruned_lifespan": 9591.666666666666,
+        "oscillation_frac": 0.2916666666666667,
+        "max_regrow": 1,
+        "conf_utility_corr": 0.023909013474802378,
+        "frozen_freeloader_frac": 0.0,
+        "dead_unit_count": 5,
+        "dead_unit_frac": 0.10416666666666667,
+        "idle_unit_frac": 0.22916666666666666,
+        "mean_neuron_activation": 0.15867893298413444,
+        "n_recycle_events": 0,
+        "recycled_rehired_frac": NaN,
+        "ghost_dense_cost": 804.0,
+        "ghost_pairs_scored": 78.855,
+        "inert_synapse_frac": 0.0,
+        "used_vs_allocated": 0.6611570247933884,
+        "meter_fidelity": 0.892200480715477,
+        "pre_shift_test_acc": 0.9266666666666666,
+        "recovered_test_acc": 0.945,
+        "recovery_gap": -0.018333333333333313,
+        "recovery_steps": 400.0
+      }
+    },
+    {
+      "variant": "phasic-startle",
+      "seed": 3,
+      "final": {
+        "final_test_acc": 0.97,
+        "max_test_acc": 0.9983333333333333,
+        "final_train_acc": 0.975,
+        "final_test_loss": 0.08187484725654832,
+        "steps_to_90": 2401.0,
+        "steps_to_95": 3001.0,
+        "auc_test_acc": 0.9294744615441598,
+        "final_acc_stability": 0.04359536162891136,
+        "synapse_count_start": 243.0,
+        "synapse_count_peak": 243.0,
+        "synapse_count_end": 230.0,
+        "n_grow_events": 68,
+        "n_prune_events": 81,
+        "n_startle_events": 3,
+        "n_arousal_events": 0,
+        "distinct_neurons_grown": 18,
+        "turnover": 0.6385020261772789,
+        "max_grows_into_one_neuron": 9,
+        "mean_fan_in": 4.6,
+        "mean_fan_out": 4.6,
+        "effective_density": 0.3993055555555556,
+        "p10_utility": 0.42920164936547694,
+        "freeloader_frac": 0.11304347826086956,
+        "mean_survivor_age": 14563.06956521739,
+        "median_survivor_age": 18000.0,
+        "mean_pruned_lifespan": 10600.0,
+        "oscillation_frac": 0.0,
+        "max_regrow": 0,
+        "conf_utility_corr": 0.15635936618478907,
+        "frozen_freeloader_frac": 0.0,
+        "dead_unit_count": 5,
+        "dead_unit_frac": 0.10416666666666667,
+        "idle_unit_frac": 0.125,
+        "mean_neuron_activation": 0.4009932688734059,
+        "n_recycle_events": 0,
+        "recycled_rehired_frac": NaN,
+        "ghost_dense_cost": 734.0,
+        "ghost_pairs_scored": 105.885,
+        "inert_synapse_frac": 0.0,
+        "used_vs_allocated": 0.9465020576131687,
+        "meter_fidelity": 0.9014017556710581,
+        "pre_shift_test_acc": 0.9966666666666667,
+        "recovered_test_acc": 0.97,
+        "recovery_gap": 0.026666666666666727,
+        "recovery_steps": Infinity
+      }
+    },
+    {
+      "variant": "phasic-startle",
+      "seed": 4,
+      "final": {
+        "final_test_acc": 0.9883333333333333,
+        "max_test_acc": 0.9966666666666667,
+        "final_train_acc": 0.995,
+        "final_test_loss": 0.082085018019805,
+        "steps_to_90": 1601.0,
+        "steps_to_95": 3001.0,
+        "auc_test_acc": 0.9254012259940366,
+        "final_acc_stability": 0.06328067986711619,
+        "synapse_count_start": 241.0,
+        "synapse_count_peak": 241.0,
+        "synapse_count_end": 150.0,
+        "n_grow_events": 45,
+        "n_prune_events": 136,
+        "n_startle_events": 1,
+        "n_arousal_events": 0,
+        "distinct_neurons_grown": 16,
+        "turnover": 0.9229575435095888,
+        "max_grows_into_one_neuron": 7,
+        "mean_fan_in": 3.0,
+        "mean_fan_out": 3.0,
+        "effective_density": 0.2604166666666667,
+        "p10_utility": 0.2711497694217543,
+        "freeloader_frac": 0.14,
+        "mean_survivor_age": 15485.906666666666,
+        "median_survivor_age": 18000.0,
+        "mean_pruned_lifespan": 9047.058823529413,
+        "oscillation_frac": 0.0,
+        "max_regrow": 0,
+        "conf_utility_corr": 0.08807664533342478,
+        "frozen_freeloader_frac": 0.0,
+        "dead_unit_count": 8,
+        "dead_unit_frac": 0.16666666666666666,
+        "idle_unit_frac": 0.25,
+        "mean_neuron_activation": 0.3456392308442722,
+        "n_recycle_events": 0,
+        "recycled_rehired_frac": NaN,
+        "ghost_dense_cost": 814.0,
+        "ghost_pairs_scored": 91.195,
+        "inert_synapse_frac": 0.0,
+        "used_vs_allocated": 0.6224066390041494,
+        "meter_fidelity": 0.9618497535997165,
+        "pre_shift_test_acc": 0.995,
+        "recovered_test_acc": 0.9883333333333333,
+        "recovery_gap": 0.00666666666666671,
+        "recovery_steps": Infinity
+      }
+    },
+    {
+      "variant": "phasic-startle-k4",
+      "seed": 0,
+      "final": {
+        "final_test_acc": 0.9683333333333334,
+        "max_test_acc": 0.9966666666666667,
+        "final_train_acc": 0.9683333333333334,
+        "final_test_loss": 0.09042650102879006,
+        "steps_to_90": 1201.0,
+        "steps_to_95": 1601.0,
+        "auc_test_acc": 0.9416790747634125,
+        "final_acc_stability": 0.056069401439446234,
+        "synapse_count_start": 243.0,
+        "synapse_count_peak": 243.0,
+        "synapse_count_end": 110.0,
+        "n_grow_events": 10,
+        "n_prune_events": 143,
+        "n_startle_events": 1,
+        "n_arousal_events": 0,
+        "distinct_neurons_grown": 3,
+        "turnover": 0.8510792671866497,
+        "max_grows_into_one_neuron": 6,
+        "mean_fan_in": 2.2,
+        "mean_fan_out": 2.2,
+        "effective_density": 0.1909722222222222,
+        "p10_utility": 0.5056839545494813,
+        "freeloader_frac": 0.1,
+        "mean_survivor_age": 17361.31818181818,
+        "median_survivor_age": 18000.0,
+        "mean_pruned_lifespan": 9471.32867132867,
+        "oscillation_frac": 0.0,
+        "max_regrow": 0,
+        "conf_utility_corr": 0.044556123675164996,
+        "frozen_freeloader_frac": 0.0,
+        "dead_unit_count": 8,
+        "dead_unit_frac": 0.16666666666666666,
+        "idle_unit_frac": 0.2708333333333333,
+        "mean_neuron_activation": 0.35891190345792,
+        "n_recycle_events": 0,
+        "recycled_rehired_frac": NaN,
+        "ghost_dense_cost": 854.0,
+        "ghost_pairs_scored": 12.541666666666666,
+        "inert_synapse_frac": 0.0,
+        "used_vs_allocated": 0.45267489711934156,
+        "meter_fidelity": 0.9695444051160771,
+        "pre_shift_test_acc": 0.985,
+        "recovered_test_acc": 0.9683333333333334,
+        "recovery_gap": 0.016666666666666607,
+        "recovery_steps": Infinity
+      }
+    },
+    {
+      "variant": "phasic-startle-k4",
+      "seed": 1,
+      "final": {
+        "final_test_acc": 0.9383333333333334,
+        "max_test_acc": 0.9933333333333333,
+        "final_train_acc": 0.9283333333333333,
+        "final_test_loss": 0.1477612947643464,
+        "steps_to_90": 2401.0,
+        "steps_to_95": 4001.0,
+        "auc_test_acc": 0.9005908661592311,
+        "final_acc_stability": 0.056819402007100034,
+        "synapse_count_start": 241.0,
+        "synapse_count_peak": 241.0,
+        "synapse_count_end": 147.0,
+        "n_grow_events": 9,
+        "n_prune_events": 103,
+        "n_startle_events": 2,
+        "n_arousal_events": 0,
+        "distinct_neurons_grown": 5,
+        "turnover": 0.514146000698568,
+        "max_grows_into_one_neuron": 4,
+        "mean_fan_in": 2.94,
+        "mean_fan_out": 2.94,
+        "effective_density": 0.2552083333333333,
+        "p10_utility": 0.5073044593691304,
+        "freeloader_frac": 0.09523809523809523,
+        "mean_survivor_age": 17079.20408163265,
+        "median_survivor_age": 18000.0,
+        "mean_pruned_lifespan": 14000.0,
+        "oscillation_frac": 0.0,
+        "max_regrow": 0,
+        "conf_utility_corr": 0.04702453382777444,
+        "frozen_freeloader_frac": 0.0,
+        "dead_unit_count": 4,
+        "dead_unit_frac": 0.08333333333333333,
+        "idle_unit_frac": 0.16666666666666666,
+        "mean_neuron_activation": 0.21737136975558316,
+        "n_recycle_events": 0,
+        "recycled_rehired_frac": NaN,
+        "ghost_dense_cost": 817.0,
+        "ghost_pairs_scored": 10.098333333333333,
+        "inert_synapse_frac": 0.0,
+        "used_vs_allocated": 0.6099585062240664,
+        "meter_fidelity": 0.9473245076380327,
+        "pre_shift_test_acc": 0.99,
+        "recovered_test_acc": 0.9383333333333334,
+        "recovery_gap": 0.05166666666666664,
+        "recovery_steps": Infinity
+      }
+    },
+    {
+      "variant": "phasic-startle-k4",
+      "seed": 2,
+      "final": {
+        "final_test_acc": 0.96,
+        "max_test_acc": 1.0,
+        "final_train_acc": 0.9483333333333334,
+        "final_test_loss": 0.12529956540303264,
+        "steps_to_90": 1001.0,
+        "steps_to_95": 1801.0,
+        "auc_test_acc": 0.9541907420782633,
+        "final_acc_stability": 0.022323380867004288,
+        "synapse_count_start": 242.0,
+        "synapse_count_peak": 242.0,
+        "synapse_count_end": 144.0,
+        "n_grow_events": 26,
+        "n_prune_events": 124,
+        "n_startle_events": 2,
+        "n_arousal_events": 0,
+        "distinct_neurons_grown": 5,
+        "turnover": 0.7434543691412563,
+        "max_grows_into_one_neuron": 8,
+        "mean_fan_in": 2.88,
+        "mean_fan_out": 2.88,
+        "effective_density": 0.25,
+        "p10_utility": 0.5649297050166912,
+        "freeloader_frac": 0.06944444444444445,
+        "mean_survivor_age": 15944.263888888889,
+        "median_survivor_age": 18000.0,
+        "mean_pruned_lifespan": 10982.258064516129,
+        "oscillation_frac": 0.0,
+        "max_regrow": 0,
+        "conf_utility_corr": 0.02188985349572262,
+        "frozen_freeloader_frac": 0.0,
+        "dead_unit_count": 6,
+        "dead_unit_frac": 0.125,
+        "idle_unit_frac": 0.2916666666666667,
+        "mean_neuron_activation": 0.318838581538657,
+        "n_recycle_events": 0,
+        "recycled_rehired_frac": NaN,
+        "ghost_dense_cost": 820.0,
+        "ghost_pairs_scored": 10.888333333333334,
+        "inert_synapse_frac": 0.0,
+        "used_vs_allocated": 0.5950413223140496,
+        "meter_fidelity": 0.9203015215840887,
+        "pre_shift_test_acc": 0.9916666666666667,
+        "recovered_test_acc": 0.96,
+        "recovery_gap": 0.03166666666666673,
+        "recovery_steps": Infinity
+      }
+    },
+    {
+      "variant": "phasic-startle-k4",
+      "seed": 3,
+      "final": {
+        "final_test_acc": 0.9983333333333333,
+        "max_test_acc": 1.0,
+        "final_train_acc": 0.985,
+        "final_test_loss": 0.06312121354339743,
+        "steps_to_90": 2401.0,
+        "steps_to_95": 3001.0,
+        "auc_test_acc": 0.922164286904828,
+        "final_acc_stability": 0.04607391404640542,
+        "synapse_count_start": 243.0,
+        "synapse_count_peak": 243.0,
+        "synapse_count_end": 184.0,
+        "n_grow_events": 22,
+        "n_prune_events": 81,
+        "n_startle_events": 2,
+        "n_arousal_events": 0,
+        "distinct_neurons_grown": 6,
+        "turnover": 0.47332667332667333,
+        "max_grows_into_one_neuron": 7,
+        "mean_fan_in": 3.68,
+        "mean_fan_out": 3.68,
+        "effective_density": 0.3194444444444444,
+        "p10_utility": 0.41088117212918385,
+        "freeloader_frac": 0.11956521739130435,
+        "mean_survivor_age": 16699.08695652174,
+        "median_survivor_age": 18000.0,
+        "mean_pruned_lifespan": 10600.0,
+        "oscillation_frac": 0.0,
+        "max_regrow": 0,
+        "conf_utility_corr": 0.09175376706209844,
+        "frozen_freeloader_frac": 0.0,
+        "dead_unit_count": 9,
+        "dead_unit_frac": 0.1875,
+        "idle_unit_frac": 0.20833333333333334,
+        "mean_neuron_activation": 0.32326472613161966,
+        "n_recycle_events": 0,
+        "recycled_rehired_frac": NaN,
+        "ghost_dense_cost": 780.0,
+        "ghost_pairs_scored": 15.193333333333333,
+        "inert_synapse_frac": 0.0,
+        "used_vs_allocated": 0.757201646090535,
+        "meter_fidelity": 0.9916752662305581,
+        "pre_shift_test_acc": 0.9966666666666667,
+        "recovered_test_acc": 0.9983333333333333,
+        "recovery_gap": -0.0016666666666665941,
+        "recovery_steps": 2999.0
+      }
+    },
+    {
+      "variant": "phasic-startle-k4",
+      "seed": 4,
+      "final": {
+        "final_test_acc": 0.955,
+        "max_test_acc": 0.9966666666666667,
+        "final_train_acc": 0.9633333333333334,
+        "final_test_loss": 0.11952226305651498,
+        "steps_to_90": 1601.0,
+        "steps_to_95": 3001.0,
+        "auc_test_acc": 0.919456080893383,
+        "final_acc_stability": 0.09165530232585807,
+        "synapse_count_start": 241.0,
+        "synapse_count_peak": 241.0,
+        "synapse_count_end": 120.0,
+        "n_grow_events": 11,
+        "n_prune_events": 132,
+        "n_startle_events": 1,
+        "n_arousal_events": 0,
+        "distinct_neurons_grown": 3,
+        "turnover": 0.7752961282338382,
+        "max_grows_into_one_neuron": 5,
+        "mean_fan_in": 2.4,
+        "mean_fan_out": 2.4,
+        "effective_density": 0.20833333333333334,
+        "p10_utility": 0.40377151443474596,
+        "freeloader_frac": 0.125,
+        "mean_survivor_age": 17073.708333333332,
+        "median_survivor_age": 18000.0,
+        "mean_pruned_lifespan": 9833.333333333334,
+        "oscillation_frac": 0.0,
+        "max_regrow": 0,
+        "conf_utility_corr": 0.01735848634937611,
+        "frozen_freeloader_frac": 0.0,
+        "dead_unit_count": 9,
+        "dead_unit_frac": 0.1875,
+        "idle_unit_frac": 0.3125,
+        "mean_neuron_activation": 0.2916628747227532,
+        "n_recycle_events": 0,
+        "recycled_rehired_frac": NaN,
+        "ghost_dense_cost": 844.0,
+        "ghost_pairs_scored": 16.393333333333334,
+        "inert_synapse_frac": 0.0,
+        "used_vs_allocated": 0.4979253112033195,
+        "meter_fidelity": 0.926531118889235,
+        "pre_shift_test_acc": 0.9933333333333333,
+        "recovered_test_acc": 0.955,
+        "recovery_gap": 0.03833333333333333,
+        "recovery_steps": Infinity
+      }
+    }
+  ]
+}

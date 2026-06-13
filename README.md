@@ -12,7 +12,10 @@ once into one shared per-wire state — **load** `|w|/w̄` and **demand** `M/M̄
 and read it through three lenses: **confidence** (freeze a wire that is
 *important and settled*), **pruning** (delete a wire weak in *both* load and
 demand), **growth** (add the missing wire the loss most wishes existed, when it
-clears a *selective* bar — RigL-style). See [sprout/currency.py](sprout/currency.py).
+clears a *selective* bar — RigL-style). The promoted run preset bounds that grow
+scan to the top-4 highest-demand post neurons, preserving the same signal while
+making the candidate scan scale like `k * active_pre` instead of all active
+pre/post pairs. See [sprout/currency.py](sprout/currency.py).
 
 Structural change is **phasic** *(default)*, in three phases driven by one
 smoothed-loss state machine: the net **learns while awake** (pure gated-SGD +
@@ -155,12 +158,27 @@ it does. Honest residuals, unchanged by promotion: emergency hires read as
 freeloaders until a sleep cycle cleans them (`freeloader_frac` ▼), and the
 mean `b_learned` gain is *not significant* at 5 seeds. `validate.py` and the
 eval `phasic` / `phasic-recycle` variants pin `startle=False` as fixed
-pre-startle references; the `phasic-startle` variant *is* the promoted
-default. The residual gap vs continuous lives in **refinement-tail growth**
+pre-startle references; the promoted efficiency arm is now
+`phasic-startle-k4`. The residual gap vs continuous lives in
+**refinement-tail growth**
 (continuous grows ~175× spread over the run; one onset hire can't
-substitute), pointing at an *aroused window* (growth re-enabled while the
-loss stays above the floor) as the next lever. Spec + results:
+substitute). Spec + results:
 `docs/superpowers/specs/2026-06-11-startle-demand-triggered-growth-design.md`.
+
+**Demand-bounded startle is the current efficiency architecture.** The growth
+scan already had a clean bound (`grow_demand_k=4`): score ghosts only into the
+top-4 highest-|delta| post neurons. Promoting that bound on top of startle kept
+single+shift accuracy/recovery ≈ while cutting the scored ghost pairs
+**80.97 → 13.02**, grow events **60.6 → 15.6**, final synapses **179 → 141**,
+and turnover **0.878 → 0.671 ▲** ([phasic-startle-k4-shift](docs/eval-runs/phasic-startle-k4-shift/)).
+On continual A→B→A+B it cut scored ghost pairs **84.71 → 15.86** and ended
+even sparser (**106 → 85** synapses) with final accuracy ≈, but did not improve
+the second-task mean ([aroused-grow-continual](docs/eval-runs/aroused-grow-continual/)).
+The tested *aroused window* (extra grow-only passes for 1k steps after startle)
+is **not promoted**: it added a little refinement activity but did not produce a
+clear `b_learned` or consolidation win. The settled architecture is therefore
+simple: phasic sleep + startle hiring + demand-bounded growth; no aroused window,
+no recycling, no extra confidence rule.
 
 ## Quick start
 
@@ -187,7 +205,7 @@ Artifacts land in `output/<preset>_<dataset>/` (`animation.gif`, frames,
 |---|---|---|
 | `core` | plain sparse backprop | all mechanisms off |
 | `currency-conf` | currency: + confidence | edges auto-coloured by gradient **demand** |
-| **`currency`** *(default)* | currency: confidence + prune + grow, **phasic** structure | the architecture (2D calibrated confidence + softened cliff + selective grow bar + phasic structural plasticity — wake learns, sleep rewires — on by default) |
+| **`currency`** *(default)* | currency: confidence + prune + grow, **phasic** structure | the architecture (2D calibrated confidence + softened cliff + selective grow bar + demand-bounded growth + phasic structural plasticity — wake learns, sleep rewires, startle hires — on by default) |
 
 ## What you can watch
 
@@ -233,7 +251,10 @@ lenses on it (one source of truth, [sprout/currency.py](sprout/currency.py)'s
   their *virtual* gradient `δ_j·a_i`; grow only those wanted **far more than a
   typical live wire** (`grow_bar_frac=3.0` — a *selective* hiring bar that keeps
   rewiring calm and sparse and tames the grow↔prune oscillation), born at weight
-  0. Dead neurons (`δ_j=0`) score ~0 and are never grown. Optional:
+  0. The promoted preset uses `grow_demand_k=4`, so each grow scan only prices
+  ghosts into the top-4 highest-|δ| post neurons; previous full-scan variants are
+  kept as A/B references. Dead neurons (`δ_j=0`) score ~0 and are never grown.
+  Optional:
   `ghost_meter=True` grows on a *sustained* EMA of the virtual gradient so a
   just-cut wire must re-earn its place (`update_ghost_meter`).
 
@@ -303,9 +324,12 @@ see "Honest comparison" above). Remaining:
    permanently-dead units (`dead_unit_frac` 0.09 → 0.18); whether that erodes
    retention on the A→B→A+B benchmark (vs the pinned continuous baseline) is the
    key open measurement.
-2. **Dead-unit revival** — small non-zero birth weight or bias nudge (would also
+2. **Tougher-problem scaling guardrails** — repeat the bounded-startle comparison
+   on wider/deeper sparse nets and harder non-spiral tasks; the grow scan now has
+   the right asymptotic shape, but the current evidence is still small-MLP.
+3. **Dead-unit revival** — small non-zero birth weight or bias nudge (would also
    relieve #1).
-3. **Stable homeostasis** — a per-neuron trained gain instead of multiplicative
+4. **Stable homeostasis** — a per-neuron trained gain instead of multiplicative
    weight rescaling.
-4. Parked v2 ideas: spiking neurons + surrogate-gradient STDP, recurrence,
+5. Parked v2 ideas: spiking neurons + surrogate-gradient STDP, recurrence,
    confidence-gated exploration noise.
