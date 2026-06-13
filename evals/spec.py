@@ -37,6 +37,8 @@ _BOUNDED_GROW_VARIANTS = {
     "digits-w32-sparse",
     "digits-w64-sparse",
     "digits-w128-sparse",
+    "digits-w128-k16",
+    "digits-w128-k32",
 }
 
 
@@ -554,6 +556,21 @@ VARIANTS: dict[str, Callable[[], Config]] = {
         eta_base=0.02, grad_currency=True, enable_confidence=True,
         enable_prune=True, enable_grow=True, gamma_dec=0.001, t_struct=200,
         phasic_structure=True, startle=True, grow_demand_k=4,
+        init_layers=(64, 128, 10), init_density=0.125),
+    # k-scaling probe: does growth attention need to scale with width? Same w128
+    # net + matched ~1184-edge budget as digits-w128-sparse, but the grow scan
+    # considers the top-16 / top-32 demanded post-neurons per pass instead of
+    # top-4 — so the wide hidden layer is not crowded out of growth by the (always
+    # high-demand) 10 output neurons. Tests whether k should scale with width.
+    "digits-w128-k16": lambda: Config(
+        eta_base=0.02, grad_currency=True, enable_confidence=True,
+        enable_prune=True, enable_grow=True, gamma_dec=0.001, t_struct=200,
+        phasic_structure=True, startle=True, grow_demand_k=16,
+        init_layers=(64, 128, 10), init_density=0.125),
+    "digits-w128-k32": lambda: Config(
+        eta_base=0.02, grad_currency=True, enable_confidence=True,
+        enable_prune=True, enable_grow=True, gamma_dec=0.001, t_struct=200,
+        phasic_structure=True, startle=True, grow_demand_k=32,
         init_layers=(64, 128, 10), init_density=0.125),
 }
 

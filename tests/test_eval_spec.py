@@ -392,3 +392,13 @@ def test_digit_width_sweep_matched_edge_budget():
             assert cfg.init_density == 1.0 and not cfg.enable_grow
         counts.append(len(build_graph(list(layers), density=density, seed=0).synapses))
     assert max(counts) / min(counts) < 1.08    # matched compute budget
+
+
+def test_digit_w128_kscale_variants():
+    """w128 k-scaling probe: same wide net + budget, larger grow_demand_k."""
+    assert make_config("digits-w128-k16").grow_demand_k == 16
+    assert make_config("digits-w128-k32").grow_demand_k == 32
+    for name in ("digits-w128-k16", "digits-w128-k32"):
+        cfg = make_config(name)
+        assert cfg.init_layers == (64, 128, 10) and cfg.init_density == 0.125
+        assert cfg.phasic_structure and cfg.startle and cfg.enable_grow
