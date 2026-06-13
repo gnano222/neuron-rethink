@@ -257,7 +257,7 @@ def test_registry_lists_all_named_variants():
 
 def test_suitespec_defaults():
     spec = SuiteSpec()
-    assert spec.variants == ("currency", "sleep")
+    assert spec.variants == ("phasic-startle-k4", "phasic-startle")
     assert spec.seeds == 5
     assert spec.dataset == "spirals"
     # promoted defaults: the width sweep made w16 the sweet spot, and the
@@ -265,7 +265,7 @@ def test_suitespec_defaults():
     assert spec.steps == 15000
     assert spec.layers == (2, 16, 16, 16, 2)
     assert spec.shift_steps == 0
-    assert spec.baseline == "currency"   # promoted: softened-cliff currency is the reference
+    assert spec.baseline == "phasic-startle-k4"   # promoted sparse/efficient reference
     assert spec.record_every == 200
     assert spec.test_seed_offset == 10000
 
@@ -328,6 +328,13 @@ def test_phasic_startle_research_variants_are_single_knob_extensions():
     assert both.arousal_steps == 1000
 
 
+def test_make_config_pins_historical_full_scan_variants():
+    # Raw Config defaults to k4 now; old named comparators still mean full-scan
+    # unless the variant name explicitly says k4/bounded.
+    for name in ("currency", "sleep", "phasic", "phasic-startle", "size-w16"):
+        assert make_config(name).grow_demand_k is None
+
+
 def test_bounded_size_sweep_arms_match_widths_with_demand_k():
     from evals.spec import make_config
     widths = {"size-w4-k4": (2, 4, 4, 4, 2), "size-w6-k4": (2, 6, 6, 6, 2),
@@ -338,3 +345,50 @@ def test_bounded_size_sweep_arms_match_widths_with_demand_k():
         assert cfg.init_layers == layers
         assert cfg.grow_demand_k == 4
         assert cfg.grad_currency and cfg.enable_grow and cfg.enable_prune
+
+
+def test_compute_efficiency_probe_variants_are_single_knobs():
+    base = make_config("phasic-startle-k4")
+    assert make_config("phasic-startle-k4-lazy").lazy_meters is True
+    assert make_config("eff-density30").init_density == 0.30
+    assert make_config("eff-density50").init_density == 0.50
+    assert make_config("eff-w12").init_layers == (2, 12, 12, 12, 2)
+    assert make_config("eff-w20").init_layers == (2, 20, 20, 20, 2)
+    assert make_config("eff-floor08").sleep_prune_floor == 0.8
+    assert make_config("eff-floor12").sleep_prune_floor == 1.2
+    assert make_config("eff-floor15").sleep_prune_floor == 1.5
+    assert make_config("eff-wta4").activation_top_k == 4
+    assert make_config("eff-wta6").activation_top_k == 6
+    assert make_config("eff-wta8").activation_top_k == 8
+
+    for name in ("phasic-startle-k4-lazy", "eff-density30", "eff-density50",
+                 "eff-w12", "eff-w20", "eff-floor08", "eff-floor12",
+                 "eff-floor15", "eff-wta4", "eff-wta6", "eff-wta8"):
+        cfg = make_config(name)
+        assert cfg.grow_demand_k == base.grow_demand_k == 4
+        assert cfg.phasic_structure and cfg.startle
+        assert cfg.enable_confidence and cfg.enable_prune and cfg.enable_grow
+
+
+def test_digit_width_sweep_matched_edge_budget():
+    """The width-sweep arms all start within ~8% of the same edge budget, with
+    the dense arm static and the wide arms self-rewiring (phasic-startle-k4)."""
+    from sprout.network import build_graph
+    arms = {
+        "digits-w16-dense":  ((64, 16, 10), 1.0, False),
+        "digits-w32-sparse": ((64, 32, 10), 0.5, True),
+        "digits-w64-sparse": ((64, 64, 10), 0.25, True),
+        "digits-w128-sparse": ((64, 128, 10), 0.125, True),
+    }
+    counts = []
+    for name, (layers, density, sparse) in arms.items():
+        cfg = make_config(name)
+        assert cfg.init_layers == layers
+        assert cfg.init_density == density
+        if sparse:
+            assert cfg.phasic_structure and cfg.startle and cfg.grow_demand_k == 4
+            assert cfg.enable_confidence and cfg.enable_prune and cfg.enable_grow
+        else:
+            assert cfg.init_density == 1.0 and not cfg.enable_grow
+        counts.append(len(build_graph(list(layers), density=density, seed=0).synapses))
+    assert max(counts) / min(counts) < 1.08    # matched compute budget

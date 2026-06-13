@@ -14,28 +14,50 @@ from typing import Callable
 from sprout.train import Config
 
 
+_BOUNDED_GROW_VARIANTS = {
+    "phasic-startle-k4",
+    "phasic-startle-k4-lazy",
+    "eff-density30",
+    "eff-density50",
+    "eff-w12",
+    "eff-w20",
+    "eff-floor08",
+    "eff-floor12",
+    "eff-floor15",
+    "eff-wta4",
+    "eff-wta6",
+    "eff-wta8",
+    "phasic-startle-aroused-k4",
+    "currency-bounded",
+    "size-w4-k4",
+    "size-w6-k4",
+    "size-w10-k4",
+    "size-w16-k4",
+    "size-w24-k4",
+    "digits-w32-sparse",
+    "digits-w64-sparse",
+    "digits-w128-sparse",
+}
+
+
 # name -> factory returning a FRESH Config (never share mutable Config instances
 # across runs; each (variant, seed) job mutates its own network/config state).
 VARIANTS: dict[str, Callable[[], Config]] = {
-    # the current default architecture: gradient-as-currency. Confidence is the
-    # calibrated 2D (importance x settledness) rule with the softened sigmoid
-    # cliff, and growth uses the selective hiring bar (grow_bar_frac=3.0) — both
-    # inherited from Config defaults. This is the promoted BASELINE.
-    # the no-sleep currency reference. Sleep consolidation is now ON by default
-    # (Config.enable_sleep=True), but this baseline pins it OFF so it stays the
-    # STABLE A/B reference every other variant is measured against (and so all
-    # historical eval-runs remain comparable). The promoted default itself = this
-    # + sleep, i.e. the `sleep` variant below.
+    # Historical continuous no-sleep reference. The current baseline architecture
+    # is phasic-startle-k4; this full-scan continuous arm stays pinned for A/B.
+    # Confidence is the calibrated 2D (importance x settledness) rule with the
+    # softened sigmoid cliff, and growth uses the selective hiring bar
+    # (grow_bar_frac=3.0).
     "currency": lambda: Config(
         eta_base=0.02, grad_currency=True, enable_confidence=True,
         enable_prune=True, enable_grow=True,
         gamma_dec=0.001, t_struct=200, enable_sleep=False, phasic_structure=False,
         startle=False,   # pinned (inert on the continuous path anyway)
     ),
-    # the PROMOTED DEFAULT: currency + settledness-gated sleep consolidation at
-    # floor 1.0 / no cap (inherited from Config defaults). Prunes aggressively
-    # only once the loss-EMA has plateaued. = `currency` + the new default sleep;
-    # compare vs the no-sleep `currency` baseline. See docs/eval-runs/
+    # Historical continuous + settledness-gated sleep consolidation at floor 1.0
+    # / no cap (inherited from Config defaults). Prunes aggressively only once
+    # the loss-EMA has plateaued. Kept to compare against the no-sleep
+    # `currency` reference. See docs/eval-runs/
     # sleep-nocap-floor-0-to-2.
     "sleep": lambda: Config(
         eta_base=0.02, grad_currency=True, enable_confidence=True,
@@ -48,10 +70,10 @@ VARIANTS: dict[str, Callable[[], Config]] = {
     # pass (prune the weak + grow the wanted) fired only at a settledness plateau.
     # Subsumes the sleep overlay and removes continuous grow<->prune churn — the
     # ghost-meter refractory and inflated grow bar are no longer load-bearing.
-    # startle is PINNED OFF: the project default promoted startle=True
+    # startle is PINNED OFF: the project baseline promoted startle=True
     # (2026-06-12), but this variant stays the stable sleep-only phasic
     # baseline every published startle/recycle run was measured against.
-    # The current efficiency arm is `phasic-startle-k4` below; this no-startle
+    # The baseline efficiency arm is `phasic-startle-k4` below; this no-startle
     # baseline stays useful for isolating the alarm itself. sleep_* knobs inherit
     # the promoted defaults (warmup 2500, patience 1500, floor 1.0, no cap).
     "phasic": lambda: Config(
@@ -83,7 +105,7 @@ VARIANTS: dict[str, Callable[[], Config]] = {
         gamma_dec=0.001, t_struct=200, phasic_structure=True,
         startle=True,
     ),
-    # PROMOTED EFFICIENCY ARM: startle plus the bounded grow scan. Same
+    # PROMOTED BASELINE: startle plus the bounded grow scan. Same
     # architecture and scoring signal, but growth only scores ghosts into the
     # top-k highest-|delta| post neurons. Shift guardrail: accuracy/recovery ≈,
     # ghost_pairs_scored 80.97 -> 13.02, grow events 60.6 -> 15.6.
@@ -92,6 +114,77 @@ VARIANTS: dict[str, Callable[[], Config]] = {
         enable_prune=True, enable_grow=True,
         gamma_dec=0.001, t_struct=200, phasic_structure=True,
         startle=True, grow_demand_k=4,
+    ),
+    # Same architecture, exact lazy decay for the gradient meters. Isolates
+    # whether skipping pure zero-gradient meter decay is worth the extra access
+    # logic while confidence still scans all live wires.
+    "phasic-startle-k4-lazy": lambda: Config(
+        eta_base=0.02, grad_currency=True, enable_confidence=True,
+        enable_prune=True, enable_grow=True,
+        gamma_dec=0.001, t_struct=200, phasic_structure=True,
+        startle=True, grow_demand_k=4, lazy_meters=True,
+    ),
+    # Compute-tuning probes around the promoted baseline. Each is a single knob:
+    # initial density, width, sleep prune floor, or enforced activation sparsity.
+    "eff-density30": lambda: Config(
+        eta_base=0.02, grad_currency=True, enable_confidence=True,
+        enable_prune=True, enable_grow=True,
+        gamma_dec=0.001, t_struct=200, phasic_structure=True,
+        startle=True, grow_demand_k=4, init_density=0.30,
+    ),
+    "eff-density50": lambda: Config(
+        eta_base=0.02, grad_currency=True, enable_confidence=True,
+        enable_prune=True, enable_grow=True,
+        gamma_dec=0.001, t_struct=200, phasic_structure=True,
+        startle=True, grow_demand_k=4, init_density=0.50,
+    ),
+    "eff-w12": lambda: Config(
+        eta_base=0.02, grad_currency=True, enable_confidence=True,
+        enable_prune=True, enable_grow=True,
+        gamma_dec=0.001, t_struct=200, phasic_structure=True,
+        startle=True, grow_demand_k=4, init_layers=(2, 12, 12, 12, 2),
+    ),
+    "eff-w20": lambda: Config(
+        eta_base=0.02, grad_currency=True, enable_confidence=True,
+        enable_prune=True, enable_grow=True,
+        gamma_dec=0.001, t_struct=200, phasic_structure=True,
+        startle=True, grow_demand_k=4, init_layers=(2, 20, 20, 20, 2),
+    ),
+    "eff-floor08": lambda: Config(
+        eta_base=0.02, grad_currency=True, enable_confidence=True,
+        enable_prune=True, enable_grow=True,
+        gamma_dec=0.001, t_struct=200, phasic_structure=True,
+        startle=True, grow_demand_k=4, sleep_prune_floor=0.8,
+    ),
+    "eff-floor12": lambda: Config(
+        eta_base=0.02, grad_currency=True, enable_confidence=True,
+        enable_prune=True, enable_grow=True,
+        gamma_dec=0.001, t_struct=200, phasic_structure=True,
+        startle=True, grow_demand_k=4, sleep_prune_floor=1.2,
+    ),
+    "eff-floor15": lambda: Config(
+        eta_base=0.02, grad_currency=True, enable_confidence=True,
+        enable_prune=True, enable_grow=True,
+        gamma_dec=0.001, t_struct=200, phasic_structure=True,
+        startle=True, grow_demand_k=4, sleep_prune_floor=1.5,
+    ),
+    "eff-wta4": lambda: Config(
+        eta_base=0.02, grad_currency=True, enable_confidence=True,
+        enable_prune=True, enable_grow=True,
+        gamma_dec=0.001, t_struct=200, phasic_structure=True,
+        startle=True, grow_demand_k=4, activation_top_k=4,
+    ),
+    "eff-wta6": lambda: Config(
+        eta_base=0.02, grad_currency=True, enable_confidence=True,
+        enable_prune=True, enable_grow=True,
+        gamma_dec=0.001, t_struct=200, phasic_structure=True,
+        startle=True, grow_demand_k=4, activation_top_k=6,
+    ),
+    "eff-wta8": lambda: Config(
+        eta_base=0.02, grad_currency=True, enable_confidence=True,
+        enable_prune=True, enable_grow=True,
+        gamma_dec=0.001, t_struct=200, phasic_structure=True,
+        startle=True, grow_demand_k=4, activation_top_k=8,
     ),
     # Startle plus a short aroused refinement window: after the immediate alarm
     # hire, allow grow-only passes on structural ticks for 1k steps while the
@@ -103,8 +196,8 @@ VARIANTS: dict[str, Callable[[], Config]] = {
         gamma_dec=0.001, t_struct=200, phasic_structure=True,
         startle=True, arousal_steps=1000,
     ),
-    # The likely scalable arm: aroused refinement, but with the bounded grow scan
-    # so the extra growth passes do not reintroduce quadratic scan cost.
+    # Tested refinement arm, not promoted: aroused refinement with the bounded
+    # grow scan so extra growth passes do not reintroduce quadratic scan cost.
     "phasic-startle-aroused-k4": lambda: Config(
         eta_base=0.02, grad_currency=True, enable_confidence=True,
         enable_prune=True, enable_grow=True,
@@ -434,6 +527,34 @@ VARIANTS: dict[str, Callable[[], Config]] = {
     # sparse, self-rewiring `currency` baseline: does self-organised sparsity
     # learn as fast, and adapt to a second task as quickly, on far fewer synapses?
     "fully-connected": lambda: Config(eta_base=0.02, init_density=1.0),
+    # --- digit width sweep: larger-but-sparse vs small-dense at a MATCHED edge
+    # budget (~1184 initial edges, 1 hidden layer), for the 8x8 digits task
+    # (run with --dataset digits). Tests whether spreading a fixed compute
+    # budget sparsely across many neurons beats spending it densely on few.
+    # Edge math (build_graph k = round(density*|prev|)):
+    #   w16-dense   (64, 16,10) d=1.0  : 16*64 + 10*16 = 1184
+    #   w32-sparse  (64, 32,10) d=0.5  : 32*32 + 10*16 = 1184
+    #   w64-sparse  (64, 64,10) d=0.25 : 64*16 + 10*16 = 1184 (+ fan-out guards)
+    #   w128-sparse (64,128,10) d=0.125: 128*8 + 10*16 = 1184 (+ fan-out guards)
+    # The dense arm is the fully-connected control (plasticity off); the sparse
+    # arms are the promoted phasic-startle-k4 self-rewiring architecture.
+    "digits-w16-dense": lambda: Config(
+        eta_base=0.02, init_density=1.0, init_layers=(64, 16, 10)),
+    "digits-w32-sparse": lambda: Config(
+        eta_base=0.02, grad_currency=True, enable_confidence=True,
+        enable_prune=True, enable_grow=True, gamma_dec=0.001, t_struct=200,
+        phasic_structure=True, startle=True, grow_demand_k=4,
+        init_layers=(64, 32, 10), init_density=0.5),
+    "digits-w64-sparse": lambda: Config(
+        eta_base=0.02, grad_currency=True, enable_confidence=True,
+        enable_prune=True, enable_grow=True, gamma_dec=0.001, t_struct=200,
+        phasic_structure=True, startle=True, grow_demand_k=4,
+        init_layers=(64, 64, 10), init_density=0.25),
+    "digits-w128-sparse": lambda: Config(
+        eta_base=0.02, grad_currency=True, enable_confidence=True,
+        enable_prune=True, enable_grow=True, gamma_dec=0.001, t_struct=200,
+        phasic_structure=True, startle=True, grow_demand_k=4,
+        init_layers=(64, 128, 10), init_density=0.125),
 }
 
 
@@ -442,20 +563,26 @@ def make_config(name: str) -> Config:
     if name not in VARIANTS:
         raise KeyError(
             f"unknown variant {name!r}; known: {', '.join(sorted(VARIANTS))}")
-    return VARIANTS[name]()
+    cfg = VARIANTS[name]()
+    # Config's raw default is the promoted bounded scan. Historical registry arms
+    # keep their old full-scan behavior unless their name explicitly opts into
+    # the demand bound.
+    if name not in _BOUNDED_GROW_VARIANTS:
+        cfg.grow_demand_k = None
+    return cfg
 
 
 @dataclass
 class SuiteSpec:
     """Everything needed to run and aggregate one comparison."""
 
-    variants: tuple[str, ...] = ("currency", "sleep")
+    variants: tuple[str, ...] = ("phasic-startle-k4", "phasic-startle")
     seeds: int = 5
     dataset: str = "spirals"
     steps: int = 15000
     shift_steps: int = 0          # > 0 enables a mid-training label-swap phase
     record_every: int = 200
-    baseline: str = "currency"     # softened-cliff 2D-confidence currency = the reference
+    baseline: str = "phasic-startle-k4"  # promoted sparse/efficient baseline
     # promoted to w16 (uniform 16-wide hidden layers): the neuron-width sweep
     # found it the efficiency sweet spot — near-top accuracy and ~1.8x faster
     # convergence than the old (2,10,10,8,2) at ~2x the wires, with the fewest
