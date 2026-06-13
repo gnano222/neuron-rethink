@@ -39,12 +39,15 @@ def test_run_one_returns_wellformed_result():
     rec = res["series"]["rec_step"]
     assert len(rec) >= 2
     for key in ("train_accuracy", "test_accuracy", "test_loss", "synapse_count",
-                "mean_confidence", "cum_grow", "cum_prune"):
+                "mean_confidence", "cum_grow", "cum_prune", "cum_edge_steps",
+                "cum_train_wall_time"):
         assert len(res["series"][key]) == len(rec), key
 
     # every final metric is a known one; the core schema keys are present
     assert set(res["final"]) <= set(metrics.METRIC_DIRECTIONS)
     for key in ("final_test_acc", "max_test_acc", "auc_test_acc", "steps_to_90",
+                "edge_steps_to_90", "train_edge_steps", "avg_live_edges",
+                "train_wall_time_sec", "fwd_active_edge_frac",
                 "final_acc_stability", "n_grow_events", "turnover",
                 "max_grows_into_one_neuron", "oscillation_frac", "max_regrow",
                 "p10_utility", "freeloader_frac", "conf_utility_corr",
@@ -162,7 +165,8 @@ def test_run_one_continual_wellformed():
     assert len(rec) >= 3
     for key in ("phase", "test_accuracy_A", "test_accuracy_B", "test_accuracy",
                 "train_accuracy", "synapse_count", "mean_confidence",
-                "cum_grow", "cum_prune"):
+                "cum_grow", "cum_prune", "cum_edge_steps",
+                "cum_train_wall_time"):
         assert len(s[key]) == len(rec), key
 
     # phases run in order A -> B -> AB
@@ -191,3 +195,26 @@ def test_run_suite_dispatches_to_continual():
     assert len(results) == 1
     assert results[0]["regime"] == "continual"
     assert "forgetting" in results[0]["final"]
+
+
+def test_run_one_digits_smoke():
+    """The 10-class digits dataset routes through get_dataset and produces a
+    well-formed single-regime result with the right neuron count."""
+    spec = tiny_spec(variants=("phasic-startle-k4",), seeds=1, dataset="digits",
+                     steps=400, shift_steps=0, record_every=200,
+                     baseline="phasic-startle-k4", layers=(64, 32, 16, 10),
+                     density=0.4)
+    res = runner.run_one("phasic-startle-k4", seed=0, spec=spec)
+    assert res["regime"] == "single"
+    assert 0.0 <= res["final"]["final_test_acc"] <= 1.0
+    assert res["n_neurons"] == 64 + 32 + 16 + 10
+
+
+def test_run_one_rejects_multiclass_shift():
+    """The label-swap shift is binary-only; digits + shift must raise."""
+    spec = tiny_spec(variants=("phasic-startle-k4",), seeds=1, dataset="digits",
+                     steps=200, shift_steps=100, record_every=100,
+                     baseline="phasic-startle-k4", layers=(64, 16, 10),
+                     density=0.4)
+    with pytest.raises(ValueError):
+        runner.run_one("phasic-startle-k4", seed=0, spec=spec)
