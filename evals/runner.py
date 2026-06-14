@@ -63,6 +63,17 @@ def _build_layers(cfg, spec) -> list:
     return list(spec.layers) if override is None else list(override)
 
 
+def _train_eval_indices(n, cap, seed):
+    """Indices for the per-snapshot TRAIN-metric evaluation. Full set unless a
+    cap is given and the train set exceeds it, in which case a deterministic
+    subsample (the train set can be huge; full-train accuracy each snapshot would
+    dominate runtime). Test metrics always use the full test set."""
+    if cap is None or n <= cap:
+        return np.arange(n)
+    return np.sort(np.random.default_rng(seed + 99991).choice(n, size=cap,
+                                                              replace=False))
+
+
 def _snapshot(series, net, tr, X_tr, y_tr, X_te, y_te):
     """Append one timepoint to the series (cheap metrics only)."""
     series["rec_step"].append(tr.step_idx)
@@ -186,6 +197,8 @@ def run_one(variant_name, seed, spec):
     series = {k: [] for k in SERIES_KEYS}
     cum_edge_steps = 0.0
     cum_train_wall_time = 0.0
+    eval_idx = _train_eval_indices(len(X_tr), getattr(spec, "train_eval_cap", None), seed)
+    X_tr_eval = X_tr[eval_idx]
 
     def loop(n_steps, y_tr_cur, y_te_cur):
         nonlocal cum_edge_steps, cum_train_wall_time
@@ -198,7 +211,8 @@ def run_one(variant_name, seed, spec):
             if record:
                 series["cum_edge_steps"].append(cum_edge_steps)
                 series["cum_train_wall_time"].append(cum_train_wall_time)
-                _snapshot(series, net, tr, X_tr, y_tr_cur, X_te, y_te_cur)
+                _snapshot(series, net, tr, X_tr_eval, y_tr_cur[eval_idx],
+                          X_te, y_te_cur)
 
     loop(spec.steps, y_tr, y_te)
 
@@ -257,6 +271,7 @@ def _cache_key(variant_name, seed, spec) -> str:
         "inner_r_hi": spec.inner_r_hi,
         "outer_r_lo": spec.outer_r_lo,
         "outer_r_hi": spec.outer_r_hi,
+        "train_eval_cap": getattr(spec, "train_eval_cap", None),
     }
     blob = json.dumps(payload, sort_keys=True).encode()
     return hashlib.sha1(blob).hexdigest()[:16]

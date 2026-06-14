@@ -674,6 +674,12 @@ class SuiteSpec:
     turns: float = 1.0
     noise: float = 0.10
     test_seed_offset: int = 10000  # held-out test set drawn at seed + this
+    # Cap the per-snapshot TRAIN-metric evaluation at this many samples (None =
+    # full train set). Large datasets (e.g. mnist14 at 12k+) make full-train
+    # accuracy each snapshot dominate runtime; a fixed subsample is a fine
+    # estimate. Test metrics always use the full test set. Default None keeps
+    # every existing run byte-identical.
+    train_eval_cap: int | None = None
 
     # continual-learning (forgetting) regime: two CONCENTRIC spirals, A->B->A+B.
     # Both tasks are origin-centred (zero-mean => learnable by the tiny net) but

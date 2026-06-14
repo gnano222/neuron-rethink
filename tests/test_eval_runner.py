@@ -210,6 +210,25 @@ def test_run_one_digits_smoke():
     assert res["n_neurons"] == 64 + 32 + 16 + 10
 
 
+def test_train_eval_indices_caps_and_is_deterministic():
+    import numpy as np
+    from evals.runner import _train_eval_indices
+    assert len(_train_eval_indices(100, None, 0)) == 100      # no cap -> full
+    assert len(_train_eval_indices(100, 1000, 0)) == 100      # cap >= n -> full
+    idx = _train_eval_indices(100, 30, 0)
+    assert len(idx) == 30 and len(set(idx.tolist())) == 30    # exact, unique
+    assert np.array_equal(idx, _train_eval_indices(100, 30, 0))   # deterministic
+
+
+def test_run_one_train_eval_cap_smoke():
+    spec = tiny_spec(variants=("core",), seeds=1, dataset="blobs", steps=40,
+                     record_every=20, layers=(2, 3, 2), n_points=200,
+                     train_eval_cap=50)
+    res = runner.run_one("core", 0, spec)
+    assert len(res["series"]["train_accuracy"]) >= 2
+    assert 0.0 <= res["final"]["final_test_acc"] <= 1.0
+
+
 def test_run_one_rejects_multiclass_shift():
     """The label-swap shift is binary-only; digits + shift must raise."""
     spec = tiny_spec(variants=("phasic-startle-k4",), seeds=1, dataset="digits",
