@@ -48,6 +48,8 @@ _BOUNDED_GROW_VARIANTS = {
     "mnist-w128-sparse",
     "mnist-w64-b2",
     "mnist-w128-b2",
+    "mnist-d2-sparse",
+    "mnist-d3-sparse",
 }
 
 
@@ -612,6 +614,14 @@ VARIANTS: dict[str, Callable[[], Config]] = {
     #   w128-b2 (196,128,10) d=0.25 : 128*49 + 10*32 = 6592, fan-in 49
     "mnist-w64-b2": _sparse((196, 64, 10), 0.5),
     "mnist-w128-b2": _sparse((196, 128, 10), 0.25),
+    # DEPTH sweep: is the ~0.93 MNIST14 plateau representational (depth would
+    # break it) or data/resolution-limited (depth won't)? Hold the matched
+    # ~3296-edge budget and the input->hidden fan-in (98) fixed; only add layers.
+    # vs the 1-hidden champ mnist-w32-sparse (196,32,10).
+    #   d2 (196, 30,20,    10) d=0.5 : ~3340 edges, fan-in [98, 15, 10]
+    #   d3 (196, 28,18,16, 10) d=0.5 : ~3220 edges, fan-in [98, 14, 9, 8]
+    "mnist-d2-sparse": _sparse((196, 30, 20, 10), 0.5),
+    "mnist-d3-sparse": _sparse((196, 28, 18, 16, 10), 0.5),
 }
 
 

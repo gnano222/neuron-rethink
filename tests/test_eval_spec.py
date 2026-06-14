@@ -453,3 +453,15 @@ def test_mnist_widen_budget_variants():
         assert cfg.phasic_structure and cfg.startle and cfg.grow_demand_k == 4
         n = len(build_graph(list(layers), density=density, seed=0).synapses)
         assert 6000 < n < 7200          # ~2x the 3296 matched budget
+
+
+def test_mnist_depth_sweep_matched_budget():
+    """Depth arms hold the ~3296-edge budget (within ~8%) while adding layers."""
+    from sprout.network import build_graph
+    for name, layers in [("mnist-d2-sparse", (196, 30, 20, 10)),
+                         ("mnist-d3-sparse", (196, 28, 18, 16, 10))]:
+        cfg = make_config(name)
+        assert cfg.init_layers == layers and cfg.init_density == 0.5
+        assert cfg.phasic_structure and cfg.startle and cfg.grow_demand_k == 4
+        n = len(build_graph(list(layers), density=0.5, seed=0).synapses)
+        assert abs(n - 3296) / 3296 < 0.08      # matched budget vs the 1-hidden champ
