@@ -23,13 +23,18 @@ from evals.metrics import METRIC_DESCRIPTIONS
 KEY_METRICS = (
     "final_test_acc",
     "steps_to_90", "steps_to_95", "auc_test_acc",           # training speed (single)
+    "edge_steps_to_90", "edge_steps_to_95",                 # training work (single)
     "a_peak", "a_steps_to_90",                              # continual: task A level+speed
     "b_learned", "b_steps_to_90",                           # continual: task B level+speed
     "forgetting", "consolidation",                          # continual: retention
     "pre_shift_test_acc", "recovered_test_acc",             # label-swap regime
-    "synapse_count_end", "effective_density",               # sparsity (cost/benefit)
+    "synapse_count_end", "effective_density", "avg_live_edges",  # sparsity
+    "train_edge_steps", "train_wall_time_sec", "wall_ms_per_step",
+    "edge_steps_per_sec",                                   # train compute cost
     "ghost_dense_cost", "ghost_pairs_scored",               # grow-scan compute cost
     "mean_neuron_activation", "dead_unit_frac",             # "average neuron value"
+    "hidden_firing_frac", "fwd_active_edge_frac",
+    "bwd_active_edge_frac", "grad_active_edge_frac",        # event-driven ceiling
     "idle_unit_frac",                                       # honest capacity (recycling)
     "n_recycle_events", "recycled_rehired_frac",            # recycling activity/outcome
     "n_startle_events",                                     # demand-spike hiring alarms
