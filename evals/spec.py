@@ -39,6 +39,10 @@ _BOUNDED_GROW_VARIANTS = {
     "digits-w128-sparse",
     "digits-w128-k16",
     "digits-w128-k32",
+    "digits-w24-sparse",
+    "digits-w16-sparse",
+    "digits-w12-sparse",
+    "digits-w8-sparse",
 }
 
 
@@ -572,6 +576,36 @@ VARIANTS: dict[str, Callable[[], Config]] = {
         enable_prune=True, enable_grow=True, gamma_dec=0.001, t_struct=200,
         phasic_structure=True, startle=True, grow_demand_k=32,
         init_layers=(64, 128, 10), init_density=0.125),
+    # budget-floor sweep: how few edges does digits actually need? Narrow the
+    # winning w32-sparse config (same phasic-startle-k4, density 0.5 so fan-in
+    # into the hidden layer stays ~32 and is NOT re-starved) down through 24/16/
+    # 12/8 hidden neurons. Edge budgets (build_graph k=round(0.5*prev)):
+    #   w24 (64,24,10): 24*32 + 10*12 = 888
+    #   w16 (64,16,10): 16*32 + 10*8  = 592
+    #   w12 (64,12,10): 12*32 + 10*6  = 444
+    #   w8  (64, 8,10):  8*32 + 10*4  = 296
+    # Run vs digits-w16-dense (1184 edges, ~0.970) to find the smallest budget
+    # that still matches dense accuracy.
+    "digits-w24-sparse": lambda: Config(
+        eta_base=0.02, grad_currency=True, enable_confidence=True,
+        enable_prune=True, enable_grow=True, gamma_dec=0.001, t_struct=200,
+        phasic_structure=True, startle=True, grow_demand_k=4,
+        init_layers=(64, 24, 10), init_density=0.5),
+    "digits-w16-sparse": lambda: Config(
+        eta_base=0.02, grad_currency=True, enable_confidence=True,
+        enable_prune=True, enable_grow=True, gamma_dec=0.001, t_struct=200,
+        phasic_structure=True, startle=True, grow_demand_k=4,
+        init_layers=(64, 16, 10), init_density=0.5),
+    "digits-w12-sparse": lambda: Config(
+        eta_base=0.02, grad_currency=True, enable_confidence=True,
+        enable_prune=True, enable_grow=True, gamma_dec=0.001, t_struct=200,
+        phasic_structure=True, startle=True, grow_demand_k=4,
+        init_layers=(64, 12, 10), init_density=0.5),
+    "digits-w8-sparse": lambda: Config(
+        eta_base=0.02, grad_currency=True, enable_confidence=True,
+        enable_prune=True, enable_grow=True, gamma_dec=0.001, t_struct=200,
+        phasic_structure=True, startle=True, grow_demand_k=4,
+        init_layers=(64, 8, 10), init_density=0.5),
 }
 
 

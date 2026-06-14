@@ -402,3 +402,19 @@ def test_digit_w128_kscale_variants():
         cfg = make_config(name)
         assert cfg.init_layers == (64, 128, 10) and cfg.init_density == 0.125
         assert cfg.phasic_structure and cfg.startle and cfg.enable_grow
+
+
+def test_digit_budget_floor_sweep_variants():
+    """Narrow the w32-sparse winner at fixed density 0.5 to probe the edge floor:
+    fewer hidden neurons -> fewer edges, fan-in into hidden held ~32."""
+    from sprout.network import build_graph
+    arms = [("digits-w8-sparse", 8), ("digits-w12-sparse", 12),
+            ("digits-w16-sparse", 16), ("digits-w24-sparse", 24)]
+    prev = 0
+    for name, w in arms:
+        cfg = make_config(name)
+        assert cfg.init_layers == (64, w, 10) and cfg.init_density == 0.5
+        assert cfg.grow_demand_k == 4 and cfg.phasic_structure and cfg.startle
+        n = len(build_graph([64, w, 10], density=0.5, seed=0).synapses)
+        assert n > prev    # monotonically more edges with width
+        prev = n
