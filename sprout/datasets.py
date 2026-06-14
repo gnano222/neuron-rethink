@@ -31,6 +31,14 @@ def _stratified_split(X, y, test_frac, seed):
     return X[train_idx], y[train_idx], X[test_idx], y[test_idx]
 
 
+def _standardize_on_train(Xtr, Xte):
+    """Z-score both splits using TRAIN statistics only (no leakage; the eps guard
+    handles constant columns, e.g. always-blank corner pixels)."""
+    mu = Xtr.mean(axis=0)
+    sigma = Xtr.std(axis=0)
+    return (Xtr - mu) / (sigma + _EPS), (Xte - mu) / (sigma + _EPS)
+
+
 def _downsample_2x2(X):
     """Flatten-784 MNIST images -> flatten-196 by 2x2 mean pooling (28->14)."""
     n = X.shape[0]
@@ -65,10 +73,7 @@ def load_mnist14_split(seed: int = 0, n_train: int = 3000, n_test: int = 1000):
     X = _downsample_2x2(np.asarray(data.data, dtype=float))   # (70000, 196)
     y = np.asarray(data.target, dtype=int)                    # labels 0..9
     Xtr, ytr, Xte, yte = _stratified_subsample_split(X, y, n_train, n_test, seed)
-    mu = Xtr.mean(axis=0)
-    sigma = Xtr.std(axis=0)
-    Xtr = (Xtr - mu) / (sigma + _EPS)
-    Xte = (Xte - mu) / (sigma + _EPS)
+    Xtr, Xte = _standardize_on_train(Xtr, Xte)
     return Xtr, ytr, Xte, yte
 
 
@@ -80,10 +85,7 @@ def load_digits_split(seed: int = 0, test_frac: float = 0.2):
     X = np.asarray(data.data, dtype=float)        # (1797, 64), pixels 0..16
     y = np.asarray(data.target, dtype=int)        # labels 0..9
     Xtr, ytr, Xte, yte = _stratified_split(X, y, test_frac, seed)
-    mu = Xtr.mean(axis=0)
-    sigma = Xtr.std(axis=0)
-    Xtr = (Xtr - mu) / (sigma + _EPS)
-    Xte = (Xte - mu) / (sigma + _EPS)
+    Xtr, Xte = _standardize_on_train(Xtr, Xte)
     return Xtr, ytr, Xte, yte
 
 

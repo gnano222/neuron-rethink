@@ -51,6 +51,23 @@ _BOUNDED_GROW_VARIANTS = {
 }
 
 
+def _dense(layers):
+    """A static fully-connected control arm (every plasticity mechanism off)."""
+    return lambda: Config(eta_base=0.02, init_density=1.0, init_layers=layers)
+
+
+def _sparse(layers, density, k=4):
+    """A promoted phasic-startle-k4 self-rewiring arm at a given size/density:
+    2D confidence + prune + grow + sleep + startle, with ``k`` = grow_demand_k.
+    The name must also appear in ``_BOUNDED_GROW_VARIANTS`` or make_config nulls k.
+    """
+    return lambda: Config(
+        eta_base=0.02, grad_currency=True, enable_confidence=True,
+        enable_prune=True, enable_grow=True, gamma_dec=0.001, t_struct=200,
+        phasic_structure=True, startle=True, grow_demand_k=k,
+        init_layers=layers, init_density=density)
+
+
 # name -> factory returning a FRESH Config (never share mutable Config instances
 # across runs; each (variant, seed) job mutates its own network/config state).
 VARIANTS: dict[str, Callable[[], Config]] = {
@@ -549,38 +566,17 @@ VARIANTS: dict[str, Callable[[], Config]] = {
     #   w128-sparse (64,128,10) d=0.125: 128*8 + 10*16 = 1184 (+ fan-out guards)
     # The dense arm is the fully-connected control (plasticity off); the sparse
     # arms are the promoted phasic-startle-k4 self-rewiring architecture.
-    "digits-w16-dense": lambda: Config(
-        eta_base=0.02, init_density=1.0, init_layers=(64, 16, 10)),
-    "digits-w32-sparse": lambda: Config(
-        eta_base=0.02, grad_currency=True, enable_confidence=True,
-        enable_prune=True, enable_grow=True, gamma_dec=0.001, t_struct=200,
-        phasic_structure=True, startle=True, grow_demand_k=4,
-        init_layers=(64, 32, 10), init_density=0.5),
-    "digits-w64-sparse": lambda: Config(
-        eta_base=0.02, grad_currency=True, enable_confidence=True,
-        enable_prune=True, enable_grow=True, gamma_dec=0.001, t_struct=200,
-        phasic_structure=True, startle=True, grow_demand_k=4,
-        init_layers=(64, 64, 10), init_density=0.25),
-    "digits-w128-sparse": lambda: Config(
-        eta_base=0.02, grad_currency=True, enable_confidence=True,
-        enable_prune=True, enable_grow=True, gamma_dec=0.001, t_struct=200,
-        phasic_structure=True, startle=True, grow_demand_k=4,
-        init_layers=(64, 128, 10), init_density=0.125),
+    "digits-w16-dense": _dense((64, 16, 10)),
+    "digits-w32-sparse": _sparse((64, 32, 10), 0.5),
+    "digits-w64-sparse": _sparse((64, 64, 10), 0.25),
+    "digits-w128-sparse": _sparse((64, 128, 10), 0.125),
     # k-scaling probe: does growth attention need to scale with width? Same w128
     # net + matched ~1184-edge budget as digits-w128-sparse, but the grow scan
     # considers the top-16 / top-32 demanded post-neurons per pass instead of
     # top-4 — so the wide hidden layer is not crowded out of growth by the (always
     # high-demand) 10 output neurons. Tests whether k should scale with width.
-    "digits-w128-k16": lambda: Config(
-        eta_base=0.02, grad_currency=True, enable_confidence=True,
-        enable_prune=True, enable_grow=True, gamma_dec=0.001, t_struct=200,
-        phasic_structure=True, startle=True, grow_demand_k=16,
-        init_layers=(64, 128, 10), init_density=0.125),
-    "digits-w128-k32": lambda: Config(
-        eta_base=0.02, grad_currency=True, enable_confidence=True,
-        enable_prune=True, enable_grow=True, gamma_dec=0.001, t_struct=200,
-        phasic_structure=True, startle=True, grow_demand_k=32,
-        init_layers=(64, 128, 10), init_density=0.125),
+    "digits-w128-k16": _sparse((64, 128, 10), 0.125, k=16),
+    "digits-w128-k32": _sparse((64, 128, 10), 0.125, k=32),
     # budget-floor sweep: how few edges does digits actually need? Narrow the
     # winning w32-sparse config (same phasic-startle-k4, density 0.5 so fan-in
     # into the hidden layer stays ~32 and is NOT re-starved) down through 24/16/
@@ -591,26 +587,10 @@ VARIANTS: dict[str, Callable[[], Config]] = {
     #   w8  (64, 8,10):  8*32 + 10*4  = 296
     # Run vs digits-w16-dense (1184 edges, ~0.970) to find the smallest budget
     # that still matches dense accuracy.
-    "digits-w24-sparse": lambda: Config(
-        eta_base=0.02, grad_currency=True, enable_confidence=True,
-        enable_prune=True, enable_grow=True, gamma_dec=0.001, t_struct=200,
-        phasic_structure=True, startle=True, grow_demand_k=4,
-        init_layers=(64, 24, 10), init_density=0.5),
-    "digits-w16-sparse": lambda: Config(
-        eta_base=0.02, grad_currency=True, enable_confidence=True,
-        enable_prune=True, enable_grow=True, gamma_dec=0.001, t_struct=200,
-        phasic_structure=True, startle=True, grow_demand_k=4,
-        init_layers=(64, 16, 10), init_density=0.5),
-    "digits-w12-sparse": lambda: Config(
-        eta_base=0.02, grad_currency=True, enable_confidence=True,
-        enable_prune=True, enable_grow=True, gamma_dec=0.001, t_struct=200,
-        phasic_structure=True, startle=True, grow_demand_k=4,
-        init_layers=(64, 12, 10), init_density=0.5),
-    "digits-w8-sparse": lambda: Config(
-        eta_base=0.02, grad_currency=True, enable_confidence=True,
-        enable_prune=True, enable_grow=True, gamma_dec=0.001, t_struct=200,
-        phasic_structure=True, startle=True, grow_demand_k=4,
-        init_layers=(64, 8, 10), init_density=0.5),
+    "digits-w24-sparse": _sparse((64, 24, 10), 0.5),
+    "digits-w16-sparse": _sparse((64, 16, 10), 0.5),
+    "digits-w12-sparse": _sparse((64, 12, 10), 0.5),
+    "digits-w8-sparse": _sparse((64, 8, 10), 0.5),
     # --- HARDER task: downsampled MNIST 14x14 (196 in, 10 out), --dataset
     # mnist14. The digits result (small-dense wins, wide-sparse only matches)
     # may be a too-easy-task artifact. MNIST has representational headroom AND
@@ -621,38 +601,17 @@ VARIANTS: dict[str, Callable[[], Config]] = {
     #   w64-sparse  (196, 64,10) d=0.25 : 64*49  + 10*16 = 3296
     #   w128-sparse (196,128,10) d=0.125: 128*24 + 10*16 = 3232 (+ fan-out)
     # Does wide-sparse finally BEAT small-dense when the task is hard enough?
-    "mnist-w16-dense": lambda: Config(
-        eta_base=0.02, init_density=1.0, init_layers=(196, 16, 10)),
-    "mnist-w32-sparse": lambda: Config(
-        eta_base=0.02, grad_currency=True, enable_confidence=True,
-        enable_prune=True, enable_grow=True, gamma_dec=0.001, t_struct=200,
-        phasic_structure=True, startle=True, grow_demand_k=4,
-        init_layers=(196, 32, 10), init_density=0.5),
-    "mnist-w64-sparse": lambda: Config(
-        eta_base=0.02, grad_currency=True, enable_confidence=True,
-        enable_prune=True, enable_grow=True, gamma_dec=0.001, t_struct=200,
-        phasic_structure=True, startle=True, grow_demand_k=4,
-        init_layers=(196, 64, 10), init_density=0.25),
-    "mnist-w128-sparse": lambda: Config(
-        eta_base=0.02, grad_currency=True, enable_confidence=True,
-        enable_prune=True, enable_grow=True, gamma_dec=0.001, t_struct=200,
-        phasic_structure=True, startle=True, grow_demand_k=4,
-        init_layers=(196, 128, 10), init_density=0.125),
+    "mnist-w16-dense": _dense((196, 16, 10)),
+    "mnist-w32-sparse": _sparse((196, 32, 10), 0.5),
+    "mnist-w64-sparse": _sparse((196, 64, 10), 0.25),
+    "mnist-w128-sparse": _sparse((196, 128, 10), 0.125),
     # WIDEN-THE-BUDGET arms: relax the matched-3296 constraint to a 2x budget
     # (~6592 edges) so the wide arms get healthier fan-in. Does spending more
     # compute on a wider net overtake the lean w32-sparse (3296, fan-in 98)?
     #   w64-b2  (196, 64,10) d=0.5  : 64*98 + 10*32 = 6592, fan-in 98 (= w32's)
     #   w128-b2 (196,128,10) d=0.25 : 128*49 + 10*32 = 6592, fan-in 49
-    "mnist-w64-b2": lambda: Config(
-        eta_base=0.02, grad_currency=True, enable_confidence=True,
-        enable_prune=True, enable_grow=True, gamma_dec=0.001, t_struct=200,
-        phasic_structure=True, startle=True, grow_demand_k=4,
-        init_layers=(196, 64, 10), init_density=0.5),
-    "mnist-w128-b2": lambda: Config(
-        eta_base=0.02, grad_currency=True, enable_confidence=True,
-        enable_prune=True, enable_grow=True, gamma_dec=0.001, t_struct=200,
-        phasic_structure=True, startle=True, grow_demand_k=4,
-        init_layers=(196, 128, 10), init_density=0.25),
+    "mnist-w64-b2": _sparse((196, 64, 10), 0.5),
+    "mnist-w128-b2": _sparse((196, 128, 10), 0.25),
 }
 
 
