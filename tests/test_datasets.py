@@ -103,3 +103,13 @@ def test_get_dataset_mnist14():
     except Exception as e:
         pytest.skip(f"MNIST fetch unavailable: {e}")
     assert Xtr.shape[1] == 196 and len(Xtr) == 200 and len(Xte) == 1000
+
+
+def test_get_dataset_mnist_full_784():
+    pytest = __import__("pytest")
+    try:
+        Xtr, ytr, Xte, yte = get_dataset("mnist", seed=0, n_points=200)
+    except Exception as e:
+        pytest.skip(f"MNIST fetch unavailable: {e}")
+    assert Xtr.shape[1] == 784 and len(Xtr) == 200 and len(Xte) == 1000
+    assert set(np.unique(yte)).issubset(set(range(10)))

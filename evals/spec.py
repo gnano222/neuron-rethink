@@ -50,6 +50,8 @@ _BOUNDED_GROW_VARIANTS = {
     "mnist-w128-b2",
     "mnist-d2-sparse",
     "mnist-d3-sparse",
+    "mnist784-d1-sparse",
+    "mnist784-d2-sparse",
 }
 
 
@@ -622,6 +624,14 @@ VARIANTS: dict[str, Callable[[], Config]] = {
     #   d3 (196, 28,18,16, 10) d=0.5 : ~3220 edges, fan-in [98, 14, 9, 8]
     "mnist-d2-sparse": _sparse((196, 30, 20, 10), 0.5),
     "mnist-d3-sparse": _sparse((196, 28, 18, 16, 10), 0.5),
+    # FULL-RESOLUTION MNIST 28x28 (784 in, 10 out), --dataset mnist. 1- vs
+    # 2-hidden at a matched ~6.2k-edge budget, first-layer fan-in held at 196.
+    # Full res has the compositional headroom 14x14 lacked, so this is where
+    # depth could finally pay (sparse keeps edges/compute modest even at 784 in).
+    #   d1 (784, 32,    10) d=0.25 : ~6355 edges, fan-in [196, 8]
+    #   d2 (784, 30,20, 10) d=0.25 : ~6091 edges, fan-in [196, 8, 5]
+    "mnist784-d1-sparse": _sparse((784, 32, 10), 0.25),
+    "mnist784-d2-sparse": _sparse((784, 30, 20, 10), 0.25),
 }
 
 

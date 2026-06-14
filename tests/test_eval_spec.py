@@ -465,3 +465,17 @@ def test_mnist_depth_sweep_matched_budget():
         assert cfg.phasic_structure and cfg.startle and cfg.grow_demand_k == 4
         n = len(build_graph(list(layers), density=0.5, seed=0).synapses)
         assert abs(n - 3296) / 3296 < 0.08      # matched budget vs the 1-hidden champ
+
+
+def test_mnist784_depth_variants_matched_budget():
+    """Full-res 784-input 1- vs 2-hidden arms hold a matched ~6.2k-edge budget
+    (within ~8%) with first-layer fan-in 196."""
+    from sprout.network import build_graph
+    counts = []
+    for name, layers in [("mnist784-d1-sparse", (784, 32, 10)),
+                         ("mnist784-d2-sparse", (784, 30, 20, 10))]:
+        cfg = make_config(name)
+        assert cfg.init_layers == layers and cfg.init_density == 0.25
+        assert cfg.phasic_structure and cfg.startle and cfg.grow_demand_k == 4
+        counts.append(len(build_graph(list(layers), density=0.25, seed=0).synapses))
+    assert max(counts) / min(counts) < 1.08

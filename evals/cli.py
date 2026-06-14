@@ -33,7 +33,7 @@ def parse_args(argv=None):
                     help="comma-separated variant names")
     ap.add_argument("--seeds", type=int, default=5)
     ap.add_argument("--dataset", default="spirals",
-                    choices=["spirals", "blobs", "digits", "mnist14"])
+                    choices=["spirals", "blobs", "digits", "mnist14", "mnist"])
     ap.add_argument("--steps", type=int, default=15000)
     ap.add_argument("--shift", type=int, default=0,
                     help="concept-shift (label-swap) steps after the main run")

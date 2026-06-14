@@ -63,18 +63,30 @@ def _stratified_subsample_split(X, y, n_train, n_test, seed):
     return X[tr_idx], y[tr_idx], X[te_idx], y[te_idx]
 
 
-def load_mnist14_split(seed: int = 0, n_train: int = 3000, n_test: int = 1000):
-    """Full MNIST (fetched via OpenML, cached) 2x2-pooled to 14x14 = 196
-    features, then a seeded class-balanced subsample + standardize on TRAIN
-    stats. A harder task than the 8x8 digits set, at a tractable edge scale."""
+def load_mnist_split(seed: int = 0, n_train: int = 12000, n_test: int = 1000,
+                     downsample: bool = False):
+    """MNIST (fetched via OpenML, cached): a seeded class-balanced subsample,
+    standardized on TRAIN stats. ``downsample`` 2x2-pools 28x28 -> 14x14 (196
+    features); otherwise the full 784 features are used. Sparse nets keep the
+    edge budget (hence compute) modest even at 784 input, so full-res is tractable
+    in the per-synapse loop; only a *dense* 784 net would need a vectorized backend.
+    """
     from sklearn.datasets import fetch_openml
     data = fetch_openml("mnist_784", version=1, as_frame=False,
                         parser="liac-arff", cache=True)
-    X = _downsample_2x2(np.asarray(data.data, dtype=float))   # (70000, 196)
+    X = np.asarray(data.data, dtype=float)                    # (70000, 784)
+    if downsample:
+        X = _downsample_2x2(X)                                # (70000, 196)
     y = np.asarray(data.target, dtype=int)                    # labels 0..9
     Xtr, ytr, Xte, yte = _stratified_subsample_split(X, y, n_train, n_test, seed)
     Xtr, Xte = _standardize_on_train(Xtr, Xte)
     return Xtr, ytr, Xte, yte
+
+
+def load_mnist14_split(seed: int = 0, n_train: int = 3000, n_test: int = 1000):
+    """MNIST 2x2-pooled to 14x14 = 196 features (a harder task than 8x8 digits at
+    a tractable edge scale). Thin wrapper over ``load_mnist_split``."""
+    return load_mnist_split(seed, n_train, n_test, downsample=True)
 
 
 def load_digits_split(seed: int = 0, test_frac: float = 0.2):
@@ -102,6 +114,8 @@ def get_dataset(name, seed, *, n_points=600, turns=1.0, noise=0.10,
         return load_digits_split(seed=seed)
     if name == "mnist14":
         return load_mnist14_split(seed=seed, n_train=n_points, n_test=1000)
+    if name == "mnist":
+        return load_mnist_split(seed=seed, n_train=n_points, n_test=1000)
     if name == "blobs":
         Xtr, ytr = generate_blobs(n=n_points, seed=seed)
         Xte, yte = generate_blobs(n=n_points, seed=seed + test_seed_offset)
