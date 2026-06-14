@@ -1,0 +1,58 @@
+metric                            eff-density30  phasic-startle-k4
+------------------------------------------------------------------
+final_test_acc ↑                         0.923≈              0.964
+max_test_acc ↑                           0.997≈              0.997
+final_train_acc ↑                        0.922≈              0.959
+final_test_loss ↓                        0.180≈              0.109
+steps_to_90 ↓                             2121≈               1721
+steps_to_95 ↓                             3961▼               2681
+edge_steps_to_90 ↓                      441316≈             416402
+edge_steps_to_95 ↓                      809916≈             648322
+auc_test_acc ↑                           0.915≈              0.928
+final_acc_stability ↓                    0.031≈              0.055
+pre_shift_test_acc ↑                     0.991≈              0.991
+recovered_test_acc ↑                     0.923≈              0.964
+recovery_gap ↓                           0.068≈              0.027
+recovery_steps ↓                             ∞?                  ∞
+synapse_count_start                    209.400≈                242
+synapse_count_peak                     209.400≈                242
+synapse_count_end                      123.800≈                141
+n_grow_events                           21.200≈             15.600
+n_prune_events                         106.800≈            116.600
+n_startle_events                             1≈              1.600
+n_arousal_events                             0≈                  0
+distinct_neurons_grown                       6≈              4.400
+turnover ↓                               0.810≈              0.671
+max_grows_into_one_neuron ↓              7.200≈                  6
+mean_fan_in                              2.476≈              2.820
+mean_fan_out                             2.476≈              2.820
+effective_density                        0.215≈              0.245
+avg_live_edges                         161.284≈            201.686
+p10_utility ↑                            0.452≈              0.479
+freeloader_frac ↓                        0.118≈              0.102
+mean_survivor_age ↑                      16233≈              16832
+median_survivor_age ↑                    18000≈              18000
+mean_pruned_lifespan                      8666≈              10977
+oscillation_frac ↓                       0.009≈                  0
+max_regrow ↓                             0.200≈                  0
+conf_utility_corr ↑                      0.066≈              0.045
+frozen_freeloader_frac ↓                     0≈                  0
+dead_unit_count ↓                           10▼              7.200
+dead_unit_frac ↓                         0.208▼              0.150
+idle_unit_frac ↓                         0.300≈              0.250
+mean_neuron_activation                   0.304≈              0.302
+hidden_firing_frac ↓                     0.371≈              0.355
+fwd_active_edge_frac ↓                   0.552≈              0.533
+bwd_active_edge_frac ↓                   0.383≈              0.358
+grad_active_edge_frac ↓                  0.223≈              0.183
+inert_synapse_frac ↓                         0≈                  0
+used_vs_allocated                        0.591≈              0.583
+n_recycle_events                             0≈                  0
+recycled_rehired_frac                        —?                  —
+train_wall_time_sec ↓                    5.112▲              6.176
+wall_ms_per_step ↓                       0.284▲              0.343
+edge_steps_per_sec ↑                    566797▼             587531
+train_edge_steps ↓                     2903278▲            3630541
+ghost_dense_cost                       840.200≈                823
+ghost_pairs_scored                      15.565≈             13.023
+meter_fidelity ↑                         0.947≈              0.951
