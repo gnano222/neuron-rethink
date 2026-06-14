@@ -310,16 +310,20 @@ Pure NumPy is enough and keeps the per-synapse object model transparent. PyTorch
 - Recurrent connections (would break the DAG/backprop simplicity).
 - Gradient-informed growth (RigL-style: grow where the backprop gradient is largest, instead of/alongside activity-based growth).
 - Confidence-gated exploration noise (Thompson-sampling-like behavior at the synapse level).
-- A "sleep"/consolidation replay phase that reinforces high-confidence pathways offline. **— now implemented** as *phasic structural plasticity*: the net rewires (prunes the weak + grows the wanted) only when the loss has settled, rather than replay-reinforcement. See the Phasic structural plasticity section below.
+- A "sleep"/consolidation replay phase that reinforces high-confidence pathways offline. **— now implemented** as *phasic-startle-k4 structural plasticity*: the net rewires (prunes the weak + grows the wanted) only when the loss has settled, and hires on sustained loss spikes with a k=4 demand-bounded grow scan.
 - Real datasets, real sparsity levels, wall-clock performance.
-## Phasic structural plasticity (default mechanism)
+## Phasic-startle-k4 structural plasticity (baseline default)
 
 Structural change is **phasic** and on by default (`Config.phasic_structure =
 True`), in **three phases driven by one smoothed-loss state machine**: the net
 **learns while awake** (confidence + gated-SGD + gradient metering every step,
 *no* rewiring), **rewires while it sleeps**, and **hires when startled**
-(`Config.startle = True`, default since 2026-06-12 — see below). "Sleep" is a
-**settledness** plateau, detected by an EMA of the training loss
+(`Config.startle = True`, default since 2026-06-12 — see below). The baseline is
+**phasic-startle-k4**: startle growth uses `Config.grow_demand_k = 4`, so each
+grow pass scores ghosts only into the top-4 highest-demand post neurons instead
+of scanning every active pre/post pair. The old full grow scan remains available
+with `grow_demand_k=None` and is pinned in the `phasic-startle` eval comparator.
+"Sleep" is a **settledness** plateau, detected by an EMA of the training loss
 (`sprout/sleep.py`, `SettlednessDetector` — early-stopping-style "patience" on the
 smoothed loss, past a warmup). Loss is the signal because it is the only clean
 one: mean confidence is non-monotonic and the gradient meter `M̄` is too spiky
@@ -382,6 +386,21 @@ read as freeloaders until a sleep cycle cleans them. Sleep-only phasic is
 retained behind `startle=False` (pinned in the eval `phasic`/`phasic-recycle`
 variants and `validate.py`).
 
+**Demand-bounded growth: the k4 default.** The promoted baseline adds one bound
+to startle: `grow_demand_k=4`, meaning candidate scoring only considers the
+top-4 highest-|delta| post neurons for each active pre neuron. This preserves the
+same gradient-currency signal while replacing a broad active-pre/active-post
+scan with a small demand frontier. Measured against full-scan `phasic-startle`
+(5 seeds, w16): on the shift guardrail, scored ghost pairs fell **80.97 →
+13.02**, grow events **60.6 → 15.6**, end synapses **179 → 141**, and turnover
+**0.878 → 0.671 ▲**, with final and recovered test accuracy ≈ (**0.967 →
+0.964**). On continual A→B→A+B, scored ghost pairs fell **84.71 → 15.86** and
+end synapses **106 → 85**, with final accuracy ≈ and `b_learned` ≈ (**0.979 →
+0.973**). The tested aroused window (`arousal_steps=1000`) is **not** promoted:
+it added refinement activity but no clear second-task or consolidation win.
+Recycling remains rejected. The settled simple architecture is therefore:
+phasic sleep, startle hiring, and a k=4 demand-bounded grow scan.
+
 **Honest caveats.** (1) Phasic cuts *edges*, not *neurons* and not the firing
 fraction — the ~47% of neurons that fire per input is unchanged (synapse sparsity
 ⊥ activation sparsity); the compute win is lower fan-in. (2) It roughly **doubles
@@ -398,24 +417,49 @@ recycling spec). `validate.py` and the eval `currency`/`sleep` baselines pin
 
 ## Research roadmap: compute efficiency
 
-The grow scan's `O(N²)` ghost enumeration was replaced by an activity-sparse scan
-(see `sprout/currency.py` `active_ghost_sets` / `iter_ghost_candidates` and the
-`docs/eval-runs` grow-scan scaling run). Two further sparsity wins are deferred —
-both are **constant-factor** (the per-step path is already `O(live edges)`, not
-`O(N²)`), so they improve wall-clock but not the asymptotic scaling the grow-scan
-fix addressed:
+The grow scan's `O(N²)` ghost enumeration was first replaced by an
+activity-sparse scan (see `sprout/currency.py` `active_ghost_sets` /
+`iter_ghost_candidates` and the `docs/eval-runs` grow-scan scaling run), then the
+baseline narrowed that scan to the top-4 demanded post neurons
+(`grow_demand_k=4`). This makes growth proportional to `k * active_pre` during
+the rare sleep/startle passes, while the normal per-step path is still
+`O(live edges)`. Two further sparsity wins are deferred — both improve wall-clock
+constant factors, but they are not needed for the current architectural
+promotion:
+
+**2026-06-12 compute-efficiency audit.** The eval harness now reports wall time,
+total train edge-steps, edge-steps-to-threshold, and active-edge fractions. At
+w16, `phasic-startle-k4` keeps fully-connected accuracy while using far fewer
+edges: **140.8 vs 576** final synapses, **3.19M vs 8.64M** train edge-steps, and
+lower measured training-loop wall time (`compute-efficiency-finalists`). Fully
+connected still wins raw SGD steps to 90/95%, so sparse training is only cheaper
+when measured as edge work or wall time, not as step count.
+
+The obvious cheaper probe, `eff-density30`, is **not promoted**. It is faster and
+sparser on stationary spirals (fixed-horizon train edge-steps **2.67M vs 3.19M**),
+but the shift guardrail exposes the robustness cost: recovered accuracy **0.964
+→ 0.923**, dead-unit fraction **0.150 → 0.208**, and worse steps-to-95
+(`compute-efficiency-density30-shift`). Smaller width (`eff-w12`) saves fixed
+edge work but learns too slowly; lazy gradient meters are exact but slower because
+confidence/update still scan live wires; top-k/WTA reduces active fractions only
+modestly unless made aggressive, and aggressive WTA hurts accuracy. Conclusion:
+keep `phasic-startle-k4` at density 0.4 as the robust compute baseline.
 
 - **#2 Lazy gradient meters.** `update_gradient_meters` EMA-updates *all* live
   wires every step, but a wire whose pre was silent has gradient 0, so its update
-  is pure decay `M ← β·M`. Track each wire's last-touched step and apply `β^Δ`
-  lazily on next access, so per-step work touches only the active wires.
-  Bit-identical to the current meters.
+  is pure decay `M ← β·M`. This is now implemented as an opt-in exact variant
+  (`lazy_meters=True`, `phasic-startle-k4-lazy`): each wire tracks its last meter
+  step and applies `β^Δ` on access. Result: **not promoted**; the extra access
+  logic costs more than it saves while confidence and weight-update loops still
+  visit all live wires.
 - **#3 Event-driven forward/backward.** `forward`/`backward` visit every hidden
   neuron each step. An active-frontier formulation propagates only out of neurons
   that fired (ReLU output ≠ 0), so silent neurons and their wires cost nothing —
   turning the per-step path from `∝ edges` into `∝ active edges`. The largest
-  inner-loop change; left for when per-step wall-clock becomes the bottleneck.
-  See the detailed treatment below.
+  inner-loop change; still deferred. The new WTA probes (`eff-wta4/6/8`) show the
+  trade-off: mild top-k barely moves wall time, while aggressive top-k damages
+  accuracy. Event-driven execution should wait until activation sparsity is both
+  enforced and accuracy-safe.
 
 ### #3 in detail: the per-sample active subgraph
 
