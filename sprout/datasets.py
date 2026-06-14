@@ -31,6 +31,47 @@ def _stratified_split(X, y, test_frac, seed):
     return X[train_idx], y[train_idx], X[test_idx], y[test_idx]
 
 
+def _downsample_2x2(X):
+    """Flatten-784 MNIST images -> flatten-196 by 2x2 mean pooling (28->14)."""
+    n = X.shape[0]
+    return X.reshape(n, 14, 2, 14, 2).mean(axis=(2, 4)).reshape(n, 196)
+
+
+def _stratified_subsample_split(X, y, n_train, n_test, seed):
+    """Class-balanced, deterministic, disjoint train/test subsample of a large
+    fixed dataset (per-class: first n_train/K to train, next n_test/K to test)."""
+    rng = np.random.default_rng(seed)
+    classes = np.unique(y)
+    per_tr = n_train // len(classes)
+    per_te = n_test // len(classes)
+    tr_idx, te_idx = [], []
+    for c in classes:
+        idx = np.where(y == c)[0]
+        rng.shuffle(idx)
+        tr_idx.extend(idx[:per_tr].tolist())
+        te_idx.extend(idx[per_tr:per_tr + per_te].tolist())
+    tr_idx = np.array(sorted(tr_idx))
+    te_idx = np.array(sorted(te_idx))
+    return X[tr_idx], y[tr_idx], X[te_idx], y[te_idx]
+
+
+def load_mnist14_split(seed: int = 0, n_train: int = 3000, n_test: int = 1000):
+    """Full MNIST (fetched via OpenML, cached) 2x2-pooled to 14x14 = 196
+    features, then a seeded class-balanced subsample + standardize on TRAIN
+    stats. A harder task than the 8x8 digits set, at a tractable edge scale."""
+    from sklearn.datasets import fetch_openml
+    data = fetch_openml("mnist_784", version=1, as_frame=False,
+                        parser="liac-arff", cache=True)
+    X = _downsample_2x2(np.asarray(data.data, dtype=float))   # (70000, 196)
+    y = np.asarray(data.target, dtype=int)                    # labels 0..9
+    Xtr, ytr, Xte, yte = _stratified_subsample_split(X, y, n_train, n_test, seed)
+    mu = Xtr.mean(axis=0)
+    sigma = Xtr.std(axis=0)
+    Xtr = (Xtr - mu) / (sigma + _EPS)
+    Xte = (Xte - mu) / (sigma + _EPS)
+    return Xtr, ytr, Xte, yte
+
+
 def load_digits_split(seed: int = 0, test_frac: float = 0.2):
     """scikit-learn 8x8 digits: seeded stratified split, standardized on TRAIN
     statistics only (no leakage; the eps guard handles constant corner pixels)."""
@@ -57,6 +98,8 @@ def get_dataset(name, seed, *, n_points=600, turns=1.0, noise=0.10,
     """
     if name == "digits":
         return load_digits_split(seed=seed)
+    if name == "mnist14":
+        return load_mnist14_split(seed=seed, n_train=n_points, n_test=1000)
     if name == "blobs":
         Xtr, ytr = generate_blobs(n=n_points, seed=seed)
         Xte, yte = generate_blobs(n=n_points, seed=seed + test_seed_offset)

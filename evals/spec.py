@@ -43,6 +43,9 @@ _BOUNDED_GROW_VARIANTS = {
     "digits-w16-sparse",
     "digits-w12-sparse",
     "digits-w8-sparse",
+    "mnist-w32-sparse",
+    "mnist-w64-sparse",
+    "mnist-w128-sparse",
 }
 
 
@@ -606,6 +609,33 @@ VARIANTS: dict[str, Callable[[], Config]] = {
         enable_prune=True, enable_grow=True, gamma_dec=0.001, t_struct=200,
         phasic_structure=True, startle=True, grow_demand_k=4,
         init_layers=(64, 8, 10), init_density=0.5),
+    # --- HARDER task: downsampled MNIST 14x14 (196 in, 10 out), --dataset
+    # mnist14. The digits result (small-dense wins, wide-sparse only matches)
+    # may be a too-easy-task artifact. MNIST has representational headroom AND
+    # the bigger input keeps wide-arm fan-in healthier. Matched ~3296-edge
+    # budget (build_graph k = round(density*|prev|)):
+    #   w16-dense   (196, 16,10) d=1.0  : 16*196 + 10*16 = 3296
+    #   w32-sparse  (196, 32,10) d=0.5  : 32*98  + 10*16 = 3296
+    #   w64-sparse  (196, 64,10) d=0.25 : 64*49  + 10*16 = 3296
+    #   w128-sparse (196,128,10) d=0.125: 128*24 + 10*16 = 3232 (+ fan-out)
+    # Does wide-sparse finally BEAT small-dense when the task is hard enough?
+    "mnist-w16-dense": lambda: Config(
+        eta_base=0.02, init_density=1.0, init_layers=(196, 16, 10)),
+    "mnist-w32-sparse": lambda: Config(
+        eta_base=0.02, grad_currency=True, enable_confidence=True,
+        enable_prune=True, enable_grow=True, gamma_dec=0.001, t_struct=200,
+        phasic_structure=True, startle=True, grow_demand_k=4,
+        init_layers=(196, 32, 10), init_density=0.5),
+    "mnist-w64-sparse": lambda: Config(
+        eta_base=0.02, grad_currency=True, enable_confidence=True,
+        enable_prune=True, enable_grow=True, gamma_dec=0.001, t_struct=200,
+        phasic_structure=True, startle=True, grow_demand_k=4,
+        init_layers=(196, 64, 10), init_density=0.25),
+    "mnist-w128-sparse": lambda: Config(
+        eta_base=0.02, grad_currency=True, enable_confidence=True,
+        enable_prune=True, enable_grow=True, gamma_dec=0.001, t_struct=200,
+        phasic_structure=True, startle=True, grow_demand_k=4,
+        init_layers=(196, 128, 10), init_density=0.125),
 }
 
 

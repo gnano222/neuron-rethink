@@ -418,3 +418,25 @@ def test_digit_budget_floor_sweep_variants():
         n = len(build_graph([64, w, 10], density=0.5, seed=0).synapses)
         assert n > prev    # monotonically more edges with width
         prev = n
+
+
+def test_mnist_width_sweep_matched_edge_budget():
+    """Downsampled-MNIST (196-in) width sweep: dense w16 vs wide sparse arms,
+    all within ~8% of the same ~3296-edge budget."""
+    from sprout.network import build_graph
+    arms = {
+        "mnist-w16-dense":  ((196, 16, 10), 1.0, False),
+        "mnist-w32-sparse": ((196, 32, 10), 0.5, True),
+        "mnist-w64-sparse": ((196, 64, 10), 0.25, True),
+        "mnist-w128-sparse": ((196, 128, 10), 0.125, True),
+    }
+    counts = []
+    for name, (layers, density, sparse) in arms.items():
+        cfg = make_config(name)
+        assert cfg.init_layers == layers and cfg.init_density == density
+        if sparse:
+            assert cfg.phasic_structure and cfg.startle and cfg.grow_demand_k == 4
+        else:
+            assert cfg.init_density == 1.0 and not cfg.enable_grow
+        counts.append(len(build_graph(list(layers), density=density, seed=0).synapses))
+    assert max(counts) / min(counts) < 1.08
