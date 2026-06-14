@@ -55,10 +55,14 @@ class Config:
     # b1-growbar-sweep). 1.5 was the prior eager default (variant currency-eager).
     grow_bar_frac: float = 3.0    # grow ghost wire if virt-grad > this * live ref
     virt_batch: int = 32          # batch size for scoring ghost wires
-    # Phase-2 demand bound for the grow scan: when an int k, score ghosts only
-    # into the top-k highest-|delta| post neurons (bounds work to k * active_pre).
-    # None => exact-sparse scan over all active posts (the bit-identical default).
-    grow_demand_k: int | None = None
+    # Promoted baseline: bound the grow scan to the top-k highest-|delta| post
+    # neurons, so candidate scoring is k * active_pre instead of active_pre *
+    # active_post. None selects the older exact full scan for A/B references.
+    grow_demand_k: int | None = 4
+    # Lazy meter experiment: skip pure EMA decay on zero-gradient wires and apply
+    # the equivalent beta^dt decay when a meter is next read/touched. Exact by
+    # construction; opt-in until evals prove wall-clock value.
+    lazy_meters: bool = False
     # A2 anti-oscillation: grow on a persistent EMA of the virtual gradient
     # (a "ghost meter") instead of one noisy batch. A just-pruned wire has no
     # meter entry, so it must re-earn growth over several cycles rather than being
@@ -155,6 +159,13 @@ class Config:
     # --- initial firing rate seeding ---
     init_firing_rate_at_target: bool = True  # avoids spurious early "underfiring"
 
+    # --- activation sparsity experiment ---
+    # Optional layer-local k-winner ReLU: after each hidden layer computes ReLU,
+    # keep only the top-k positive activations and zero the rest. This is the
+    # simplest explainable way to make activation sparsity real before investing
+    # in an event-driven forward/backward implementation.
+    activation_top_k: int | None = None
+
     # --- eval-harness build hint (NOT read by Trainer) ---
     # Optional per-variant override of the *initial* graph density used by the
     # eval runner's build_graph. None => use the suite's --density. This lets a
@@ -190,6 +201,8 @@ class Trainer:
         self.y = np.asarray(y)
         self.rng = np.random.default_rng(seed)
         self.step_idx = 0
+        # Network.forward owns activations, but Config owns the experiment knob.
+        self.net.activation_top_k = cfg.activation_top_k
         self.history = {
             # logged every step
             "step": [],
@@ -295,14 +308,21 @@ class Trainer:
                                       update_confidence_2d)
         cfg, net = self.cfg, self.net
 
-        update_gradient_meters(net, grad_w, cfg.beta_g)             # §1 currency
+        meter_step = self.step_idx + 1
+        update_gradient_meters(net, grad_w, cfg.beta_g,             # §1 currency
+                               step_idx=self.step_idx,
+                               lazy=cfg.lazy_meters)
         if cfg.enable_confidence:                                   # Readout A
             if cfg.confidence_mode == "twod":
                 update_confidence_2d(net, cfg.conf_gain, cfg.conf_alpha, cfg.c_max,
-                                     cfg.settled_mode, cfg.conf_k)
+                                     cfg.settled_mode, cfg.conf_k,
+                                     meter_beta=(cfg.beta_g if cfg.lazy_meters else None),
+                                     meter_step=meter_step)
             else:
                 update_confidence_currency(net, cfg.gamma_dec, cfg.gamma_up,
-                                           cfg.gamma_dn, cfg.c_max, cfg.m_floor_frac)
+                                           cfg.gamma_dn, cfg.c_max, cfg.m_floor_frac,
+                                           meter_beta=(cfg.beta_g if cfg.lazy_meters else None),
+                                           meter_step=meter_step)
         apply_gated_update(net, grad_w, grad_b, cfg.eta_base)       # gated SGD
         self._increment_ages()
         if self.sleep_detector is not None:                        # settledness
@@ -357,7 +377,10 @@ class Trainer:
             cap = cfg.sleep_max_prune if consolidating else cfg.max_prune
             if cap is None:                     # sleep 'no cap' => all eligible
                 cap = len(net.synapses)
-            pruned = prune_currency(net, cfg.t_grace, cap, floor, cfg.lam_prune)
+            pruned = prune_currency(
+                net, cfg.t_grace, cap, floor, cfg.lam_prune,
+                meter_beta=(cfg.beta_g if cfg.lazy_meters else None),
+                meter_step=self.step_idx + 1)
             for edge in pruned:
                 self.events.append({"step": self.step_idx, "type": "prune", "edge": edge})
             n_pruned = len(pruned)
@@ -403,8 +426,10 @@ class Trainer:
         if cfg.enable_prune:                          # prune every below-floor wire
             cap = (cfg.sleep_max_prune if cfg.sleep_max_prune is not None
                    else len(net.synapses))
-            pruned = prune_currency(net, cfg.t_grace, cap,
-                                    cfg.sleep_prune_floor, cfg.lam_prune)
+            pruned = prune_currency(
+                net, cfg.t_grace, cap, cfg.sleep_prune_floor, cfg.lam_prune,
+                meter_beta=(cfg.beta_g if cfg.lazy_meters else None),
+                meter_step=self.step_idx + 1)
             for edge in pruned:
                 self.events.append({"step": self.step_idx, "type": "prune", "edge": edge})
             n_pruned = len(pruned)

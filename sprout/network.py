@@ -40,6 +40,7 @@ class Synapse:
     age: int = 0              # steps since birth, for the grace period
     grad_mag: float = 0.0     # EMA of |dL/dw|  - the "currency" magnitude meter
     grad_signed: float = 0.0  # EMA of  dL/dw   - the signed meter (for consistency)
+    grad_last_step: int = 0   # lazy-meter update index; 0 means never touched
 
 
 class Network:
@@ -97,11 +98,21 @@ class Network:
         # hidden layers: z = bias + sum(w * a_pre); a = ReLU(z)
         last = len(self.layers) - 1
         for layer_idx in range(1, last):
+            positive = []
             for nid in self.layers[layer_idx]:
                 z = self.neurons[nid].bias
                 for pre in self.incoming[nid]:
                     z += self.synapses[(pre, nid)].weight * self.neurons[pre].activation
-                self.neurons[nid].activation = z if z > 0.0 else 0.0
+                a = z if z > 0.0 else 0.0
+                self.neurons[nid].activation = a
+                if a > 0.0:
+                    positive.append((a, nid))
+            top_k = getattr(self, "activation_top_k", None)
+            if top_k is not None and top_k >= 0 and len(positive) > top_k:
+                keep = {nid for _, nid in sorted(positive, reverse=True)[:top_k]}
+                for _, nid in positive:
+                    if nid not in keep:
+                        self.neurons[nid].activation = 0.0
 
         # output layer: collect z, then softmax over the (2) outputs
         out_ids = self.layers[last]
