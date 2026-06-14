@@ -46,6 +46,8 @@ _BOUNDED_GROW_VARIANTS = {
     "mnist-w32-sparse",
     "mnist-w64-sparse",
     "mnist-w128-sparse",
+    "mnist-w64-b2",
+    "mnist-w128-b2",
 }
 
 
@@ -636,6 +638,21 @@ VARIANTS: dict[str, Callable[[], Config]] = {
         enable_prune=True, enable_grow=True, gamma_dec=0.001, t_struct=200,
         phasic_structure=True, startle=True, grow_demand_k=4,
         init_layers=(196, 128, 10), init_density=0.125),
+    # WIDEN-THE-BUDGET arms: relax the matched-3296 constraint to a 2x budget
+    # (~6592 edges) so the wide arms get healthier fan-in. Does spending more
+    # compute on a wider net overtake the lean w32-sparse (3296, fan-in 98)?
+    #   w64-b2  (196, 64,10) d=0.5  : 64*98 + 10*32 = 6592, fan-in 98 (= w32's)
+    #   w128-b2 (196,128,10) d=0.25 : 128*49 + 10*32 = 6592, fan-in 49
+    "mnist-w64-b2": lambda: Config(
+        eta_base=0.02, grad_currency=True, enable_confidence=True,
+        enable_prune=True, enable_grow=True, gamma_dec=0.001, t_struct=200,
+        phasic_structure=True, startle=True, grow_demand_k=4,
+        init_layers=(196, 64, 10), init_density=0.5),
+    "mnist-w128-b2": lambda: Config(
+        eta_base=0.02, grad_currency=True, enable_confidence=True,
+        enable_prune=True, enable_grow=True, gamma_dec=0.001, t_struct=200,
+        phasic_structure=True, startle=True, grow_demand_k=4,
+        init_layers=(196, 128, 10), init_density=0.25),
 }
 
 

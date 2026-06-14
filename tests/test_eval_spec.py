@@ -440,3 +440,16 @@ def test_mnist_width_sweep_matched_edge_budget():
             assert cfg.init_density == 1.0 and not cfg.enable_grow
         counts.append(len(build_graph(list(layers), density=density, seed=0).synapses))
     assert max(counts) / min(counts) < 1.08
+
+
+def test_mnist_widen_budget_variants():
+    """2x-budget wide arms (~6592 edges vs the 3296 matched budget), w64
+    restored to w32's healthy fan-in (98)."""
+    from sprout.network import build_graph
+    for name, layers, density in [("mnist-w64-b2", (196, 64, 10), 0.5),
+                                  ("mnist-w128-b2", (196, 128, 10), 0.25)]:
+        cfg = make_config(name)
+        assert cfg.init_layers == layers and cfg.init_density == density
+        assert cfg.phasic_structure and cfg.startle and cfg.grow_demand_k == 4
+        n = len(build_graph(list(layers), density=density, seed=0).synapses)
+        assert 6000 < n < 7200          # ~2x the 3296 matched budget
