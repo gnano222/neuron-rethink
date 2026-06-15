@@ -1,7 +1,7 @@
 import numpy as np
 
 from sprout.network import build_graph, init_weights
-from sprout.fast import ArrayNet, _settledness_vec, train_array
+from sprout.fast import ArrayNet, ArrayTrainer, _settledness_vec, train_array
 from sprout import learning, currency
 from sprout.currency import settledness
 from sprout.train import Config, accuracy
@@ -131,6 +131,32 @@ def test_train_array_learns_and_sparsifies():
     net = train_array(cfg, net, X, y, seed=0, steps=15000)
     assert accuracy(net, X, y) > 0.7
     assert len(net.synapses) < start
+
+
+def test_arraytrainer_interface_and_events():
+    cfg = _cfg()
+    cfg.sleep_warmup = 300
+    cfg.sleep_patience = 200
+    X, y = generate_spirals(n=300, seed=2)
+    net = build_graph([2, 12, 12, 2], density=0.5, seed=2)
+    init_weights(net, seed=2)
+    tr = ArrayTrainer(cfg, net, X, y, seed=2)
+    for _ in range(3000):
+        tr.step(record=False)
+    assert tr.step_idx == 3000
+    types = {e["type"] for e in tr.events}
+    assert "sleep" in types and ("prune" in types or "grow" in types)
+    tr.sync_into(net)
+    assert abs(net.synapses[tr.an.keys[0]].weight - tr.an.weight[0]) < 1e-12
+
+
+def test_arraytrainer_rejects_continuous_plasticity():
+    import pytest
+    cfg = Config(eta_base=0.02, enable_confidence=True, enable_prune=True,
+                 enable_grow=True, phasic_structure=False)
+    net = _net()
+    with pytest.raises(NotImplementedError):
+        ArrayTrainer(cfg, net, np.zeros((4, 4)), np.zeros(4, int), seed=0)
 
 
 def test_train_array_deterministic():

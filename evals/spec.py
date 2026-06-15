@@ -676,6 +676,12 @@ class SuiteSpec:
     # estimate. Test metrics always use the full test set. Default None keeps
     # every existing run byte-identical.
     train_eval_cap: int | None = None
+    # Training backend: "object" (per-synapse Network — default + validated
+    # reference) or "array" (vectorized sprout.fast.ArrayTrainer — faster; results
+    # statistically equivalent but NOT identical, so A/B within one backend). The
+    # cache key includes this. See docs/superpowers/specs/
+    # 2026-06-15-backend-harness-wiring-design.md.
+    backend: str = "object"
 
     # continual-learning (forgetting) regime: two CONCENTRIC spirals, A->B->A+B.
     # Both tasks are origin-centred (zero-mean => learnable by the tiny net) but

@@ -19,6 +19,13 @@ def test_parse_args_defaults():
     assert args.dataset == "spirals"
 
 
+def test_cli_backend_flag():
+    assert cli.build_spec(cli.parse_args([])).backend == "object"   # default
+    args = cli.parse_args(["--variants", "phasic-startle-k4", "--baseline",
+                           "phasic-startle-k4", "--backend", "array"])
+    assert cli.build_spec(args).backend == "array"
+
+
 def test_cli_accepts_digits_dataset():
     args = cli.parse_args(["--variants", "phasic-startle-k4,fully-connected",
                            "--dataset", "digits", "--layers", "64,64,32,10",

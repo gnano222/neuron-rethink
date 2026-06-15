@@ -118,6 +118,10 @@ def run_one_continual(variant_name, seed, spec):
     held-out accuracy is snapshotted throughout, giving the forgetting +
     consolidation curves and metrics. The single-task path is untouched.
     """
+    if getattr(spec, "backend", "object") == "array":
+        raise NotImplementedError(
+            "the array backend supports the single regime only; "
+            "use backend='object' for the continual regime")
     cfg = make_config(variant_name)
 
     def spiral(s, r_lo, r_hi):
@@ -192,7 +196,12 @@ def run_one(variant_name, seed, spec):
 
     net = build_graph(_build_layers(cfg, spec), density=_build_density(cfg, spec), seed=seed)
     init_weights(net, seed=seed)
-    tr = Trainer(cfg, net, X_tr, y_tr, seed=seed)
+    is_array = getattr(spec, "backend", "object") == "array"
+    if is_array:
+        from sprout.fast import ArrayTrainer
+        tr = ArrayTrainer(cfg, net, X_tr, y_tr, seed=seed)
+    else:
+        tr = Trainer(cfg, net, X_tr, y_tr, seed=seed)
     initial_edges = set(net.synapses)
     series = {k: [] for k in SERIES_KEYS}
     cum_edge_steps = 0.0
@@ -209,6 +218,8 @@ def run_one(variant_name, seed, spec):
             cum_train_wall_time += time.perf_counter() - t0
             cum_edge_steps += len(net.synapses)
             if record:
+                if is_array:                  # array path: write arrays -> object
+                    tr.sync_into(net)         # net so the metrics read live state
                 series["cum_edge_steps"].append(cum_edge_steps)
                 series["cum_train_wall_time"].append(cum_train_wall_time)
                 _snapshot(series, net, tr, X_tr_eval, y_tr_cur[eval_idx],
@@ -272,6 +283,7 @@ def _cache_key(variant_name, seed, spec) -> str:
         "outer_r_lo": spec.outer_r_lo,
         "outer_r_hi": spec.outer_r_hi,
         "train_eval_cap": getattr(spec, "train_eval_cap", None),
+        "backend": getattr(spec, "backend", "object"),
     }
     blob = json.dumps(payload, sort_keys=True).encode()
     return hashlib.sha1(blob).hexdigest()[:16]

@@ -229,6 +229,37 @@ def test_run_one_train_eval_cap_smoke():
     assert 0.0 <= res["final"]["final_test_acc"] <= 1.0
 
 
+def test_cache_key_includes_backend():
+    obj = tiny_spec(variants=("phasic-startle-k4",), seeds=1, dataset="spirals",
+                    layers=(2, 6, 2), n_points=80, baseline="phasic-startle-k4")
+    arr = tiny_spec(variants=("phasic-startle-k4",), seeds=1, dataset="spirals",
+                    layers=(2, 6, 2), n_points=80, baseline="phasic-startle-k4",
+                    backend="array")
+    assert runner._cache_key("phasic-startle-k4", 0, obj) != \
+        runner._cache_key("phasic-startle-k4", 0, arr)
+
+
+def test_run_one_array_backend_smoke_and_close_to_object():
+    base = dict(variants=("phasic-startle-k4",), seeds=1, dataset="spirals",
+                steps=2000, record_every=500, layers=(2, 10, 10, 2), density=0.5,
+                n_points=200, baseline="phasic-startle-k4")
+    obj = runner.run_one("phasic-startle-k4", 0, SuiteSpec(**base, backend="object"))
+    arr = runner.run_one("phasic-startle-k4", 0, SuiteSpec(**base, backend="array"))
+    assert arr["regime"] == "single"
+    assert arr["n_neurons"] == obj["n_neurons"]
+    assert len(arr["series"]["rec_step"]) == len(obj["series"]["rec_step"])
+    assert 0.0 <= arr["final"]["final_test_acc"] <= 1.0
+    # statistically equivalent, not identical (float drift) -> loose tolerance
+    assert abs(arr["final"]["final_test_acc"] - obj["final"]["final_test_acc"]) < 0.15
+
+
+def test_run_one_continual_rejects_array_backend():
+    spec = tiny_continual_spec(variants=("phasic-startle-k4",), seeds=1)
+    spec = SuiteSpec(**{**spec.__dict__, "backend": "array"})
+    with pytest.raises(NotImplementedError):
+        runner.run_one_continual("phasic-startle-k4", 0, spec)
+
+
 def test_run_one_rejects_multiclass_shift():
     """The label-swap shift is binary-only; digits + shift must raise."""
     spec = tiny_spec(variants=("phasic-startle-k4",), seeds=1, dataset="digits",

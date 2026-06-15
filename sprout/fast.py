@@ -192,47 +192,83 @@ class ArrayNet:
         self.confidence = np.clip(c, 0.0, cfg.c_max)
 
 
-# -- standalone runner: vectorized wake + object-reuse phasic bursts ---------
+# -- ArrayTrainer: a Trainer-shaped adapter the eval harness can drive ---------
+
+class ArrayTrainer:
+    """Mirrors the slice of ``Trainer`` that ``evals.runner.run_one`` uses, but
+    trains on the vectorized ``ArrayNet`` wake path. Rare phasic rewire bursts
+    round-trip to the object ``net`` and reuse the tested ``currency`` prune/grow.
+
+    Supported: phasic (``phasic_structure=True``) and static (no plasticity).
+    Continuous-with-plasticity (``phasic_structure=False`` + prune/grow) raises —
+    those A/B variants stay on the object backend.
+    """
+
+    def __init__(self, cfg, net, X, y, seed=0):
+        import math
+        from sprout.sleep import SettlednessDetector
+        if not cfg.phasic_structure and (cfg.enable_prune or cfg.enable_grow):
+            raise NotImplementedError(
+                "ArrayTrainer supports phasic_structure=True or no-plasticity; "
+                "use backend='object' for continuous-path prune/grow.")
+        self.cfg = cfg
+        self.net = net
+        self.X = np.asarray(X, dtype=float)
+        self.y = np.asarray(y)
+        self.rng = np.random.default_rng(seed)
+        self.an = ArrayNet.from_network(net)
+        self.step_idx = 0
+        self.events = []
+        floor = (cfg.startle_floor if cfg.startle_floor is not None
+                 else 0.5 * math.log(len(net.layers[-1])))
+        self.detector = SettlednessDetector(
+            cfg.sleep_loss_beta, cfg.sleep_loss_tol, cfg.sleep_patience,
+            cfg.sleep_warmup, spike_tol=cfg.startle_tol,
+            spike_patience=cfg.startle_patience, spike_floor=floor)
+
+    def sync_into(self, net):
+        self.an.sync_into(net)
+
+    def step(self, record=False):
+        cfg = self.cfg
+        i = self.rng.integers(len(self.X))
+        loss = self.an.step(self.X[i], int(self.y[i]), cfg, self.step_idx)
+        settled = self.detector.update(loss, self.step_idx)
+        if cfg.phasic_structure and settled and (cfg.enable_prune or cfg.enable_grow):
+            self._burst()
+        self.step_idx += 1
+        return loss
+
+    def _burst(self):
+        from sprout.currency import (prune_currency, grow_currency,
+                                     batch_edge_scores)
+        cfg, net = self.cfg, self.net
+        self.an.sync_into(net)                            # to the reference
+        self.events.append({"step": self.step_idx, "type": "sleep", "edge": None})
+        if cfg.enable_prune:
+            cap = (cfg.sleep_max_prune if cfg.sleep_max_prune is not None
+                   else len(net.synapses))
+            for edge in prune_currency(net, cfg.t_grace, cap,
+                                       cfg.sleep_prune_floor, cfg.lam_prune):
+                self.events.append({"step": self.step_idx, "type": "prune", "edge": edge})
+        if cfg.enable_grow:
+            b = min(cfg.virt_batch, len(self.X))
+            idx = self.rng.choice(len(self.X), size=b, replace=False)
+            ghost, ref = batch_edge_scores(net, self.X[idx], self.y[idx],
+                                           grow_demand_k=cfg.grow_demand_k)
+            for edge in grow_currency(net, ghost, ref, len(ghost), cfg.grow_bar_frac):
+                self.events.append({"step": self.step_idx, "type": "grow", "edge": edge})
+        self.an = ArrayNet.from_network(net)             # rebuild arrays + groups
+        self.detector.reset()
+
+
+# -- standalone runner (thin wrapper over ArrayTrainer) -----------------------
 
 def train_array(cfg, net, X, y, seed, steps):
-    """Train ``net`` on the fast path: vectorized wake steps, with rare phasic
-    rewire bursts done by syncing back to the object model and reusing
-    ``currency.prune_currency`` / ``grow_currency`` (the tested reference). Mutates
-    and returns ``net``. Mirrors ``Trainer``'s sampling + ``_rewire_phasic``.
-    """
-    import math
-    from sprout.currency import prune_currency, grow_currency, batch_edge_scores
-    from sprout.sleep import SettlednessDetector
-
-    X = np.asarray(X, dtype=float)
-    y = np.asarray(y)
-    rng = np.random.default_rng(seed)
-    an = ArrayNet.from_network(net)
-    floor = (cfg.startle_floor if cfg.startle_floor is not None
-             else 0.5 * math.log(len(net.layers[-1])))
-    det = SettlednessDetector(cfg.sleep_loss_beta, cfg.sleep_loss_tol,
-                              cfg.sleep_patience, cfg.sleep_warmup,
-                              spike_tol=cfg.startle_tol,
-                              spike_patience=cfg.startle_patience, spike_floor=floor)
-
-    for step_idx in range(steps):
-        i = rng.integers(len(X))
-        loss = an.step(X[i], int(y[i]), cfg, step_idx)
-        settled = det.update(loss, step_idx)
-        if cfg.phasic_structure and settled and (cfg.enable_prune or cfg.enable_grow):
-            an.sync_into(net)                            # to the reference
-            if cfg.enable_prune:
-                cap = (cfg.sleep_max_prune if cfg.sleep_max_prune is not None
-                       else len(net.synapses))
-                prune_currency(net, cfg.t_grace, cap, cfg.sleep_prune_floor, cfg.lam_prune)
-            if cfg.enable_grow:
-                b = min(cfg.virt_batch, len(X))
-                idx = rng.choice(len(X), size=b, replace=False)
-                ghost, ref = batch_edge_scores(net, X[idx], y[idx],
-                                               grow_demand_k=cfg.grow_demand_k)
-                grow_currency(net, ghost, ref, len(ghost), cfg.grow_bar_frac)
-            an = ArrayNet.from_network(net)              # rebuild arrays + groups
-            det.reset()
-
-    an.sync_into(net)
+    """Train ``net`` on the fast path and return it (mutated). Vectorized wake
+    steps + object-reuse phasic bursts, via :class:`ArrayTrainer`."""
+    tr = ArrayTrainer(cfg, net, X, y, seed=seed)
+    for _ in range(steps):
+        tr.step()
+    tr.sync_into(net)
     return net
