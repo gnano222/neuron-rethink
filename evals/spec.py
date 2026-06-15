@@ -595,9 +595,9 @@ VARIANTS: dict[str, Callable[[], Config]] = {
     "digits-w16-sparse": _sparse((64, 16, 10), 0.5),
     "digits-w12-sparse": _sparse((64, 12, 10), 0.5),
     "digits-w8-sparse": _sparse((64, 8, 10), 0.5),
-    # --- HARDER task: downsampled MNIST 14x14 (196 in, 10 out), --dataset
-    # mnist14. The digits result (small-dense wins, wide-sparse only matches)
-    # may be a too-easy-task artifact. MNIST has representational headroom AND
+    # --- HARDER task: MNIST 14x14 (196 in, 10 out), --dataset mnist (the
+    # default MNIST). The digits result (small-dense wins, wide-sparse only
+    # matches) may be a too-easy-task artifact. MNIST has representational headroom AND
     # the bigger input keeps wide-arm fan-in healthier. Matched ~3296-edge
     # budget (build_graph k = round(density*|prev|)):
     #   w16-dense   (196, 16,10) d=1.0  : 16*196 + 10*16 = 3296
@@ -671,7 +671,7 @@ class SuiteSpec:
     noise: float = 0.10
     test_seed_offset: int = 10000  # held-out test set drawn at seed + this
     # Cap the per-snapshot TRAIN-metric evaluation at this many samples (None =
-    # full train set). Large datasets (e.g. mnist14 at 12k+) make full-train
+    # full train set). Large datasets (e.g. mnist at 12k+) make full-train
     # accuracy each snapshot dominate runtime; a fixed subsample is a fine
     # estimate. Test metrics always use the full test set. Default None keeps
     # every existing run byte-identical.

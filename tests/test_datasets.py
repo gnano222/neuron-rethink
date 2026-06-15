@@ -72,7 +72,7 @@ def test_get_dataset_unknown_raises():
         get_dataset("nope", seed=0)
 
 
-# -- mnist14 (downsampled MNIST) ---------------------------------------------
+# -- MNIST: `mnist` = 14x14 (default), `mnist-full` = 784 ---------------------
 
 def test_downsample_2x2_shape_and_block_mean():
     from sprout.datasets import _downsample_2x2
@@ -84,31 +84,31 @@ def test_downsample_2x2_shape_and_block_mean():
     assert out[0, 0] == 4.0 and out[0, 1] == 8.0
 
 
-def test_load_mnist14_split_smoke():
+def test_load_mnist_split_defaults_to_14x14():
     pytest = __import__("pytest")
     try:
-        from sprout.datasets import load_mnist14_split
-        Xtr, ytr, Xte, yte = load_mnist14_split(seed=0, n_train=200, n_test=100)
+        from sprout.datasets import load_mnist_split
+        Xtr, ytr, Xte, yte = load_mnist_split(seed=0, n_train=200, n_test=100)
     except Exception as e:                          # offline / fetch unavailable
         pytest.skip(f"MNIST fetch unavailable: {e}")
-    assert Xtr.shape[1] == 196 and len(Xtr) == 200 and len(Xte) == 100
+    assert Xtr.shape[1] == 196 and len(Xtr) == 200 and len(Xte) == 100   # 14x14
     assert set(np.unique(yte)).issubset(set(range(10)))
     assert np.allclose(Xtr.mean(axis=0), 0.0, atol=1e-6)   # standardized on train
 
 
-def test_get_dataset_mnist14():
-    pytest = __import__("pytest")
-    try:
-        Xtr, ytr, Xte, yte = get_dataset("mnist14", seed=0, n_points=200)
-    except Exception as e:
-        pytest.skip(f"MNIST fetch unavailable: {e}")
-    assert Xtr.shape[1] == 196 and len(Xtr) == 200 and len(Xte) == 1000
-
-
-def test_get_dataset_mnist_full_784():
+def test_get_dataset_mnist_is_14x14():
     pytest = __import__("pytest")
     try:
         Xtr, ytr, Xte, yte = get_dataset("mnist", seed=0, n_points=200)
+    except Exception as e:
+        pytest.skip(f"MNIST fetch unavailable: {e}")
+    assert Xtr.shape[1] == 196 and len(Xtr) == 200 and len(Xte) == 1000   # default = 14x14
+
+
+def test_get_dataset_mnist_full_is_784():
+    pytest = __import__("pytest")
+    try:
+        Xtr, ytr, Xte, yte = get_dataset("mnist-full", seed=0, n_points=200)
     except Exception as e:
         pytest.skip(f"MNIST fetch unavailable: {e}")
     assert Xtr.shape[1] == 784 and len(Xtr) == 200 and len(Xte) == 1000

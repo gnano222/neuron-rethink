@@ -1,10 +1,10 @@
 """Quick single-run smoke test: train the SPROUT phasic-startle-k4 architecture
 on a registry dataset and report accuracy + compute cost. The eval harness
 (evaluate.py) is the multi-seed comparison tool; this is the fast one-off check.
-Defaults to the priority dataset, mnist14.
+Defaults to the priority dataset, mnist (14x14).
 
-    python run_dataset.py --dataset mnist14 --steps 40000 --layers 196,64,10
-    python run_dataset.py --dataset digits  --steps 40000 --layers 64,64,32,10
+    python run_dataset.py --dataset mnist  --steps 40000 --layers 196,64,10
+    python run_dataset.py --dataset digits --steps 40000 --layers 64,64,32,10
 
 Mirrors the promoted ``phasic-startle-k4`` eval config (phasic structure + sleep
 consolidation + startle), so the numbers track the eval baseline. No viz — just
@@ -30,13 +30,13 @@ def _sparse_config() -> Config:
     )
 
 
-def train_dataset(dataset="mnist14", steps=40000, seed=0, layers=(196, 64, 10),
+def train_dataset(dataset="mnist", steps=40000, seed=0, layers=(196, 64, 10),
                   density=0.25, n_points=6000):
     """Train on a registry dataset and return accuracy + compute metrics.
 
-    ``n_points`` is the train-sample count for large/fixed datasets (mnist14);
-    it is ignored by the bundled 8x8 ``digits`` set and used as the point count
-    for generated ``spirals``/``blobs``.
+    ``n_points`` is the train-sample count for the subsampled MNIST sets (mnist /
+    mnist-full); it is ignored by the bundled 8x8 ``digits`` set and used as the
+    point count for generated ``spirals``/``blobs``.
     """
     Xtr, ytr, Xte, yte = get_dataset(dataset, seed, n_points=n_points)
     net = build_graph(list(layers), density=density, seed=seed)
@@ -62,14 +62,14 @@ def train_dataset(dataset="mnist14", steps=40000, seed=0, layers=(196, 64, 10),
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description="SPROUT single-run smoke test")
-    ap.add_argument("--dataset", default="mnist14",
-                    choices=["mnist14", "digits", "spirals", "blobs"])
+    ap.add_argument("--dataset", default="mnist",
+                    choices=["mnist", "mnist-full", "digits", "spirals", "blobs"])
     ap.add_argument("--steps", type=int, default=40000)
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--layers", default="196,64,10")
     ap.add_argument("--density", type=float, default=0.25)
     ap.add_argument("--points", type=int, default=6000,
-                    help="train samples (mnist14) / point count (spirals, blobs)")
+                    help="train samples (mnist/mnist-full) / point count (spirals, blobs)")
     args = ap.parse_args(argv)
     layers = tuple(int(x) for x in args.layers.split(","))
     print(f"training {args.dataset} {layers} @ density {args.density} "
