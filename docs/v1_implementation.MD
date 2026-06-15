@@ -171,10 +171,23 @@ This is the most common failure point: He/Xavier-initializing a dense matrix and
 
 ## 6. The data / task
 
-- **Input:** 2D point `(x, y)`. **Output:** 2 classes.
-- **Start easy:** two Gaussian blobs (linearly separable-ish) to debug the pipeline.
-- **Real test:** **two interleaving spirals** — hard enough that the network must genuinely use its capacity (so growth/pruning matter), easy enough that you know what success looks like and can watch the decision boundary form.
-- ~500–1000 generated points. **Single-sample SGD** is fine and the most watchable; small mini-batches also fine.
+The home task is 2-D so the decision boundary is watchable; multiclass image
+tasks were added later to stress-test the architecture. All served through one
+registry, `sprout.datasets.get_dataset(name, seed, ...)`:
+
+- **`spirals`** (default) — **two interleaving spirals** (2-D, 2-class): hard
+  enough that the net must use its capacity (growth/pruning matter), easy enough
+  to watch the boundary form. The `validate.py` guardrail task.
+- **`blobs`** — two Gaussian blobs (2-D), for pipeline debug.
+- **`digits`** — scikit-learn 8×8 digits (64-D, 10-class), bundled (no download).
+- **`mnist`** — MNIST 2×2-pooled to **14×14 (196-D, 10-class)**: the **default
+  MNIST**. At a fixed sparse edge budget a thumbnail the net can fully cover beats
+  a 784 image it can only glimpse (see §15).
+- **`mnist-full`** — full 28×28 MNIST (784-D), the full-resolution control.
+
+~500–1000 points for the generated tasks; a seeded class-balanced subsample for
+the fixed image sets. **Single-sample SGD** throughout (the most watchable, and
+what the currency meters assume).
 
 ---
 
@@ -277,19 +290,27 @@ The project succeeds — independent of accuracy — if you can demonstrate, on 
 
 ---
 
-## 12. Suggested code layout
+## 12. Code layout (as built)
 
 ```
 sprout/
-  data.py          # generate_blobs(), generate_spirals()
-  network.py       # Neuron, Synapse, Network; build_graph(), init_weights() (§5), forward() (§4.1), backward() (§4.4)
-  learning.py      # update_firing_rates(), update_eligibility(), update_confidence(), apply_gated_update()  (§4.2–4.6)
-  plasticity.py    # prune(), grow(), homeostasis(), increment_ages()  (§4.7–4.8)
-  viz.py           # render(): graph panel + accuracy + synapse-count + decision boundary  (§9)
-  train.py         # hyperparameters (§8) + main loop (§7)
+  data.py          # generate_blobs(), generate_spirals()  (§6 2-D tasks)
+  datasets.py      # get_dataset() registry: spirals/blobs/digits/mnist/mnist-full
+  network.py       # Neuron, Synapse (+ gradient meters), Network; build_graph/init_weights (§5), forward/backward (§4)
+  fast.py          # ArrayNet / ArrayTrainer — vectorized backend (§16)
+  learning.py      # update_firing_rates(), apply_gated_update()  (§4.2, §4.6)
+  currency.py      # gradient meters + confidence/prune/grow readouts (the "Phasic-startle-k4" section)
+  sleep.py         # SettlednessDetector — the loss-plateau gate / phasic trigger
+  viz.py           # render(): graph panel + accuracy + synapse-count + decision boundary (§9)
+  train.py         # Config (§8) + Trainer: phasic vs continuous structural plasticity (§7)
+run.py / run_dataset.py / validate.py / evaluate.py   # drivers (see README)
+evals/             # comparative harness (spec, runner, metrics, aggregate, report, cli)
 ```
 
-Pure NumPy is enough and keeps the per-synapse object model transparent. PyTorch is fine if you prefer autograd for §4.4, but the irregular sparse graph means you'll likely hand-roll the forward/backward over adjacency lists anyway — don't reach for dense layers.
+The legacy `plasticity.py` (eligibility-trace prune/grow) and the three-factor
+confidence rule were removed once gradient-as-currency became the only path.
+Pure NumPy keeps the per-synapse object model transparent (the *reference*); the
+`fast` backend mirrors it as parallel edge arrays for speed (§16).
 
 ---
 
@@ -452,80 +473,70 @@ keep `phasic-startle-k4` at density 0.4 as the robust compute baseline.
   step and applies `β^Δ` on access. Result: **not promoted**; the extra access
   logic costs more than it saves while confidence and weight-update loops still
   visit all live wires.
-- **#3 Event-driven forward/backward.** `forward`/`backward` visit every hidden
-  neuron each step. An active-frontier formulation propagates only out of neurons
-  that fired (ReLU output ≠ 0), so silent neurons and their wires cost nothing —
-  turning the per-step path from `∝ edges` into `∝ active edges`. The largest
-  inner-loop change; still deferred. The new WTA probes (`eff-wta4/6/8`) show the
-  trade-off: mild top-k barely moves wall time, while aggressive top-k damages
-  accuracy. Event-driven execution should wait until activation sparsity is both
-  enforced and accuracy-safe.
+- **#3 Faster inner loop — DONE via a vectorized backend (§16).** The per-step
+  path visited every wire in a Python scalar loop. Rather than the event-driven
+  active-frontier rewrite originally sketched, the realized win was to vectorize
+  the *whole* per-step path as NumPy edge-array scatter/segment-sums
+  (`sprout/fast.py`, **~60× at scale**) — option (c) below. An event-driven
+  frontier (`∝ active edges` instead of `∝ edges`) remains a *further* win, but
+  it is gated on activation sparsity being enforced (see the ceilings below) and
+  the vectorized backend already removed the practical compute wall.
 
-### #3 in detail: the per-sample active subgraph
+**Active-subgraph ceilings (why the event-driven frontier is only a *further*
+win).** The weight gradient `δ_post·a_pre` is nonzero only on *doubly-active*
+edges (`a_pre≠0` AND `δ_post≠0`), and meters + the gated update do real work only
+there. On the w16 spirals net, measured fractions are *mild* — ~44% of hidden
+neurons fire, ~60% fwd-active / ~57% bwd-active / ~36% doubly-active edges — so an
+event-driven frontier's ceiling is only ~1.7× (forward) to ~2.8× (gradient), and
+**roughly constant with width** (firing stays ~40–47%), i.e. a constant-factor,
+not asymptotic, win. It becomes asymptotic only if activation sparsity is
+*enforced* (homeostasis toward `r_target`, or fixed-k WTA → firing ~15%). Since
+the vectorized backend (§16) already removed the practical wall via plain NumPy
+vectorization, the event-driven frontier is parked until activation sparsity is
+made real and accuracy-safe.
 
-**Mechanism.** Both passes currently iterate every neuron and its full adjacency
-(`sprout/network.py` `forward` / `backward`). The event-driven rewrite tracks a
-*frontier* and touches only the edges that carry real signal:
+## 15. Datasets & the sparse-vs-dense findings (digits → MNIST)
 
-- *Forward (a "fired" frontier).* Initialise each non-input neuron's
-  pre-activation to its bias (`z_j ← bias_j`); input neurons are the seed
-  frontier. Walking layers in order, each fired neuron *scatters* `w_ij·a_i` into
-  its posts' `z`; after a layer finishes, one pass applies ReLU and the neurons
-  with `z_j > 0` become the next frontier. Work = `O(N)` for the bias/ReLU pass
-  plus `Σ out-degree` over *fired* neurons — i.e. `∝ fwd-active edges`, where an
-  edge is fwd-active iff its pre fired (`a_pre ≠ 0`). The `O(N)` floor is
-  irreducible: every neuron must still be ReLU'd and bias-initialised, and a
-  neuron with `bias_j > 0` fires even with an all-silent fan-in, so it joins the
-  frontier on bias alone.
-- *Backward (a "nonzero-delta" frontier).* `δ_j = relu'(z_j)·Σ w_jk·δ_k` is zero
-  whenever `j` was silent (`relu'=0`), so silent neurons neither receive nor
-  propagate a delta. Seed the frontier with the output neurons (always nonzero),
-  and scatter `w_pre,j·δ_j` only *back through fired pres* (a silent pre's δ is
-  killed by its own `relu'` regardless). Work `∝ bwd-active edges`.
+Beyond spirals, the architecture was stress-tested on real multiclass image data
+(§6), holding **compute (edge count) constant** and varying network shape. Full
+write-up + per-run scorecards:
+[docs/findings-2026-06-14-sparse-vs-dense-constant-compute.md](findings-2026-06-14-sparse-vs-dense-constant-compute.md).
+Headlines:
 
-**The unifying insight — one active subgraph for the whole step.** The weight
-gradient is `grad_w[(pre,post)] = δ_post · a_pre`, which is nonzero **iff
-`a_pre ≠ 0` AND `δ_post ≠ 0`** — the *doubly-active* edges. Every per-step
-consumer of the gradient is therefore already structurally sparse on the same
-subgraph: `apply_gated_update` changes a weight only on doubly-active edges (a
-zero-gradient edge is a pure no-op, not even decay), and `update_gradient_meters`
-does real work only there (everywhere else it is the decay `M ← β·M` that #2
-defers). So #2 and #3 are two views of one optimisation: **confine forward,
-backward, the meter update, and the weight update to the per-sample active
-subgraph.** Build the frontier once in forward, reuse it everywhere downstream.
+- **Task headroom decides it.** On *easy* 8×8 `digits` a small **dense** net wins
+  and a wider self-rewiring **sparse** net only ties; on harder **MNIST 14×14** the
+  wide-sparse net **beats** small-dense at the same budget (+4.8pt), and the edge
+  **grows with data** (+14.8pt at 4× data — the small dense net underfits).
+- **`mnist-w32-sparse`** (one hidden layer, fan-in ~98) is the robust default arm.
+- **The ~0.93 MNIST ceiling is architectural, not compute.** Every MLP lever was
+  mapped and exhausted: width *plateaus*, **depth hurts** (no skip connections),
+  **higher resolution hurts** at a fixed budget (fan-in coverage drops — a 14×14
+  thumbnail the net fully covers beats a 784 image it can only glimpse; hence
+  `mnist` defaults to 14×14), and **more budget is a dead end** (the net
+  self-prunes to ~4–5k edges regardless). Only *more data* reliably helps; the one
+  untested lever that could break it is a **convolution / weight-sharing** prior.
 
-**Measured magnitude (this is the important part).** The ceiling is set purely by
-realised ReLU sparsity, and in the v1 nets that sparsity is *mild* — far from
-what `r_target = 0.15` suggests, because nothing in currency mode enforces it
-(homeostasis is off; growth is gradient-driven, not firing-rate-driven). On the
-**default w16 net (`(2,16,16,16,2)`, currency, spirals, 15k steps)**, averaged
-over the held-out test set:
+The constant-compute sweep arms live in [evals/spec.py](../evals/spec.py)
+(`digits-*`, `mnist-*` = 14×14, `mnist784-*` = full), built from a small
+`_dense()` / `_sparse(layers, density, k)` factory.
 
-| quantity | value | ceiling for |
-|---|---|---|
-| hidden neurons firing (`a > 0`) | **~44%** | — |
-| fwd-active edges (pre fired) | ~60% | forward **~1.7×** |
-| bwd-active edges (post δ ≠ 0) | ~57% | backward **~1.7×** |
-| doubly-active edges (grad ≠ 0) | ~36% | meters + update **~2.8×** |
+## 16. Vectorized backend (`ArrayNet`)
 
-A width/depth sweep (w6→w48, plus an 8-hidden-layer net) shows the firing
-fraction stays roughly flat at **~40–47%** as width grows (so this is a
-**constant-factor** win, not asymptotic — the active *fraction* doesn't shrink
-with `N`), and improves only modestly with depth (the deep net fires ~39%, for a
-~2.3× forward / ~4.9× gradient ceiling).
+The object `Network`'s per-synapse Python loop is the *reference* but costs
+`O(edges)`/step. [`sprout/fast.py`](../sprout/fast.py)'s **`ArrayNet`** runs the
+same graph as flat NumPy edge-arrays — forward/backward as `np.bincount`
+scatter/segment-sums in topological order (so the general DAG / skip edges work),
+and the per-step meters/confidence/gated-update as array ops. It is **faithful**:
+forward/backward parity `1e-9`, multi-step wake parity with identical predictions
+(float-drift only). Rare phasic prune/grow bursts round-trip to the object model
+and reuse the tested `currency` code. Measured **~60× at scale** (a ~94k-edge net:
+177 → 2.8 ms/step).
 
-**The catch, and the prerequisite.** Those are *zero-overhead ceilings*. The
-current inner loop is Python scalar ops with tiny constants; an event-driven
-rewrite adds frontier bookkeeping (membership sets, the scatter accumulator, the
-unavoidable `O(N)` ReLU/bias pass). At the v1 default scale (`N=52`, `E≈250`) that
-overhead would likely **erase or invert** a 1.7× edge-count saving — #3 is a wash
-here. It pays off only when one of these holds: **(a)** nets get much larger, so
-`E` dwarfs the `O(N)` floor and the constant amortises; **(b)** activation
-sparsity is actually *enforced* — turning on homeostasis toward `r_target`, or a
-k-winners-take-all activation, would push firing toward ~15% and lift the forward
-ceiling to ~6× (and under fixed-`k` WTA the active fraction shrinks with width,
-making #3 genuinely *asymptotic*); or **(c)** the inner loop leaves Python for a
-vectorised/compiled backend where branchy frontier logic is cheap. The honest
-ordering: **#3's payoff is gated on activation sparsity being real, and right now
-it isn't** — so the highest-leverage precursor is to enforce (or at least measure
-under homeostasis) ReLU sparsity before investing in the event-driven rewrite.
+`ArrayTrainer` mirrors the `Trainer` slice the eval harness uses, so
+`evaluate.py --backend array` runs the full pipeline on the fast path; the object
+backend stays the default + validated reference (array is statistically
+equivalent, not identical, so A/B within a backend; the cache key includes the
+backend). Single-sample only (the speedup is across *edges*, not minibatching);
+continual + continuous-with-plasticity stay object-only. Specs:
+`docs/superpowers/specs/2026-06-15-vectorized-backend-design.md` and
+`...-backend-harness-wiring-design.md`.
