@@ -32,10 +32,14 @@ def _make_config():
     # (confidence/prune/grow) running CONTINUOUSLY. Sleep + phasic structure +
     # startle are pinned OFF here so this 7/7 guardrail stays a stable
     # reference of the base learning loop (those are validated separately
-    # under docs/eval-runs).
+    # under docs/eval-runs). grow_demand_k is pinned to None (the exact full
+    # grow scan) too: the promoted baseline default is 4, but this guardrail must
+    # stay invariant to that promotion (the bounded scan grows less eagerly and
+    # trips criterion 7's early-growth check).
     return Config(eta_base=0.02, enable_confidence=True, enable_prune=True,
                   enable_grow=True, gamma_dec=0.001, t_struct=200,
-                  enable_sleep=False, phasic_structure=False, startle=False)
+                  enable_sleep=False, phasic_structure=False, startle=False,
+                  grow_demand_k=None)
 
 
 def main():

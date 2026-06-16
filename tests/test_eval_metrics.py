@@ -160,18 +160,22 @@ def test_structural_metrics_count_startle_events():
     events = [
         {"step": 100, "type": "startle", "edge": None},
         {"step": 100, "type": "grow", "edge": (0, 5)},
+        {"step": 200, "type": "arousal", "edge": None},
+        {"step": 200, "type": "grow", "edge": (1, 5)},
         {"step": 400, "type": "startle", "edge": None},
         {"step": 900, "type": "sleep", "edge": None},
         {"step": 900, "type": "prune", "edge": (0, 5)},
     ]
     s = metrics.structural_metrics(events)
     assert s["n_startle_events"] == 2
-    assert s["n_grow_events"] == 1            # startles are not grow events
+    assert s["n_arousal_events"] == 1
+    assert s["n_grow_events"] == 2            # startles/arousal markers are not grow events
 
 
 def test_startle_metric_is_registered():
-    assert metrics.METRIC_DIRECTIONS["n_startle_events"] == "neutral"
-    assert "n_startle_events" in metrics.METRIC_DESCRIPTIONS
+    for k in ("n_startle_events", "n_arousal_events"):
+        assert metrics.METRIC_DIRECTIONS[k] == "neutral"
+        assert k in metrics.METRIC_DESCRIPTIONS
 
 
 # -- utility -----------------------------------------------------------------
@@ -275,6 +279,14 @@ def test_steps_to_threshold():
     assert metrics.steps_to_threshold(rec, acc, 0.99) == math.inf
 
 
+def test_cost_to_threshold_uses_matching_cost_series():
+    costs = [10, 50, 120, 240]
+    acc = [0.5, 0.8, 0.92, 0.96]
+    assert metrics.cost_to_threshold(costs, acc, 0.90) == 120
+    assert metrics.cost_to_threshold(costs, acc, 0.95) == 240
+    assert metrics.cost_to_threshold(costs, acc, 0.99) == math.inf
+
+
 def test_auc_of_accuracy_curve():
     # straight line 0 -> 1 over [0,100] has normalised area 0.5
     assert metrics.auc([0, 100], [0.0, 1.0]) == pytest.approx(0.5)
@@ -301,6 +313,27 @@ def test_effective_density_drops_when_edge_removed():
     net = _net_2_2_2()
     net.remove_synapse(0, 2)
     assert metrics.fan_stats(net)["effective_density"] == pytest.approx(7 / 8)
+
+
+def test_active_edge_stats_count_forward_backward_and_gradient_edges():
+    net = _net_2_2_2()
+    # Hidden 2 is silent; hidden 3 fires. Output deltas are always nonzero.
+    net.neurons[2].bias = -1e6
+    net.neurons[3].bias = 1.0
+    net.synapses[(3, 5)].weight = -0.25  # make hidden 3's backprop delta nonzero
+    X = [np.array([0.5, 0.5])]
+    y = [0]
+    s = metrics.active_edge_stats(net, X, y)
+    assert s["hidden_firing_frac"] == pytest.approx(0.5)
+    # Forward-active: 4 input->hidden edges have active inputs, plus 2 edges
+    # from fired hidden 3 to outputs => 6 of 8.
+    assert s["fwd_active_edge_frac"] == pytest.approx(6 / 8)
+    # Backward-active: output posts active for 4 hidden->output edges; hidden 3
+    # has nonzero delta for its 2 input->hidden incoming edges => 6 of 8.
+    assert s["bwd_active_edge_frac"] == pytest.approx(6 / 8)
+    # Gradient-active needs active pre AND active post: input->hidden3 (2) plus
+    # hidden3->outputs (2) => 4 of 8.
+    assert s["grad_active_edge_frac"] == pytest.approx(4 / 8)
 
 
 # -- quality: survivor age ---------------------------------------------------
@@ -478,9 +511,16 @@ def test_ghost_scan_cost_empty_set_is_zero_scored():
     assert out["ghost_dense_cost"] > 0.0
 
 
-def test_cost_metrics_are_registered_neutral_and_in_compute_family():
-    for k in ("ghost_dense_cost", "ghost_pairs_scored"):
-        assert metrics.METRIC_DIRECTIONS[k] == "neutral"
+def test_cost_metrics_are_registered_and_in_compute_family():
+    for k in ("ghost_dense_cost", "ghost_pairs_scored",
+              "train_wall_time_sec", "wall_ms_per_step",
+              "edge_steps_per_sec", "train_edge_steps",
+              "edge_steps_to_90", "edge_steps_to_95",
+              "avg_live_edges", "hidden_firing_frac",
+              "fwd_active_edge_frac", "bwd_active_edge_frac",
+              "grad_active_edge_frac"):
         assert k in metrics.METRIC_DESCRIPTIONS
-    assert metrics.METRIC_FAMILIES["Compute cost"] == (
-        "ghost_dense_cost", "ghost_pairs_scored")
+    assert metrics.METRIC_DIRECTIONS["ghost_dense_cost"] == "neutral"
+    assert metrics.METRIC_DIRECTIONS["edge_steps_to_95"] == "lower"
+    assert metrics.METRIC_DIRECTIONS["edge_steps_per_sec"] == "higher"
+    assert "train_edge_steps" in metrics.METRIC_FAMILIES["Compute cost"]

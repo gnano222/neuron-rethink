@@ -219,3 +219,6 @@ __marimo__/
 
 # SPROUT artifacts
 output/
+
+# Duplicate of the tracked .claude/skills skill; local agent-runtime copy
+.agents/

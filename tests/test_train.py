@@ -28,6 +28,18 @@ def test_deep_signal_alive_after_init():
     assert np.mean(acts) > 1e-3  # signal survived to depth
 
 
+def test_activation_top_k_limits_hidden_layer_firing():
+    net = build_graph([2, 6, 6, 2], density=1.0, seed=0)
+    init_weights(net, seed=0)
+    X, y = generate_blobs(n=40, seed=0)
+    cfg = Config(activation_top_k=2)
+    Trainer(cfg, net, X, y, seed=0)
+    net.forward(X[0])
+    for layer in net.layers[1:-1]:
+        fired = sum(1 for nid in layer if net.neurons[nid].activation > 0.0)
+        assert fired <= 2
+
+
 def test_backprop_only_learns_blobs():
     # §10 step 1 success criterion: accuracy climbs on the easy task.
     net = build_graph([2, 8, 8, 6, 2], density=0.5, seed=0)
@@ -64,6 +76,18 @@ def test_default_config_ghost_meter_off():
     assert cfg.beta_ghost == 0.8
 
 
+def test_default_config_lazy_meters_off():
+    # Exact lazy meter decay is available as a compute experiment, but the
+    # promoted baseline stays on the simpler eager meter path until measured.
+    assert Config().lazy_meters is False
+
+
+def test_default_config_has_no_activation_top_k():
+    # WTA/top-k ReLU is an explicit activation-sparsity experiment, not part of
+    # the baseline until it proves an accuracy/compute trade-off.
+    assert Config().activation_top_k is None
+
+
 def test_default_config_uses_selective_grow_bar():
     # B1 promoted: the selective hiring bar (grow_bar_frac=3.0) is the default,
     # not the prior eager 1.5 — it fixes the grow<->prune oscillation at source.
@@ -85,10 +109,10 @@ def test_default_config_has_no_init_layers_override():
     assert Config().init_layers is None
 
 
-def test_default_config_has_no_grow_demand_k():
-    # grow_demand_k=None => exact-sparse grow scan over all active posts (the
-    # bit-identical default); an int k restricts to the top-k highest-|delta|.
-    assert Config().grow_demand_k is None
+def test_default_config_uses_bounded_grow_scan():
+    # Promoted baseline: score ghosts only into the top-4 highest-|delta| post
+    # neurons. grow_demand_k=None remains available for full-scan A/B references.
+    assert Config().grow_demand_k == 4
 
 
 def test_default_config_has_sleep_on_floor1_nocap():
@@ -272,6 +296,12 @@ def test_default_config_startle_on():
     assert cfg.startle_floor is None       # None => auto ln(K)/2 from the net
 
 
+def test_default_config_arousal_window_off():
+    # The promoted startle baseline is still one-shot unless an eval variant
+    # explicitly opens the refinement window.
+    assert Config().arousal_steps == 0
+
+
 def test_startle_floor_auto_derives_from_output_layer():
     # None => half of chance-level CE loss, ln(K)/2 — self-scaling, no tuning.
     import math
@@ -330,6 +360,25 @@ def test_startle_grows_and_never_prunes():
     grow_steps = {e["step"] for e in tr.events if e["type"] == "grow"}
     assert startle_steps
     assert startle_steps <= grow_steps             # the alarm hired
+    assert not [e for e in tr.events if e["type"] == "prune"]
+
+
+def test_startle_can_open_arousal_window():
+    tr, _ = _spike_run(startle=True, arousal_steps=400)
+    startle_steps = [e["step"] for e in tr.events if e["type"] == "startle"]
+    assert startle_steps
+    assert tr.aroused_until >= startle_steps[0] + 400
+
+
+def test_arousal_window_runs_grow_only_on_structural_ticks():
+    tr, _ = _spike_run(startle=True, startle_patience=10, t_struct=50,
+                       arousal_steps=180, grow_bar_frac=0.0)
+    startle_steps = [e["step"] for e in tr.events if e["type"] == "startle"]
+    arousal_steps = [e["step"] for e in tr.events if e["type"] == "arousal"]
+    assert startle_steps
+    assert arousal_steps
+    assert all(s % 50 == 0 for s in arousal_steps)
+    assert min(arousal_steps) > min(startle_steps)
     assert not [e for e in tr.events if e["type"] == "prune"]
 
 

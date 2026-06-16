@@ -39,12 +39,15 @@ def test_run_one_returns_wellformed_result():
     rec = res["series"]["rec_step"]
     assert len(rec) >= 2
     for key in ("train_accuracy", "test_accuracy", "test_loss", "synapse_count",
-                "mean_confidence", "cum_grow", "cum_prune"):
+                "mean_confidence", "cum_grow", "cum_prune", "cum_edge_steps",
+                "cum_train_wall_time"):
         assert len(res["series"][key]) == len(rec), key
 
     # every final metric is a known one; the core schema keys are present
     assert set(res["final"]) <= set(metrics.METRIC_DIRECTIONS)
     for key in ("final_test_acc", "max_test_acc", "auc_test_acc", "steps_to_90",
+                "edge_steps_to_90", "train_edge_steps", "avg_live_edges",
+                "train_wall_time_sec", "fwd_active_edge_frac",
                 "final_acc_stability", "n_grow_events", "turnover",
                 "max_grows_into_one_neuron", "oscillation_frac", "max_regrow",
                 "p10_utility", "freeloader_frac", "conf_utility_corr",
@@ -162,7 +165,8 @@ def test_run_one_continual_wellformed():
     assert len(rec) >= 3
     for key in ("phase", "test_accuracy_A", "test_accuracy_B", "test_accuracy",
                 "train_accuracy", "synapse_count", "mean_confidence",
-                "cum_grow", "cum_prune"):
+                "cum_grow", "cum_prune", "cum_edge_steps",
+                "cum_train_wall_time"):
         assert len(s[key]) == len(rec), key
 
     # phases run in order A -> B -> AB
@@ -191,3 +195,76 @@ def test_run_suite_dispatches_to_continual():
     assert len(results) == 1
     assert results[0]["regime"] == "continual"
     assert "forgetting" in results[0]["final"]
+
+
+def test_run_one_digits_smoke():
+    """The 10-class digits dataset routes through get_dataset and produces a
+    well-formed single-regime result with the right neuron count."""
+    spec = tiny_spec(variants=("phasic-startle-k4",), seeds=1, dataset="digits",
+                     steps=400, shift_steps=0, record_every=200,
+                     baseline="phasic-startle-k4", layers=(64, 32, 16, 10),
+                     density=0.4)
+    res = runner.run_one("phasic-startle-k4", seed=0, spec=spec)
+    assert res["regime"] == "single"
+    assert 0.0 <= res["final"]["final_test_acc"] <= 1.0
+    assert res["n_neurons"] == 64 + 32 + 16 + 10
+
+
+def test_train_eval_indices_caps_and_is_deterministic():
+    import numpy as np
+    from evals.runner import _train_eval_indices
+    assert len(_train_eval_indices(100, None, 0)) == 100      # no cap -> full
+    assert len(_train_eval_indices(100, 1000, 0)) == 100      # cap >= n -> full
+    idx = _train_eval_indices(100, 30, 0)
+    assert len(idx) == 30 and len(set(idx.tolist())) == 30    # exact, unique
+    assert np.array_equal(idx, _train_eval_indices(100, 30, 0))   # deterministic
+
+
+def test_run_one_train_eval_cap_smoke():
+    spec = tiny_spec(variants=("core",), seeds=1, dataset="blobs", steps=40,
+                     record_every=20, layers=(2, 3, 2), n_points=200,
+                     train_eval_cap=50)
+    res = runner.run_one("core", 0, spec)
+    assert len(res["series"]["train_accuracy"]) >= 2
+    assert 0.0 <= res["final"]["final_test_acc"] <= 1.0
+
+
+def test_cache_key_includes_backend():
+    obj = tiny_spec(variants=("phasic-startle-k4",), seeds=1, dataset="spirals",
+                    layers=(2, 6, 2), n_points=80, baseline="phasic-startle-k4")
+    arr = tiny_spec(variants=("phasic-startle-k4",), seeds=1, dataset="spirals",
+                    layers=(2, 6, 2), n_points=80, baseline="phasic-startle-k4",
+                    backend="array")
+    assert runner._cache_key("phasic-startle-k4", 0, obj) != \
+        runner._cache_key("phasic-startle-k4", 0, arr)
+
+
+def test_run_one_array_backend_smoke_and_close_to_object():
+    base = dict(variants=("phasic-startle-k4",), seeds=1, dataset="spirals",
+                steps=2000, record_every=500, layers=(2, 10, 10, 2), density=0.5,
+                n_points=200, baseline="phasic-startle-k4")
+    obj = runner.run_one("phasic-startle-k4", 0, SuiteSpec(**base, backend="object"))
+    arr = runner.run_one("phasic-startle-k4", 0, SuiteSpec(**base, backend="array"))
+    assert arr["regime"] == "single"
+    assert arr["n_neurons"] == obj["n_neurons"]
+    assert len(arr["series"]["rec_step"]) == len(obj["series"]["rec_step"])
+    assert 0.0 <= arr["final"]["final_test_acc"] <= 1.0
+    # statistically equivalent, not identical (float drift) -> loose tolerance
+    assert abs(arr["final"]["final_test_acc"] - obj["final"]["final_test_acc"]) < 0.15
+
+
+def test_run_one_continual_rejects_array_backend():
+    spec = tiny_continual_spec(variants=("phasic-startle-k4",), seeds=1)
+    spec = SuiteSpec(**{**spec.__dict__, "backend": "array"})
+    with pytest.raises(NotImplementedError):
+        runner.run_one_continual("phasic-startle-k4", 0, spec)
+
+
+def test_run_one_rejects_multiclass_shift():
+    """The label-swap shift is binary-only; digits + shift must raise."""
+    spec = tiny_spec(variants=("phasic-startle-k4",), seeds=1, dataset="digits",
+                     steps=200, shift_steps=100, record_every=100,
+                     baseline="phasic-startle-k4", layers=(64, 16, 10),
+                     density=0.4)
+    with pytest.raises(ValueError):
+        runner.run_one("phasic-startle-k4", seed=0, spec=spec)

@@ -32,28 +32,92 @@ _EPS = 1e-12
 
 # -- §1 the currency: per-wire gradient meters -------------------------------
 
-def update_gradient_meters(net, grad_w, beta):
+def _meter_step(step_idx):
+    return None if step_idx is None else int(step_idx) + 1
+
+
+def _decay_factor(beta, dt):
+    return beta ** max(0, int(dt))
+
+
+def meter_grad_mag(syn, beta=None, meter_step=None):
+    """Read a magnitude meter, applying pending lazy decay virtually."""
+    if beta is None or meter_step is None:
+        return syn.grad_mag
+    return syn.grad_mag * _decay_factor(beta, meter_step - syn.grad_last_step)
+
+
+def meter_grad_signed(syn, beta=None, meter_step=None):
+    """Read a signed meter, applying pending lazy decay virtually."""
+    if beta is None or meter_step is None:
+        return syn.grad_signed
+    return syn.grad_signed * _decay_factor(beta, meter_step - syn.grad_last_step)
+
+
+def realize_gradient_meters(net, beta, step_idx):
+    """Apply all pending lazy decays in-place up to ``step_idx``.
+
+    Used at reporting/export boundaries where concrete stored values are needed.
+    """
+    target = _meter_step(step_idx)
+    if target is None:
+        return
+    for syn in net.synapses.values():
+        dt = target - syn.grad_last_step
+        if dt > 0:
+            f = _decay_factor(beta, dt)
+            syn.grad_mag *= f
+            syn.grad_signed *= f
+            syn.grad_last_step = target
+
+
+def _realize_synapse_meter(syn, beta, target):
+    dt = target - syn.grad_last_step
+    if dt > 0:
+        f = _decay_factor(beta, dt)
+        syn.grad_mag *= f
+        syn.grad_signed *= f
+        syn.grad_last_step = target
+
+
+def update_gradient_meters(net, grad_w, beta, step_idx=None, lazy=False):
     """EMA-update each live wire's magnitude and signed gradient meters.
 
         M_ij <- beta * M_ij + (1 - beta) * |g_ij|
         S_ij <- beta * S_ij + (1 - beta) *  g_ij
     """
+    target = _meter_step(step_idx)
+    if lazy:
+        if target is None:
+            raise ValueError("lazy gradient meters require step_idx")
+        for key, g in grad_w.items():
+            if g == 0.0:
+                continue
+            syn = net.synapses[key]
+            _realize_synapse_meter(syn, beta, target)
+            syn.grad_mag += (1.0 - beta) * abs(g)
+            syn.grad_signed += (1.0 - beta) * g
+        return
+
     for key, syn in net.synapses.items():
         g = grad_w.get(key, 0.0)
         syn.grad_mag = beta * syn.grad_mag + (1.0 - beta) * abs(g)
         syn.grad_signed = beta * syn.grad_signed + (1.0 - beta) * g
+        if target is not None:
+            syn.grad_last_step = target
 
 
-def mean_grad_mag(net):
+def mean_grad_mag(net, meter_beta=None, meter_step=None):
     """Mean magnitude meter over live wires (the adaptive scale ``M-bar``)."""
     if not net.synapses:
         return 0.0
-    return sum(s.grad_mag for s in net.synapses.values()) / len(net.synapses)
+    return (sum(meter_grad_mag(s, meter_beta, meter_step)
+                for s in net.synapses.values()) / len(net.synapses))
 
 
 # -- shared state: the two coordinates both lenses read ----------------------
 
-def network_scales(net):
+def network_scales(net, meter_beta=None, meter_step=None):
     """The two adaptive scales every wire is normalised against:
 
         (w-bar = mean |weight|,  M-bar = mean grad_mag)  over live wires.
@@ -66,7 +130,7 @@ def network_scales(net):
     if n == 0:
         return 0.0, 0.0
     wbar = sum(abs(s.weight) for s in net.synapses.values()) / n
-    return wbar, mean_grad_mag(net)
+    return wbar, mean_grad_mag(net, meter_beta, meter_step)
 
 
 def load(syn, wbar, eps=_EPS):
@@ -74,9 +138,9 @@ def load(syn, wbar, eps=_EPS):
     return abs(syn.weight) / (wbar + eps)
 
 
-def demand(syn, Mbar, eps=_EPS):
+def demand(syn, Mbar, eps=_EPS, meter_beta=None, meter_step=None):
     """``d = M / M-bar`` — how hard the loss still pushes this wire vs average."""
-    return syn.grad_mag / (Mbar + eps)
+    return meter_grad_mag(syn, meter_beta, meter_step) / (Mbar + eps)
 
 
 def _sigmoid(z):
@@ -116,7 +180,8 @@ def settledness(d, mode="sigmoid", k=3.0):
 # -- Readout A: confidence ---------------------------------------------------
 
 def update_confidence_currency(net, gamma_dec, gamma_up, gamma_dn, c_max,
-                               m_floor_frac, eps=_EPS):
+                               m_floor_frac, eps=_EPS,
+                               meter_beta=None, meter_step=None):
     """Confidence as a tug-of-war on the currency (every step, all live wires).
 
         d     = M_ij / (M-bar + eps)
@@ -131,10 +196,11 @@ def update_confidence_currency(net, gamma_dec, gamma_up, gamma_dn, c_max,
     kappa = 0, so the earn term vanishes. ``gamma_dn > gamma_up`` makes
     confidence hard to earn and easy to lose - the desired "trust" dynamics.
     """
-    mbar = mean_grad_mag(net)
+    mbar = mean_grad_mag(net, meter_beta, meter_step)
     m_floor = m_floor_frac * mbar
     for syn in net.synapses.values():
-        M, S = syn.grad_mag, syn.grad_signed
+        M = meter_grad_mag(syn, meter_beta, meter_step)
+        S = meter_grad_signed(syn, meter_beta, meter_step)
         d = M / (mbar + eps)
         kappa = (abs(S) / (M + eps)) if M >= m_floor else 0.0
         earn = gamma_up * kappa * max(1.0 - d, 0.0)
@@ -146,7 +212,8 @@ def update_confidence_currency(net, gamma_dec, gamma_up, gamma_dn, c_max,
 # -- Readout A (2D): confidence from importance x settledness ----------------
 
 def update_confidence_2d(net, gain, alpha, c_max, settled_mode="sigmoid",
-                         conf_k=3.0, eps=_EPS):
+                         conf_k=3.0, eps=_EPS,
+                         meter_beta=None, meter_step=None):
     """Confidence as the shared 2D state prune reads: *important* AND *settled*.
 
         imp     = max(load(syn) - 1, 0)            "above-average weight" (importance)
@@ -168,10 +235,11 @@ def update_confidence_2d(net, gain, alpha, c_max, settled_mode="sigmoid",
     """
     if not net.synapses:
         return
-    wbar, mbar = network_scales(net)
+    wbar, mbar = network_scales(net, meter_beta, meter_step)
     for syn in net.synapses.values():
         imp = max(load(syn, wbar, eps) - 1.0, 0.0)
-        settled = settledness(demand(syn, mbar, eps), settled_mode, conf_k)
+        settled = settledness(
+            demand(syn, mbar, eps, meter_beta, meter_step), settled_mode, conf_k)
         target = min(gain * imp * settled, c_max)
         c = (1.0 - alpha) * syn.confidence + alpha * target
         syn.confidence = min(max(c, 0.0), c_max)
@@ -179,7 +247,8 @@ def update_confidence_2d(net, gain, alpha, c_max, settled_mode="sigmoid",
 
 # -- Readout B: pruning ------------------------------------------------------
 
-def prune_currency(net, t_grace, max_prune, prune_u_floor=0.5, lam=1.0, eps=1e-9):
+def prune_currency(net, t_grace, max_prune, prune_u_floor=0.5, lam=1.0,
+                   eps=1e-9, meter_beta=None, meter_step=None):
     """Prune wires the network has genuinely stopped using.
 
         U_ij = |w_ij| / (w-bar + eps)  +  lam * M_ij / (M-bar + eps)
@@ -194,13 +263,14 @@ def prune_currency(net, t_grace, max_prune, prune_u_floor=0.5, lam=1.0, eps=1e-9
     """
     if not net.synapses:
         return []
-    wbar, mbar = network_scales(net)               # same shared state confidence reads
+    wbar, mbar = network_scales(net, meter_beta, meter_step)  # same shared state
 
     candidates = []
     for (pre, post), syn in net.synapses.items():
         if syn.age <= t_grace:
             continue
-        u = load(syn, wbar, eps) + lam * demand(syn, mbar, eps)
+        u = load(syn, wbar, eps) + lam * demand(
+            syn, mbar, eps, meter_beta, meter_step)
         if u < prune_u_floor:
             candidates.append((u, pre, post))
 

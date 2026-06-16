@@ -13,6 +13,9 @@ from sprout.network import Network, build_graph, init_weights
 from sprout.train import Config, Trainer, accuracy
 from sprout.currency import (
     update_gradient_meters,
+    realize_gradient_meters,
+    meter_grad_mag,
+    meter_grad_signed,
     mean_grad_mag,
     network_scales,
     load,
@@ -46,6 +49,33 @@ def test_gradient_meters_are_emas_of_magnitude_and_sign():
     for k in keys:
         assert abs(net.synapses[k].grad_mag - 1.5) < 1e-12       # .5*1 + .5*2
         assert abs(net.synapses[k].grad_signed - (-0.5)) < 1e-12  # .5*1 + .5*(-2)
+
+
+def test_lazy_gradient_meters_match_eager_after_realization():
+    eager = build_graph([2, 3, 2], density=1.0, seed=0)
+    lazy = build_graph([2, 3, 2], density=1.0, seed=0)
+    keys = list(eager.synapses)
+    seq = [
+        {k: 2.0 for k in keys},
+        {k: (0.0 if i % 2 else -1.0) for i, k in enumerate(keys)},
+        {k: 0.0 for k in keys},
+        {k: (3.0 if i == 0 else 0.0) for i, k in enumerate(keys)},
+    ]
+    for step, grad in enumerate(seq):
+        update_gradient_meters(eager, grad, beta=0.5, step_idx=step)
+        update_gradient_meters(lazy, grad, beta=0.5, step_idx=step, lazy=True)
+
+        # Virtual reads are exact before realization.
+        for k in keys:
+            le = lazy.synapses[k]
+            ee = eager.synapses[k]
+            assert meter_grad_mag(le, 0.5, step + 1) == pytest.approx(ee.grad_mag)
+            assert meter_grad_signed(le, 0.5, step + 1) == pytest.approx(ee.grad_signed)
+
+    realize_gradient_meters(lazy, beta=0.5, step_idx=len(seq) - 1)
+    for k in keys:
+        assert lazy.synapses[k].grad_mag == pytest.approx(eager.synapses[k].grad_mag)
+        assert lazy.synapses[k].grad_signed == pytest.approx(eager.synapses[k].grad_signed)
 
 
 def test_mean_grad_mag():

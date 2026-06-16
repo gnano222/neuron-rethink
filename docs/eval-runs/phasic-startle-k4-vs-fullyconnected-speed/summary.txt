@@ -1,0 +1,43 @@
+metric                          fully-connected  phasic-startle-k4
+------------------------------------------------------------------
+final_test_acc ↑                          0.996             0.993≈
+max_test_acc ↑                            0.998             0.998≈
+final_train_acc ↑                         0.995             0.993≈
+final_test_loss ↓                         0.020             0.030≈
+steps_to_90 ↓                              1281              2141▼
+steps_to_95 ↓                              1521              2881▼
+auc_test_acc ↑                            0.961             0.937▼
+final_acc_stability ↓                     0.005             0.009≈
+synapse_count_start                         576           242.100≈
+synapse_count_peak                          576           242.100≈
+synapse_count_end                           576           140.800≈
+n_grow_events                                 0             8.600≈
+n_prune_events                                0           109.900≈
+n_startle_events                              0             0.100≈
+n_arousal_events                              0                 0≈
+distinct_neurons_grown                        0             2.400≈
+turnover ↓                                    0             0.576▼
+max_grows_into_one_neuron ↓                   0             4.200▼
+mean_fan_in                              11.520             2.816≈
+mean_fan_out                             11.520             2.816≈
+effective_density                             1             0.244≈
+p10_utility ↑                             0.294             0.718▲
+freeloader_frac ↓                         0.189             0.044▲
+mean_survivor_age ↑                       15000             14384▼
+median_survivor_age ↑                     15000             15000≈
+mean_pruned_lifespan                          0              9567≈
+oscillation_frac ↓                            0                 0≈
+max_regrow ↓                                  0            -0.100≈
+conf_utility_corr ↑                           —             0.314?
+frozen_freeloader_frac ↓                      0                 0≈
+dead_unit_count ↓                         1.100                 6▼
+dead_unit_frac ↓                          0.023             0.125▼
+idle_unit_frac ↓                          0.023             0.219▼
+mean_neuron_activation                    0.400             0.459≈
+inert_synapse_frac ↓                          0                 0≈
+used_vs_allocated                             1             0.582≈
+n_recycle_events                              0                 0≈
+recycled_rehired_frac                         —                 —?
+ghost_dense_cost                            388           823.200≈
+ghost_pairs_scored                      105.084             9.537≈
+meter_fidelity ↑                          0.680             0.717≈

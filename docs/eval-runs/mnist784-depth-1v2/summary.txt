@@ -1,0 +1,54 @@
+metric                        mnist784-d1-sparse  mnist784-d2-sparse
+--------------------------------------------------------------------
+final_test_acc ↑                           0.914              0.902▼
+max_test_acc ↑                             0.918              0.903▼
+final_train_acc ↑                          0.943              0.929▼
+final_test_loss ↓                          0.520              0.571≈
+steps_to_90 ↓                              38001                  ∞?
+steps_to_95 ↓                                  ∞                  ∞?
+edge_steps_to_90 ↓                     173672261                  ∞?
+edge_steps_to_95 ↓                             ∞                  ∞?
+auc_test_acc ↑                             0.848              0.833▼
+final_acc_stability ↓                      0.023              0.031▼
+synapse_count_start                         6354               6091≈
+synapse_count_peak                          6354               6111≈
+synapse_count_end                           3401               4064≈
+n_grow_events                               9171              10176≈
+n_prune_events                             12123              12204≈
+n_startle_events                               0              3.333≈
+n_arousal_events                               0                  0≈
+distinct_neurons_grown                    40.333             53.333≈
+turnover ↓                                 4.969              4.806≈
+max_grows_into_one_neuron ↓                  647            656.667≈
+mean_fan_in                               80.984             67.733≈
+mean_fan_out                               4.168              4.873≈
+effective_density                          0.134              0.167≈
+avg_live_edges                              4191               4627≈
+p10_utility ↑                              1.038              0.933≈
+freeloader_frac ↓                          0.004              0.030▼
+mean_survivor_age ↑                        39194              37048≈
+median_survivor_age ↑                      53732              50066≈
+mean_pruned_lifespan                        9875              10455≈
+oscillation_frac ↓                         0.200              0.173≈
+max_regrow ↓                                   4              4.333≈
+conf_utility_corr ↑                        0.583              0.506▼
+frozen_freeloader_frac ↓                       0                  0≈
+dead_unit_count ↓                              0              3.667▼
+dead_unit_frac ↓                               0              0.073▼
+idle_unit_frac ↓                           0.010              0.100▼
+mean_neuron_activation                     1.147              0.832≈
+hidden_firing_frac ↓                       0.382              0.289▲
+fwd_active_edge_frac ↓                     0.971              0.943▲
+bwd_active_edge_frac ↓                     0.609              0.612≈
+grad_active_edge_frac ↓                    0.580              0.573≈
+inert_synapse_frac ↓                           0                  0≈
+used_vs_allocated                          0.535              0.667≈
+n_recycle_events                               0                  0≈
+recycled_rehired_frac                          —                  —?
+train_wall_time_sec ↓                    543.313            596.581≈
+wall_ms_per_step ↓                         9.055              9.943≈
+edge_steps_per_sec ↑                      462767             464743≈
+train_edge_steps ↓                     251459533          277652501≈
+ghost_dense_cost                           29847              44076≈
+ghost_pairs_scored                          2369               2358≈
+meter_fidelity ↑                           0.453              0.541▲

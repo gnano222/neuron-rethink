@@ -213,6 +213,7 @@ def structural_metrics(events) -> dict:
         "n_grow_events": len(grow),
         "n_prune_events": len(prune),
         "n_startle_events": sum(1 for e in events if e["type"] == "startle"),
+        "n_arousal_events": sum(1 for e in events if e["type"] == "arousal"),
         "distinct_neurons_grown": len(grows_per_target),
         "max_grows_into_one_neuron": max(grows_per_target.values(), default=0),
     }
@@ -264,6 +265,14 @@ def steps_to_threshold(rec_step, acc_series, threshold: float) -> float:
     for s, a in zip(rec_step, acc_series):
         if a >= threshold:
             return float(s)
+    return math.inf
+
+
+def cost_to_threshold(cost_series, acc_series, threshold: float) -> float:
+    """Cumulative cost at first threshold crossing, or inf if never reached."""
+    for c, a in zip(cost_series, acc_series):
+        if a >= threshold:
+            return float(c)
     return math.inf
 
 
@@ -406,6 +415,55 @@ def fan_stats(net) -> dict:
     }
 
 
+def active_edge_stats(net, X, y) -> dict:
+    """Fractions that bound an event-driven implementation's useful work.
+
+    Forward can skip edges whose pre neuron is silent; backward can skip edges
+    whose post delta is zero; weight updates and meters only need the
+    intersection. The current implementation still visits all live edges, so
+    these are ceilings for future active-frontier code rather than current
+    wall-clock measurements.
+    """
+    edges = list(net.synapses)
+    last = len(net.layers) - 1
+    hidden = [nid for L in range(1, last) for nid in net.layers[L]]
+    if not edges or len(X) == 0:
+        return {
+            "hidden_firing_frac": 0.0,
+            "fwd_active_edge_frac": 0.0,
+            "bwd_active_edge_frac": 0.0,
+            "grad_active_edge_frac": 0.0,
+        }
+
+    hidden_fired = 0
+    fwd_active = 0
+    bwd_active = 0
+    grad_active = 0
+    for xi, yi in zip(X, y):
+        net.forward(xi)
+        _, _, grad_b = net.backward(int(yi))
+        active_pre = {nid for nid in range(net.num_neurons)
+                      if net.neurons[nid].activation != 0.0}
+        active_post = {nid for nid, delta in grad_b.items() if delta != 0.0}
+        hidden_fired += sum(1 for nid in hidden
+                            if net.neurons[nid].activation != 0.0)
+        for pre, post in edges:
+            pre_on = pre in active_pre
+            post_on = post in active_post
+            fwd_active += int(pre_on)
+            bwd_active += int(post_on)
+            grad_active += int(pre_on and post_on)
+
+    denom = len(edges) * len(X)
+    hidden_denom = len(hidden) * len(X) if hidden else 1
+    return {
+        "hidden_firing_frac": hidden_fired / hidden_denom,
+        "fwd_active_edge_frac": fwd_active / denom,
+        "bwd_active_edge_frac": bwd_active / denom,
+        "grad_active_edge_frac": grad_active / denom,
+    }
+
+
 # ---------------------------------------------------------------------------
 # D. synapse quality — stability / lifespan (survivor side)
 # ---------------------------------------------------------------------------
@@ -495,6 +553,8 @@ METRIC_DIRECTIONS: dict[str, str] = {
     # B. training efficacy
     "steps_to_90": "lower",
     "steps_to_95": "lower",
+    "edge_steps_to_90": "lower",
+    "edge_steps_to_95": "lower",
     "auc_test_acc": "higher",
     "final_acc_stability": "lower",
     "pre_shift_test_acc": "higher",
@@ -518,12 +578,14 @@ METRIC_DIRECTIONS: dict[str, str] = {
     "n_grow_events": "neutral",
     "n_prune_events": "neutral",
     "n_startle_events": "neutral",
+    "n_arousal_events": "neutral",
     "distinct_neurons_grown": "neutral",
     "turnover": "lower",
     "max_grows_into_one_neuron": "lower",
     "mean_fan_in": "neutral",
     "mean_fan_out": "neutral",
     "effective_density": "neutral",
+    "avg_live_edges": "neutral",
     # D. synapse quality
     # (mean utility is intentionally omitted: |w|/mean|w| + lam*d/mean(d) has a
     # mean of exactly 1+lam by construction, so only its distribution informs)
@@ -540,6 +602,10 @@ METRIC_DIRECTIONS: dict[str, str] = {
     "dead_unit_frac": "lower",
     "idle_unit_frac": "lower",
     "mean_neuron_activation": "neutral",
+    "hidden_firing_frac": "lower",
+    "fwd_active_edge_frac": "lower",
+    "bwd_active_edge_frac": "lower",
+    "grad_active_edge_frac": "lower",
     "inert_synapse_frac": "lower",
     "used_vs_allocated": "neutral",
     "n_recycle_events": "neutral",
@@ -547,6 +613,10 @@ METRIC_DIRECTIONS: dict[str, str] = {
     # sanity (currency)
     "meter_fidelity": "higher",
     # E. compute cost (descriptive: the scaling story is the chart, not verdicts)
+    "train_wall_time_sec": "lower",
+    "wall_ms_per_step": "lower",
+    "edge_steps_per_sec": "higher",
+    "train_edge_steps": "lower",
     "ghost_dense_cost": "neutral",
     "ghost_pairs_scored": "neutral",
 }
@@ -562,6 +632,8 @@ METRIC_DESCRIPTIONS: dict[str, str] = {
     # B. training efficacy
     "steps_to_90": "steps to first reach 90% test accuracy",
     "steps_to_95": "steps to first reach 95% test accuracy",
+    "edge_steps_to_90": "live-edge training work to first reach 90% test accuracy",
+    "edge_steps_to_95": "live-edge training work to first reach 95% test accuracy",
     "auc_test_acc": "area under the test-accuracy curve (speed + level)",
     "final_acc_stability": "jitter (std) of test accuracy over the last records",
     "pre_shift_test_acc": "test accuracy just before the concept shift",
@@ -585,12 +657,14 @@ METRIC_DESCRIPTIONS: dict[str, str] = {
     "n_grow_events": "total synapses grown over the run",
     "n_prune_events": "total synapses pruned over the run",
     "n_startle_events": "demand-spike hiring alarms fired (startle growth)",
+    "n_arousal_events": "post-startle refinement windows that ran grow-only passes",
     "distinct_neurons_grown": "how many neurons received grown wires",
     "turnover": "(grows + prunes) per average synapse — rewiring rate",
     "max_grows_into_one_neuron": "most times one neuron was grown into (churn)",
     "mean_fan_in": "avg incoming connections per non-input neuron",
     "mean_fan_out": "avg outgoing connections per non-output neuron",
     "effective_density": "live edges as a fraction of fully-connected",
+    "avg_live_edges": "time-average live edges during training",
     # D. synapse quality
     "p10_utility": "10th-percentile synapse utility (weak-wire floor)",
     "freeloader_frac": "fraction of synapses below the prune-utility floor",
@@ -605,6 +679,10 @@ METRIC_DESCRIPTIONS: dict[str, str] = {
     "dead_unit_frac": "fraction of hidden neurons that never fire (scale-free)",
     "idle_unit_frac": "fraction of hidden neurons dead OR outputless (not in service)",
     "mean_neuron_activation": "avg hidden-neuron ReLU output on test data (neuron value)",
+    "hidden_firing_frac": "fraction of hidden ReLUs active on test data",
+    "fwd_active_edge_frac": "fraction of live edges whose pre neuron is active",
+    "bwd_active_edge_frac": "fraction of live edges whose post delta is nonzero",
+    "grad_active_edge_frac": "fraction of live edges with nonzero weight gradient",
     "inert_synapse_frac": "fraction of synapses with ~zero weight",
     "used_vs_allocated": "live edges vs edges present at init",
     "n_recycle_events": "dead-unit recycles fired over the run (sleep recycling)",
@@ -612,6 +690,10 @@ METRIC_DESCRIPTIONS: dict[str, str] = {
     # sanity
     "meter_fidelity": "corr of metered vs fresh gradient (currency only)",
     # E. compute cost
+    "train_wall_time_sec": "training-loop wall time only, excluding eval snapshots",
+    "wall_ms_per_step": "training-loop milliseconds per SGD step",
+    "edge_steps_per_sec": "live-edge steps processed per wall-clock second",
+    "train_edge_steps": "cumulative live-edge steps over training",
     "ghost_dense_cost": "candidate ghost wires the grow-scan must consider (~N²)",
     "ghost_pairs_scored": "candidate wires actually scored after activity+demand pruning",
 }
@@ -621,7 +703,8 @@ METRIC_FAMILIES: dict[str, tuple[str, ...]] = {
     "Prediction performance": (
         "final_test_acc", "max_test_acc", "final_train_acc", "final_test_loss"),
     "Training efficacy": (
-        "steps_to_90", "steps_to_95", "auc_test_acc", "final_acc_stability",
+        "steps_to_90", "steps_to_95", "edge_steps_to_90", "edge_steps_to_95",
+        "auc_test_acc", "final_acc_stability",
         "pre_shift_test_acc", "recovered_test_acc", "recovery_gap",
         "recovery_steps"),
     "Continual learning": (
@@ -630,16 +713,21 @@ METRIC_FAMILIES: dict[str, tuple[str, ...]] = {
     "Synapse structure": (
         "synapse_count_start", "synapse_count_peak", "synapse_count_end",
         "n_grow_events", "n_prune_events", "n_startle_events",
+        "n_arousal_events",
         "distinct_neurons_grown", "turnover", "max_grows_into_one_neuron",
-        "mean_fan_in", "mean_fan_out", "effective_density"),
+        "mean_fan_in", "mean_fan_out", "effective_density", "avg_live_edges"),
     "Synapse quality": (
         "p10_utility", "freeloader_frac", "mean_survivor_age",
         "median_survivor_age", "mean_pruned_lifespan", "oscillation_frac",
         "max_regrow", "conf_utility_corr", "frozen_freeloader_frac",
         "dead_unit_count", "dead_unit_frac", "idle_unit_frac",
-        "mean_neuron_activation", "inert_synapse_frac", "used_vs_allocated",
+        "mean_neuron_activation", "hidden_firing_frac",
+        "fwd_active_edge_frac", "bwd_active_edge_frac",
+        "grad_active_edge_frac", "inert_synapse_frac", "used_vs_allocated",
         "n_recycle_events", "recycled_rehired_frac"),
-    "Compute cost": ("ghost_dense_cost", "ghost_pairs_scored"),
+    "Compute cost": (
+        "train_wall_time_sec", "wall_ms_per_step", "edge_steps_per_sec",
+        "train_edge_steps", "ghost_dense_cost", "ghost_pairs_scored"),
     "Signal sanity": ("meter_fidelity",),
 }
 
@@ -650,6 +738,10 @@ def final_snapshot(net, X_test, y_test, events, initial_edges, series,
     arrays (for the diagnostic plots). Utility/calibration use the fresh,
     architecture-neutral gradient demand so variants are comparable.
     """
+    if getattr(cfg, "lazy_meters", False) and series.get("rec_step"):
+        from sprout.currency import realize_gradient_meters
+        realize_gradient_meters(net, cfg.beta_g, int(series["rec_step"][-1]))
+
     demand = fresh_demand(net, X_test, y_test)
     utils = synapse_utilities(net, demand, lam=cfg.lam_prune)
     ustats = utility_stats(utils, prune_u_floor=cfg.prune_u_floor)
@@ -664,14 +756,23 @@ def final_snapshot(net, X_test, y_test, events, initial_edges, series,
     recyc = recycle_metrics(events, net, X_test)
     scan = ghost_scan_cost(net, X_test, y_test,
                            getattr(cfg, "grow_demand_k", None))
+    active = active_edge_stats(net, X_test, y_test)
     ages = survivor_age_stats(net)
 
     rec = series["rec_step"]
     test_acc = series["test_accuracy"]
     sc = series["synapse_count"]
+    edge_steps = series.get("cum_edge_steps", [])
+    wall_times = series.get("cum_train_wall_time", [])
     mean_count = float(np.mean(sc)) if sc else 1.0
     denom = mean_count if mean_count > 0 else 1.0
     turnover = (struct["n_grow_events"] + struct["n_prune_events"]) / denom
+    total_steps = float(rec[-1] + 1) if rec else 0.0
+    train_edge_steps = float(edge_steps[-1]) if edge_steps else 0.0
+    train_wall_time = float(wall_times[-1]) if wall_times else 0.0
+    avg_live_edges = (train_edge_steps / total_steps) if total_steps > 0 else 0.0
+    wall_ms_per_step = (1000.0 * train_wall_time / total_steps) if total_steps > 0 else 0.0
+    edge_steps_per_sec = (train_edge_steps / train_wall_time) if train_wall_time > 0 else 0.0
 
     final = {
         "final_test_acc": float(test_acc[-1]) if test_acc else 0.0,
@@ -682,6 +783,8 @@ def final_snapshot(net, X_test, y_test, events, initial_edges, series,
                             if series["test_loss"] else 0.0),
         "steps_to_90": steps_to_threshold(rec, test_acc, 0.90),
         "steps_to_95": steps_to_threshold(rec, test_acc, 0.95),
+        "edge_steps_to_90": cost_to_threshold(edge_steps, test_acc, 0.90),
+        "edge_steps_to_95": cost_to_threshold(edge_steps, test_acc, 0.95),
         "auc_test_acc": auc(rec, test_acc),
         "final_acc_stability": stability(test_acc),
         "synapse_count_start": float(sc[0]) if sc else 0.0,
@@ -690,12 +793,14 @@ def final_snapshot(net, X_test, y_test, events, initial_edges, series,
         "n_grow_events": struct["n_grow_events"],
         "n_prune_events": struct["n_prune_events"],
         "n_startle_events": struct["n_startle_events"],
+        "n_arousal_events": struct["n_arousal_events"],
         "distinct_neurons_grown": struct["distinct_neurons_grown"],
         "turnover": turnover,
         "max_grows_into_one_neuron": struct["max_grows_into_one_neuron"],
         "mean_fan_in": fans["mean_fan_in"],
         "mean_fan_out": fans["mean_fan_out"],
         "effective_density": fans["effective_density"],
+        "avg_live_edges": avg_live_edges,
         "p10_utility": ustats["p10_utility"],
         "freeloader_frac": ustats["freeloader_frac"],
         "mean_survivor_age": ages["mean_survivor_age"],
@@ -709,8 +814,16 @@ def final_snapshot(net, X_test, y_test, events, initial_edges, series,
         "dead_unit_frac": nact["dead_unit_frac"],
         "idle_unit_frac": nact["idle_unit_frac"],
         "mean_neuron_activation": nact["mean_neuron_activation"],
+        "hidden_firing_frac": active["hidden_firing_frac"],
+        "fwd_active_edge_frac": active["fwd_active_edge_frac"],
+        "bwd_active_edge_frac": active["bwd_active_edge_frac"],
+        "grad_active_edge_frac": active["grad_active_edge_frac"],
         "n_recycle_events": recyc["n_recycle_events"],
         "recycled_rehired_frac": recyc["recycled_rehired_frac"],
+        "train_wall_time_sec": train_wall_time,
+        "wall_ms_per_step": wall_ms_per_step,
+        "edge_steps_per_sec": edge_steps_per_sec,
+        "train_edge_steps": train_edge_steps,
         "ghost_dense_cost": scan["ghost_dense_cost"],
         "ghost_pairs_scored": scan["ghost_pairs_scored"],
         "inert_synapse_frac": cap["inert_synapse_frac"],

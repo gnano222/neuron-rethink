@@ -55,10 +55,14 @@ class Config:
     # b1-growbar-sweep). 1.5 was the prior eager default (variant currency-eager).
     grow_bar_frac: float = 3.0    # grow ghost wire if virt-grad > this * live ref
     virt_batch: int = 32          # batch size for scoring ghost wires
-    # Phase-2 demand bound for the grow scan: when an int k, score ghosts only
-    # into the top-k highest-|delta| post neurons (bounds work to k * active_pre).
-    # None => exact-sparse scan over all active posts (the bit-identical default).
-    grow_demand_k: int | None = None
+    # Promoted baseline: bound the grow scan to the top-k highest-|delta| post
+    # neurons, so candidate scoring is k * active_pre instead of active_pre *
+    # active_post. None selects the older exact full scan for A/B references.
+    grow_demand_k: int | None = 4
+    # Lazy meter experiment: skip pure EMA decay on zero-gradient wires and apply
+    # the equivalent beta^dt decay when a meter is next read/touched. Exact by
+    # construction; opt-in until evals prove wall-clock value.
+    lazy_meters: bool = False
     # A2 anti-oscillation: grow on a persistent EMA of the virtual gradient
     # (a "ghost meter") instead of one noisy batch. A just-pruned wire has no
     # meter entry, so it must re-earn growth over several cycles rather than being
@@ -117,6 +121,12 @@ class Config:
     # are huge RELATIVE spikes but sit far below chance-level loss.
     startle_floor: float | None = None
 
+    # Optional refinement-tail growth after startle. A startle still fires the
+    # immediate grow-only alarm; this opens a short aroused window where grow-only
+    # passes may run on t_struct ticks while the loss EMA remains above the same
+    # absolute trouble floor. Zero keeps the promoted one-shot startle baseline.
+    arousal_steps: int = 0
+
     # --- sleep-time recycling (opt-in experiment; phasic path only) ---
     # A dead ReLU unit is an absorbing state (delta = 0 => no updates, never
     # ghost-scored as pre or post). When True, each phasic burst recycles
@@ -148,6 +158,13 @@ class Config:
 
     # --- initial firing rate seeding ---
     init_firing_rate_at_target: bool = True  # avoids spurious early "underfiring"
+
+    # --- activation sparsity experiment ---
+    # Optional layer-local k-winner ReLU: after each hidden layer computes ReLU,
+    # keep only the top-k positive activations and zero the rest. This is the
+    # simplest explainable way to make activation sparsity real before investing
+    # in an event-driven forward/backward implementation.
+    activation_top_k: int | None = None
 
     # --- eval-harness build hint (NOT read by Trainer) ---
     # Optional per-variant override of the *initial* graph density used by the
@@ -184,6 +201,8 @@ class Trainer:
         self.y = np.asarray(y)
         self.rng = np.random.default_rng(seed)
         self.step_idx = 0
+        # Network.forward owns activations, but Config owns the experiment knob.
+        self.net.activation_top_k = cfg.activation_top_k
         self.history = {
             # logged every step
             "step": [],
@@ -205,6 +224,7 @@ class Trainer:
         # A2: persistent EMA of the virtual gradient per candidate (ghost) wire,
         # carried across rewire cycles so growth reacts to a sustained signal.
         self.ghost_meter = {}  # (pre, post) -> ema score; only when cfg.ghost_meter
+        self.aroused_until = -1
         # settledness detector: the plateau gate for sleep consolidation AND the
         # trigger for phasic structural plasticity, so build it for either.
         self.settled = False
@@ -288,14 +308,21 @@ class Trainer:
                                       update_confidence_2d)
         cfg, net = self.cfg, self.net
 
-        update_gradient_meters(net, grad_w, cfg.beta_g)             # §1 currency
+        meter_step = self.step_idx + 1
+        update_gradient_meters(net, grad_w, cfg.beta_g,             # §1 currency
+                               step_idx=self.step_idx,
+                               lazy=cfg.lazy_meters)
         if cfg.enable_confidence:                                   # Readout A
             if cfg.confidence_mode == "twod":
                 update_confidence_2d(net, cfg.conf_gain, cfg.conf_alpha, cfg.c_max,
-                                     cfg.settled_mode, cfg.conf_k)
+                                     cfg.settled_mode, cfg.conf_k,
+                                     meter_beta=(cfg.beta_g if cfg.lazy_meters else None),
+                                     meter_step=meter_step)
             else:
                 update_confidence_currency(net, cfg.gamma_dec, cfg.gamma_up,
-                                           cfg.gamma_dn, cfg.c_max, cfg.m_floor_frac)
+                                           cfg.gamma_dn, cfg.c_max, cfg.m_floor_frac,
+                                           meter_beta=(cfg.beta_g if cfg.lazy_meters else None),
+                                           meter_step=meter_step)
         apply_gated_update(net, grad_w, grad_b, cfg.eta_base)       # gated SGD
         self._increment_ages()
         if self.sleep_detector is not None:                        # settledness
@@ -304,6 +331,10 @@ class Trainer:
         n_pruned = n_grown = 0
         if (cfg.enable_prune or cfg.enable_grow) and self.step_idx % cfg.t_struct == 0:
             n_pruned, n_grown = self._rewire_currency()
+        if (cfg.phasic_structure and cfg.enable_grow
+                and self.step_idx % cfg.t_struct == 0
+                and self._arousal_active()):
+            n_grown += self._arousal_grow()
         # Startle (phasic-only): an ALARM, checked every step (not just t_struct
         # ticks — hiring latency is the whole point). Placed AFTER the rewire so
         # a sleep burst that just fired (and reset the detector) disarms it —
@@ -313,6 +344,17 @@ class Trainer:
                 and self.sleep_detector.startled):
             n_grown += self._startle_grow()
         return n_pruned, n_grown
+
+    def _arousal_active(self):
+        """Whether the post-startle refinement window is open and still useful."""
+        if self.cfg.arousal_steps <= 0 or self.step_idx > self.aroused_until:
+            return False
+        if self.sleep_detector is None or self.sleep_detector.loss_ema is None:
+            return False
+        if self.sleep_detector.loss_ema <= self.sleep_detector.spike_floor:
+            self.aroused_until = -1
+            return False
+        return True
 
     def _rewire_currency(self):
         if self.cfg.phasic_structure:            # the C architecture: rewire only
@@ -335,7 +377,10 @@ class Trainer:
             cap = cfg.sleep_max_prune if consolidating else cfg.max_prune
             if cap is None:                     # sleep 'no cap' => all eligible
                 cap = len(net.synapses)
-            pruned = prune_currency(net, cfg.t_grace, cap, floor, cfg.lam_prune)
+            pruned = prune_currency(
+                net, cfg.t_grace, cap, floor, cfg.lam_prune,
+                meter_beta=(cfg.beta_g if cfg.lazy_meters else None),
+                meter_step=self.step_idx + 1)
             for edge in pruned:
                 self.events.append({"step": self.step_idx, "type": "prune", "edge": edge})
             n_pruned = len(pruned)
@@ -381,8 +426,10 @@ class Trainer:
         if cfg.enable_prune:                          # prune every below-floor wire
             cap = (cfg.sleep_max_prune if cfg.sleep_max_prune is not None
                    else len(net.synapses))
-            pruned = prune_currency(net, cfg.t_grace, cap,
-                                    cfg.sleep_prune_floor, cfg.lam_prune)
+            pruned = prune_currency(
+                net, cfg.t_grace, cap, cfg.sleep_prune_floor, cfg.lam_prune,
+                meter_beta=(cfg.beta_g if cfg.lazy_meters else None),
+                meter_step=self.step_idx + 1)
             for edge in pruned:
                 self.events.append({"step": self.step_idx, "type": "prune", "edge": edge})
             n_pruned = len(pruned)
@@ -409,7 +456,28 @@ class Trainer:
 
         self.sleep_detector.reset()                   # require a fresh plateau
         self.settled = False
+        self.aroused_until = -1                       # consolidation closes arousal
         return n_pruned, n_grown
+
+    def _arousal_grow(self):
+        """Grow during a short post-startle refinement window.
+
+        This is the same grow verb used by sleep/startle, but scheduled only on
+        structural ticks and without pruning. It gives a shifted task a few
+        follow-up hires after the first emergency pass, then stops by time,
+        loss floor, or the next sleep burst.
+        """
+        from sprout.currency import grow_currency, batch_edge_scores
+        cfg, net = self.cfg, self.net
+        self.events.append({"step": self.step_idx, "type": "arousal", "edge": None})
+        b = min(cfg.virt_batch, len(self.X))
+        idx = self.rng.choice(len(self.X), size=b, replace=False)
+        ghost, ref = batch_edge_scores(net, self.X[idx], self.y[idx],
+                                       grow_demand_k=cfg.grow_demand_k)
+        grown = grow_currency(net, ghost, ref, len(ghost), cfg.grow_bar_frac)
+        for edge in grown:
+            self.events.append({"step": self.step_idx, "type": "grow", "edge": edge})
+        return len(grown)
 
     def _startle_grow(self):
         """The startle pass: hire NOW, while the demand spike is live.
@@ -433,6 +501,9 @@ class Trainer:
         grown = grow_currency(net, ghost, ref, len(ghost), cfg.grow_bar_frac)
         for edge in grown:
             self.events.append({"step": self.step_idx, "type": "grow", "edge": edge})
+        if cfg.arousal_steps > 0:
+            self.aroused_until = max(self.aroused_until,
+                                     self.step_idx + cfg.arousal_steps)
         self.sleep_detector.reset()
         self.settled = False
         return len(grown)

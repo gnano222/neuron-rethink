@@ -11,6 +11,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import time
 from concurrent.futures import ProcessPoolExecutor
 from dataclasses import asdict
 
@@ -26,27 +27,24 @@ for _v in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS",
 
 from sprout.network import build_graph, init_weights      # noqa: E402
 from sprout.train import Trainer, accuracy                # noqa: E402
-from sprout.data import generate_blobs, generate_spirals  # noqa: E402
+from sprout.data import generate_spirals                  # noqa: E402
+from sprout.datasets import get_dataset                    # noqa: E402
 from evals.spec import make_config                         # noqa: E402
 from evals import metrics                                  # noqa: E402
 
 
 SERIES_KEYS = ("rec_step", "train_accuracy", "train_loss", "test_accuracy",
                "test_loss", "synapse_count", "mean_confidence",
-               "cum_grow", "cum_prune")
+               "cum_grow", "cum_prune", "cum_edge_steps",
+               "cum_train_wall_time")
 
 # continual regime tracks both tasks; "test_accuracy"/"test_loss" hold the union
 # (over A and B test sets) so final_snapshot's perf/structure metrics reuse cleanly.
 CONTINUAL_SERIES_KEYS = ("rec_step", "phase", "train_accuracy", "train_loss",
                          "test_accuracy_A", "test_accuracy_B", "test_accuracy",
                          "test_loss", "synapse_count", "mean_confidence",
-                         "cum_grow", "cum_prune")
-
-
-def _gen(dataset, n, seed, turns, noise):
-    if dataset == "blobs":
-        return generate_blobs(n=n, seed=seed)
-    return generate_spirals(n=n, seed=seed, turns=turns, noise=noise)
+                         "cum_grow", "cum_prune", "cum_edge_steps",
+                         "cum_train_wall_time")
 
 
 def _build_density(cfg, spec) -> float:
@@ -63,6 +61,17 @@ def _build_layers(cfg, spec) -> list:
     neuron counts while the rest of the suite shares one topology."""
     override = getattr(cfg, "init_layers", None)
     return list(spec.layers) if override is None else list(override)
+
+
+def _train_eval_indices(n, cap, seed):
+    """Indices for the per-snapshot TRAIN-metric evaluation. Full set unless a
+    cap is given and the train set exceeds it, in which case a deterministic
+    subsample (the train set can be huge; full-train accuracy each snapshot would
+    dominate runtime). Test metrics always use the full test set."""
+    if cap is None or n <= cap:
+        return np.arange(n)
+    return np.sort(np.random.default_rng(seed + 99991).choice(n, size=cap,
+                                                              replace=False))
 
 
 def _snapshot(series, net, tr, X_tr, y_tr, X_te, y_te):
@@ -109,6 +118,10 @@ def run_one_continual(variant_name, seed, spec):
     held-out accuracy is snapshotted throughout, giving the forgetting +
     consolidation curves and metrics. The single-task path is untouched.
     """
+    if getattr(spec, "backend", "object") == "array":
+        raise NotImplementedError(
+            "the array backend supports the single regime only; "
+            "use backend='object' for the continual regime")
     cfg = make_config(variant_name)
 
     def spiral(s, r_lo, r_hi):
@@ -130,12 +143,20 @@ def run_one_continual(variant_name, seed, spec):
     tr = Trainer(cfg, net, Xa_tr, ya_tr, seed=seed)
     initial_edges = set(net.synapses)
     series = {k: [] for k in CONTINUAL_SERIES_KEYS}
+    cum_edge_steps = 0.0
+    cum_train_wall_time = 0.0
 
     def loop(n_steps, phase, X_tr, y_tr):
+        nonlocal cum_edge_steps, cum_train_wall_time
         for s in range(n_steps):
             record = (s % spec.record_every == 0) or (s == n_steps - 1)
+            t0 = time.perf_counter()
             tr.step(record=False)
+            cum_train_wall_time += time.perf_counter() - t0
+            cum_edge_steps += len(net.synapses)
             if record:
+                series["cum_edge_steps"].append(cum_edge_steps)
+                series["cum_train_wall_time"].append(cum_train_wall_time)
                 _snapshot_continual(series, net, tr, phase, X_tr, y_tr,
                                     Xa_te, ya_te, Xb_te, yb_te,
                                     X_te_both, y_te_both)
@@ -169,28 +190,49 @@ def run_one_continual(variant_name, seed, spec):
 def run_one(variant_name, seed, spec):
     """Train one (variant, seed) and return a plain-dict RunResult."""
     cfg = make_config(variant_name)
-    X_tr, y_tr = _gen(spec.dataset, spec.n_points, seed, spec.turns, spec.noise)
-    X_te, y_te = _gen(spec.dataset, spec.n_points, seed + spec.test_seed_offset,
-                      spec.turns, spec.noise)
+    X_tr, y_tr, X_te, y_te = get_dataset(
+        spec.dataset, seed, n_points=spec.n_points, turns=spec.turns,
+        noise=spec.noise, test_seed_offset=spec.test_seed_offset)
 
     net = build_graph(_build_layers(cfg, spec), density=_build_density(cfg, spec), seed=seed)
     init_weights(net, seed=seed)
-    tr = Trainer(cfg, net, X_tr, y_tr, seed=seed)
+    is_array = getattr(spec, "backend", "object") == "array"
+    if is_array:
+        from sprout.fast import ArrayTrainer
+        tr = ArrayTrainer(cfg, net, X_tr, y_tr, seed=seed)
+    else:
+        tr = Trainer(cfg, net, X_tr, y_tr, seed=seed)
     initial_edges = set(net.synapses)
     series = {k: [] for k in SERIES_KEYS}
+    cum_edge_steps = 0.0
+    cum_train_wall_time = 0.0
+    eval_idx = _train_eval_indices(len(X_tr), getattr(spec, "train_eval_cap", None), seed)
+    X_tr_eval = X_tr[eval_idx]
 
     def loop(n_steps, y_tr_cur, y_te_cur):
+        nonlocal cum_edge_steps, cum_train_wall_time
         for s in range(n_steps):
             record = (s % spec.record_every == 0) or (s == n_steps - 1)
+            t0 = time.perf_counter()
             tr.step(record=False)
+            cum_train_wall_time += time.perf_counter() - t0
+            cum_edge_steps += len(net.synapses)
             if record:
-                _snapshot(series, net, tr, X_tr, y_tr_cur, X_te, y_te_cur)
+                if is_array:                  # array path: write arrays -> object
+                    tr.sync_into(net)         # net so the metrics read live state
+                series["cum_edge_steps"].append(cum_edge_steps)
+                series["cum_train_wall_time"].append(cum_train_wall_time)
+                _snapshot(series, net, tr, X_tr_eval, y_tr_cur[eval_idx],
+                          X_te, y_te_cur)
 
     loop(spec.steps, y_tr, y_te)
 
     shift_start_index = None
     y_te_final = y_te
     if spec.shift_steps > 0:
+        if int(np.max(y_tr)) > 1:
+            raise ValueError("label-swap shift is only defined for binary tasks; "
+                             f"dataset {spec.dataset!r} has >2 classes")
         shift_start_index = len(series["rec_step"])
         y_tr_sw, y_te_final = 1 - y_tr, 1 - y_te
         tr.X, tr.y = X_tr, y_tr_sw            # concept shift: swap the labels
@@ -240,6 +282,8 @@ def _cache_key(variant_name, seed, spec) -> str:
         "inner_r_hi": spec.inner_r_hi,
         "outer_r_lo": spec.outer_r_lo,
         "outer_r_hi": spec.outer_r_hi,
+        "train_eval_cap": getattr(spec, "train_eval_cap", None),
+        "backend": getattr(spec, "backend", "object"),
     }
     blob = json.dumps(payload, sort_keys=True).encode()
     return hashlib.sha1(blob).hexdigest()[:16]

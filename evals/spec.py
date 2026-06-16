@@ -14,28 +14,82 @@ from typing import Callable
 from sprout.train import Config
 
 
+_BOUNDED_GROW_VARIANTS = {
+    "phasic-startle-k4",
+    "phasic-startle-k4-lazy",
+    "eff-density30",
+    "eff-density50",
+    "eff-w12",
+    "eff-w20",
+    "eff-floor08",
+    "eff-floor12",
+    "eff-floor15",
+    "eff-wta4",
+    "eff-wta6",
+    "eff-wta8",
+    "phasic-startle-aroused-k4",
+    "currency-bounded",
+    "size-w4-k4",
+    "size-w6-k4",
+    "size-w10-k4",
+    "size-w16-k4",
+    "size-w24-k4",
+    "digits-w32-sparse",
+    "digits-w64-sparse",
+    "digits-w128-sparse",
+    "digits-w128-k16",
+    "digits-w128-k32",
+    "digits-w24-sparse",
+    "digits-w16-sparse",
+    "digits-w12-sparse",
+    "digits-w8-sparse",
+    "mnist-w32-sparse",
+    "mnist-w64-sparse",
+    "mnist-w128-sparse",
+    "mnist-w64-b2",
+    "mnist-w128-b2",
+    "mnist-d2-sparse",
+    "mnist-d3-sparse",
+    "mnist784-d1-sparse",
+    "mnist784-d2-sparse",
+}
+
+
+def _dense(layers):
+    """A static fully-connected control arm (every plasticity mechanism off)."""
+    return lambda: Config(eta_base=0.02, init_density=1.0, init_layers=layers)
+
+
+def _sparse(layers, density, k=4):
+    """A promoted phasic-startle-k4 self-rewiring arm at a given size/density:
+    2D confidence + prune + grow + sleep + startle, with ``k`` = grow_demand_k.
+    The name must also appear in ``_BOUNDED_GROW_VARIANTS`` or make_config nulls k.
+    """
+    return lambda: Config(
+        eta_base=0.02, grad_currency=True, enable_confidence=True,
+        enable_prune=True, enable_grow=True, gamma_dec=0.001, t_struct=200,
+        phasic_structure=True, startle=True, grow_demand_k=k,
+        init_layers=layers, init_density=density)
+
+
 # name -> factory returning a FRESH Config (never share mutable Config instances
 # across runs; each (variant, seed) job mutates its own network/config state).
 VARIANTS: dict[str, Callable[[], Config]] = {
-    # the current default architecture: gradient-as-currency. Confidence is the
-    # calibrated 2D (importance x settledness) rule with the softened sigmoid
-    # cliff, and growth uses the selective hiring bar (grow_bar_frac=3.0) — both
-    # inherited from Config defaults. This is the promoted BASELINE.
-    # the no-sleep currency reference. Sleep consolidation is now ON by default
-    # (Config.enable_sleep=True), but this baseline pins it OFF so it stays the
-    # STABLE A/B reference every other variant is measured against (and so all
-    # historical eval-runs remain comparable). The promoted default itself = this
-    # + sleep, i.e. the `sleep` variant below.
+    # Historical continuous no-sleep reference. The current baseline architecture
+    # is phasic-startle-k4; this full-scan continuous arm stays pinned for A/B.
+    # Confidence is the calibrated 2D (importance x settledness) rule with the
+    # softened sigmoid cliff, and growth uses the selective hiring bar
+    # (grow_bar_frac=3.0).
     "currency": lambda: Config(
         eta_base=0.02, grad_currency=True, enable_confidence=True,
         enable_prune=True, enable_grow=True,
         gamma_dec=0.001, t_struct=200, enable_sleep=False, phasic_structure=False,
         startle=False,   # pinned (inert on the continuous path anyway)
     ),
-    # the PROMOTED DEFAULT: currency + settledness-gated sleep consolidation at
-    # floor 1.0 / no cap (inherited from Config defaults). Prunes aggressively
-    # only once the loss-EMA has plateaued. = `currency` + the new default sleep;
-    # compare vs the no-sleep `currency` baseline. See docs/eval-runs/
+    # Historical continuous + settledness-gated sleep consolidation at floor 1.0
+    # / no cap (inherited from Config defaults). Prunes aggressively only once
+    # the loss-EMA has plateaued. Kept to compare against the no-sleep
+    # `currency` reference. See docs/eval-runs/
     # sleep-nocap-floor-0-to-2.
     "sleep": lambda: Config(
         eta_base=0.02, grad_currency=True, enable_confidence=True,
@@ -48,12 +102,12 @@ VARIANTS: dict[str, Callable[[], Config]] = {
     # pass (prune the weak + grow the wanted) fired only at a settledness plateau.
     # Subsumes the sleep overlay and removes continuous grow<->prune churn — the
     # ghost-meter refractory and inflated grow bar are no longer load-bearing.
-    # startle is PINNED OFF: the project default promoted startle=True
+    # startle is PINNED OFF: the project baseline promoted startle=True
     # (2026-06-12), but this variant stays the stable sleep-only phasic
     # baseline every published startle/recycle run was measured against.
-    # The promoted default itself = `phasic-startle` below. sleep_* knobs
-    # inherit the promoted defaults (warmup 2500, patience 1500, floor 1.0,
-    # no cap).
+    # The baseline efficiency arm is `phasic-startle-k4` below; this no-startle
+    # baseline stays useful for isolating the alarm itself. sleep_* knobs inherit
+    # the promoted defaults (warmup 2500, patience 1500, floor 1.0, no cap).
     "phasic": lambda: Config(
         eta_base=0.02, grad_currency=True, enable_confidence=True,
         enable_prune=True, enable_grow=True,
@@ -74,19 +128,113 @@ VARIANTS: dict[str, Callable[[], Config]] = {
         gamma_dec=0.001, t_struct=200, phasic_structure=True,
         recycle_dead=True, startle=False,
     ),
-    # the PROMOTED DEFAULT (2026-06-12): phasic + STARTLE — demand-triggered
-    # growth, the third phase (wake = learn, sleep = consolidate, startle =
-    # hire). A grow-only pass fires ~60 steps into a sustained loss-EMA spike
-    # — while the transition's deltas are hot — then re-baselines the
-    # detector. Inert on stationary data (0 false alarms); under shifts it
-    # recruits idle capacity and raises the continual worst-seed floor.
-    # = `phasic` + the promoted startle default; compare vs `phasic`. Spec:
-    # docs/superpowers/specs/2026-06-11-startle-demand-triggered-growth-design.md.
+    # phasic + STARTLE with the original full grow scan. Kept as the stable
+    # one-shot/full-scan reference measured in startle-continual; the promoted
+    # efficiency arm is `phasic-startle-k4`.
     "phasic-startle": lambda: Config(
         eta_base=0.02, grad_currency=True, enable_confidence=True,
         enable_prune=True, enable_grow=True,
         gamma_dec=0.001, t_struct=200, phasic_structure=True,
         startle=True,
+    ),
+    # PROMOTED BASELINE: startle plus the bounded grow scan. Same
+    # architecture and scoring signal, but growth only scores ghosts into the
+    # top-k highest-|delta| post neurons. Shift guardrail: accuracy/recovery ≈,
+    # ghost_pairs_scored 80.97 -> 13.02, grow events 60.6 -> 15.6.
+    "phasic-startle-k4": lambda: Config(
+        eta_base=0.02, grad_currency=True, enable_confidence=True,
+        enable_prune=True, enable_grow=True,
+        gamma_dec=0.001, t_struct=200, phasic_structure=True,
+        startle=True, grow_demand_k=4,
+    ),
+    # Same architecture, exact lazy decay for the gradient meters. Isolates
+    # whether skipping pure zero-gradient meter decay is worth the extra access
+    # logic while confidence still scans all live wires.
+    "phasic-startle-k4-lazy": lambda: Config(
+        eta_base=0.02, grad_currency=True, enable_confidence=True,
+        enable_prune=True, enable_grow=True,
+        gamma_dec=0.001, t_struct=200, phasic_structure=True,
+        startle=True, grow_demand_k=4, lazy_meters=True,
+    ),
+    # Compute-tuning probes around the promoted baseline. Each is a single knob:
+    # initial density, width, sleep prune floor, or enforced activation sparsity.
+    "eff-density30": lambda: Config(
+        eta_base=0.02, grad_currency=True, enable_confidence=True,
+        enable_prune=True, enable_grow=True,
+        gamma_dec=0.001, t_struct=200, phasic_structure=True,
+        startle=True, grow_demand_k=4, init_density=0.30,
+    ),
+    "eff-density50": lambda: Config(
+        eta_base=0.02, grad_currency=True, enable_confidence=True,
+        enable_prune=True, enable_grow=True,
+        gamma_dec=0.001, t_struct=200, phasic_structure=True,
+        startle=True, grow_demand_k=4, init_density=0.50,
+    ),
+    "eff-w12": lambda: Config(
+        eta_base=0.02, grad_currency=True, enable_confidence=True,
+        enable_prune=True, enable_grow=True,
+        gamma_dec=0.001, t_struct=200, phasic_structure=True,
+        startle=True, grow_demand_k=4, init_layers=(2, 12, 12, 12, 2),
+    ),
+    "eff-w20": lambda: Config(
+        eta_base=0.02, grad_currency=True, enable_confidence=True,
+        enable_prune=True, enable_grow=True,
+        gamma_dec=0.001, t_struct=200, phasic_structure=True,
+        startle=True, grow_demand_k=4, init_layers=(2, 20, 20, 20, 2),
+    ),
+    "eff-floor08": lambda: Config(
+        eta_base=0.02, grad_currency=True, enable_confidence=True,
+        enable_prune=True, enable_grow=True,
+        gamma_dec=0.001, t_struct=200, phasic_structure=True,
+        startle=True, grow_demand_k=4, sleep_prune_floor=0.8,
+    ),
+    "eff-floor12": lambda: Config(
+        eta_base=0.02, grad_currency=True, enable_confidence=True,
+        enable_prune=True, enable_grow=True,
+        gamma_dec=0.001, t_struct=200, phasic_structure=True,
+        startle=True, grow_demand_k=4, sleep_prune_floor=1.2,
+    ),
+    "eff-floor15": lambda: Config(
+        eta_base=0.02, grad_currency=True, enable_confidence=True,
+        enable_prune=True, enable_grow=True,
+        gamma_dec=0.001, t_struct=200, phasic_structure=True,
+        startle=True, grow_demand_k=4, sleep_prune_floor=1.5,
+    ),
+    "eff-wta4": lambda: Config(
+        eta_base=0.02, grad_currency=True, enable_confidence=True,
+        enable_prune=True, enable_grow=True,
+        gamma_dec=0.001, t_struct=200, phasic_structure=True,
+        startle=True, grow_demand_k=4, activation_top_k=4,
+    ),
+    "eff-wta6": lambda: Config(
+        eta_base=0.02, grad_currency=True, enable_confidence=True,
+        enable_prune=True, enable_grow=True,
+        gamma_dec=0.001, t_struct=200, phasic_structure=True,
+        startle=True, grow_demand_k=4, activation_top_k=6,
+    ),
+    "eff-wta8": lambda: Config(
+        eta_base=0.02, grad_currency=True, enable_confidence=True,
+        enable_prune=True, enable_grow=True,
+        gamma_dec=0.001, t_struct=200, phasic_structure=True,
+        startle=True, grow_demand_k=4, activation_top_k=8,
+    ),
+    # Startle plus a short aroused refinement window: after the immediate alarm
+    # hire, allow grow-only passes on structural ticks for 1k steps while the
+    # loss remains above the same trouble floor. Tests whether phasic can recover
+    # continuous growth's refinement tail without continuous churn.
+    "phasic-startle-aroused": lambda: Config(
+        eta_base=0.02, grad_currency=True, enable_confidence=True,
+        enable_prune=True, enable_grow=True,
+        gamma_dec=0.001, t_struct=200, phasic_structure=True,
+        startle=True, arousal_steps=1000,
+    ),
+    # Tested refinement arm, not promoted: aroused refinement with the bounded
+    # grow scan so extra growth passes do not reintroduce quadratic scan cost.
+    "phasic-startle-aroused-k4": lambda: Config(
+        eta_base=0.02, grad_currency=True, enable_confidence=True,
+        enable_prune=True, enable_grow=True,
+        gamma_dec=0.001, t_struct=200, phasic_structure=True,
+        startle=True, arousal_steps=1000, grow_demand_k=4,
     ),
     # the full triad: startle hiring + sleep recycling. Blanks born at sleep
     # bursts now get to bid into HOT startle windows — the configuration the
@@ -411,6 +559,79 @@ VARIANTS: dict[str, Callable[[], Config]] = {
     # sparse, self-rewiring `currency` baseline: does self-organised sparsity
     # learn as fast, and adapt to a second task as quickly, on far fewer synapses?
     "fully-connected": lambda: Config(eta_base=0.02, init_density=1.0),
+    # --- digit width sweep: larger-but-sparse vs small-dense at a MATCHED edge
+    # budget (~1184 initial edges, 1 hidden layer), for the 8x8 digits task
+    # (run with --dataset digits). Tests whether spreading a fixed compute
+    # budget sparsely across many neurons beats spending it densely on few.
+    # Edge math (build_graph k = round(density*|prev|)):
+    #   w16-dense   (64, 16,10) d=1.0  : 16*64 + 10*16 = 1184
+    #   w32-sparse  (64, 32,10) d=0.5  : 32*32 + 10*16 = 1184
+    #   w64-sparse  (64, 64,10) d=0.25 : 64*16 + 10*16 = 1184 (+ fan-out guards)
+    #   w128-sparse (64,128,10) d=0.125: 128*8 + 10*16 = 1184 (+ fan-out guards)
+    # The dense arm is the fully-connected control (plasticity off); the sparse
+    # arms are the promoted phasic-startle-k4 self-rewiring architecture.
+    "digits-w16-dense": _dense((64, 16, 10)),
+    "digits-w32-sparse": _sparse((64, 32, 10), 0.5),
+    "digits-w64-sparse": _sparse((64, 64, 10), 0.25),
+    "digits-w128-sparse": _sparse((64, 128, 10), 0.125),
+    # k-scaling probe: does growth attention need to scale with width? Same w128
+    # net + matched ~1184-edge budget as digits-w128-sparse, but the grow scan
+    # considers the top-16 / top-32 demanded post-neurons per pass instead of
+    # top-4 — so the wide hidden layer is not crowded out of growth by the (always
+    # high-demand) 10 output neurons. Tests whether k should scale with width.
+    "digits-w128-k16": _sparse((64, 128, 10), 0.125, k=16),
+    "digits-w128-k32": _sparse((64, 128, 10), 0.125, k=32),
+    # budget-floor sweep: how few edges does digits actually need? Narrow the
+    # winning w32-sparse config (same phasic-startle-k4, density 0.5 so fan-in
+    # into the hidden layer stays ~32 and is NOT re-starved) down through 24/16/
+    # 12/8 hidden neurons. Edge budgets (build_graph k=round(0.5*prev)):
+    #   w24 (64,24,10): 24*32 + 10*12 = 888
+    #   w16 (64,16,10): 16*32 + 10*8  = 592
+    #   w12 (64,12,10): 12*32 + 10*6  = 444
+    #   w8  (64, 8,10):  8*32 + 10*4  = 296
+    # Run vs digits-w16-dense (1184 edges, ~0.970) to find the smallest budget
+    # that still matches dense accuracy.
+    "digits-w24-sparse": _sparse((64, 24, 10), 0.5),
+    "digits-w16-sparse": _sparse((64, 16, 10), 0.5),
+    "digits-w12-sparse": _sparse((64, 12, 10), 0.5),
+    "digits-w8-sparse": _sparse((64, 8, 10), 0.5),
+    # --- HARDER task: MNIST 14x14 (196 in, 10 out), --dataset mnist (the
+    # default MNIST). The digits result (small-dense wins, wide-sparse only
+    # matches) may be a too-easy-task artifact. MNIST has representational headroom AND
+    # the bigger input keeps wide-arm fan-in healthier. Matched ~3296-edge
+    # budget (build_graph k = round(density*|prev|)):
+    #   w16-dense   (196, 16,10) d=1.0  : 16*196 + 10*16 = 3296
+    #   w32-sparse  (196, 32,10) d=0.5  : 32*98  + 10*16 = 3296
+    #   w64-sparse  (196, 64,10) d=0.25 : 64*49  + 10*16 = 3296
+    #   w128-sparse (196,128,10) d=0.125: 128*24 + 10*16 = 3232 (+ fan-out)
+    # Does wide-sparse finally BEAT small-dense when the task is hard enough?
+    "mnist-w16-dense": _dense((196, 16, 10)),
+    "mnist-w32-sparse": _sparse((196, 32, 10), 0.5),
+    "mnist-w64-sparse": _sparse((196, 64, 10), 0.25),
+    "mnist-w128-sparse": _sparse((196, 128, 10), 0.125),
+    # WIDEN-THE-BUDGET arms: relax the matched-3296 constraint to a 2x budget
+    # (~6592 edges) so the wide arms get healthier fan-in. Does spending more
+    # compute on a wider net overtake the lean w32-sparse (3296, fan-in 98)?
+    #   w64-b2  (196, 64,10) d=0.5  : 64*98 + 10*32 = 6592, fan-in 98 (= w32's)
+    #   w128-b2 (196,128,10) d=0.25 : 128*49 + 10*32 = 6592, fan-in 49
+    "mnist-w64-b2": _sparse((196, 64, 10), 0.5),
+    "mnist-w128-b2": _sparse((196, 128, 10), 0.25),
+    # DEPTH sweep: is the ~0.93 MNIST14 plateau representational (depth would
+    # break it) or data/resolution-limited (depth won't)? Hold the matched
+    # ~3296-edge budget and the input->hidden fan-in (98) fixed; only add layers.
+    # vs the 1-hidden champ mnist-w32-sparse (196,32,10).
+    #   d2 (196, 30,20,    10) d=0.5 : ~3340 edges, fan-in [98, 15, 10]
+    #   d3 (196, 28,18,16, 10) d=0.5 : ~3220 edges, fan-in [98, 14, 9, 8]
+    "mnist-d2-sparse": _sparse((196, 30, 20, 10), 0.5),
+    "mnist-d3-sparse": _sparse((196, 28, 18, 16, 10), 0.5),
+    # FULL-RESOLUTION MNIST 28x28 (784 in, 10 out), --dataset mnist. 1- vs
+    # 2-hidden at a matched ~6.2k-edge budget, first-layer fan-in held at 196.
+    # Full res has the compositional headroom 14x14 lacked, so this is where
+    # depth could finally pay (sparse keeps edges/compute modest even at 784 in).
+    #   d1 (784, 32,    10) d=0.25 : ~6355 edges, fan-in [196, 8]
+    #   d2 (784, 30,20, 10) d=0.25 : ~6091 edges, fan-in [196, 8, 5]
+    "mnist784-d1-sparse": _sparse((784, 32, 10), 0.25),
+    "mnist784-d2-sparse": _sparse((784, 30, 20, 10), 0.25),
 }
 
 
@@ -419,20 +640,26 @@ def make_config(name: str) -> Config:
     if name not in VARIANTS:
         raise KeyError(
             f"unknown variant {name!r}; known: {', '.join(sorted(VARIANTS))}")
-    return VARIANTS[name]()
+    cfg = VARIANTS[name]()
+    # Config's raw default is the promoted bounded scan. Historical registry arms
+    # keep their old full-scan behavior unless their name explicitly opts into
+    # the demand bound.
+    if name not in _BOUNDED_GROW_VARIANTS:
+        cfg.grow_demand_k = None
+    return cfg
 
 
 @dataclass
 class SuiteSpec:
     """Everything needed to run and aggregate one comparison."""
 
-    variants: tuple[str, ...] = ("currency", "sleep")
+    variants: tuple[str, ...] = ("phasic-startle-k4", "phasic-startle")
     seeds: int = 5
     dataset: str = "spirals"
     steps: int = 15000
     shift_steps: int = 0          # > 0 enables a mid-training label-swap phase
     record_every: int = 200
-    baseline: str = "currency"     # softened-cliff 2D-confidence currency = the reference
+    baseline: str = "phasic-startle-k4"  # promoted sparse/efficient baseline
     # promoted to w16 (uniform 16-wide hidden layers): the neuron-width sweep
     # found it the efficiency sweet spot — near-top accuracy and ~1.8x faster
     # convergence than the old (2,10,10,8,2) at ~2x the wires, with the fewest
@@ -443,6 +670,18 @@ class SuiteSpec:
     turns: float = 1.0
     noise: float = 0.10
     test_seed_offset: int = 10000  # held-out test set drawn at seed + this
+    # Cap the per-snapshot TRAIN-metric evaluation at this many samples (None =
+    # full train set). Large datasets (e.g. mnist at 12k+) make full-train
+    # accuracy each snapshot dominate runtime; a fixed subsample is a fine
+    # estimate. Test metrics always use the full test set. Default None keeps
+    # every existing run byte-identical.
+    train_eval_cap: int | None = None
+    # Training backend: "object" (per-synapse Network — default + validated
+    # reference) or "array" (vectorized sprout.fast.ArrayTrainer — faster; results
+    # statistically equivalent but NOT identical, so A/B within one backend). The
+    # cache key includes this. See docs/superpowers/specs/
+    # 2026-06-15-backend-harness-wiring-design.md.
+    backend: str = "object"
 
     # continual-learning (forgetting) regime: two CONCENTRIC spirals, A->B->A+B.
     # Both tasks are origin-centred (zero-mean => learnable by the tiny net) but

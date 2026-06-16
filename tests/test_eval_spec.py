@@ -257,7 +257,7 @@ def test_registry_lists_all_named_variants():
 
 def test_suitespec_defaults():
     spec = SuiteSpec()
-    assert spec.variants == ("currency", "sleep")
+    assert spec.variants == ("phasic-startle-k4", "phasic-startle")
     assert spec.seeds == 5
     assert spec.dataset == "spirals"
     # promoted defaults: the width sweep made w16 the sweet spot, and the
@@ -265,7 +265,7 @@ def test_suitespec_defaults():
     assert spec.steps == 15000
     assert spec.layers == (2, 16, 16, 16, 2)
     assert spec.shift_steps == 0
-    assert spec.baseline == "currency"   # promoted: softened-cliff currency is the reference
+    assert spec.baseline == "phasic-startle-k4"   # promoted sparse/efficient reference
     assert spec.record_every == 200
     assert spec.test_seed_offset == 10000
 
@@ -305,6 +305,36 @@ def test_currency_bounded_is_currency_plus_demand_k():
     assert bounded.grow_bar_frac == base.grow_bar_frac
 
 
+def test_phasic_startle_research_variants_are_single_knob_extensions():
+    base = make_config("phasic-startle")
+    k4 = make_config("phasic-startle-k4")
+    aroused = make_config("phasic-startle-aroused")
+    both = make_config("phasic-startle-aroused-k4")
+
+    assert base.phasic_structure and base.startle
+    assert base.grow_demand_k is None
+    assert base.arousal_steps == 0
+
+    assert k4.phasic_structure and k4.startle
+    assert k4.grow_demand_k == 4
+    assert k4.arousal_steps == 0
+
+    assert aroused.phasic_structure and aroused.startle
+    assert aroused.grow_demand_k is None
+    assert aroused.arousal_steps == 1000
+
+    assert both.phasic_structure and both.startle
+    assert both.grow_demand_k == 4
+    assert both.arousal_steps == 1000
+
+
+def test_make_config_pins_historical_full_scan_variants():
+    # Raw Config defaults to k4 now; old named comparators still mean full-scan
+    # unless the variant name explicitly says k4/bounded.
+    for name in ("currency", "sleep", "phasic", "phasic-startle", "size-w16"):
+        assert make_config(name).grow_demand_k is None
+
+
 def test_bounded_size_sweep_arms_match_widths_with_demand_k():
     from evals.spec import make_config
     widths = {"size-w4-k4": (2, 4, 4, 4, 2), "size-w6-k4": (2, 6, 6, 6, 2),
@@ -315,3 +345,137 @@ def test_bounded_size_sweep_arms_match_widths_with_demand_k():
         assert cfg.init_layers == layers
         assert cfg.grow_demand_k == 4
         assert cfg.grad_currency and cfg.enable_grow and cfg.enable_prune
+
+
+def test_compute_efficiency_probe_variants_are_single_knobs():
+    base = make_config("phasic-startle-k4")
+    assert make_config("phasic-startle-k4-lazy").lazy_meters is True
+    assert make_config("eff-density30").init_density == 0.30
+    assert make_config("eff-density50").init_density == 0.50
+    assert make_config("eff-w12").init_layers == (2, 12, 12, 12, 2)
+    assert make_config("eff-w20").init_layers == (2, 20, 20, 20, 2)
+    assert make_config("eff-floor08").sleep_prune_floor == 0.8
+    assert make_config("eff-floor12").sleep_prune_floor == 1.2
+    assert make_config("eff-floor15").sleep_prune_floor == 1.5
+    assert make_config("eff-wta4").activation_top_k == 4
+    assert make_config("eff-wta6").activation_top_k == 6
+    assert make_config("eff-wta8").activation_top_k == 8
+
+    for name in ("phasic-startle-k4-lazy", "eff-density30", "eff-density50",
+                 "eff-w12", "eff-w20", "eff-floor08", "eff-floor12",
+                 "eff-floor15", "eff-wta4", "eff-wta6", "eff-wta8"):
+        cfg = make_config(name)
+        assert cfg.grow_demand_k == base.grow_demand_k == 4
+        assert cfg.phasic_structure and cfg.startle
+        assert cfg.enable_confidence and cfg.enable_prune and cfg.enable_grow
+
+
+def test_digit_width_sweep_matched_edge_budget():
+    """The width-sweep arms all start within ~8% of the same edge budget, with
+    the dense arm static and the wide arms self-rewiring (phasic-startle-k4)."""
+    from sprout.network import build_graph
+    arms = {
+        "digits-w16-dense":  ((64, 16, 10), 1.0, False),
+        "digits-w32-sparse": ((64, 32, 10), 0.5, True),
+        "digits-w64-sparse": ((64, 64, 10), 0.25, True),
+        "digits-w128-sparse": ((64, 128, 10), 0.125, True),
+    }
+    counts = []
+    for name, (layers, density, sparse) in arms.items():
+        cfg = make_config(name)
+        assert cfg.init_layers == layers
+        assert cfg.init_density == density
+        if sparse:
+            assert cfg.phasic_structure and cfg.startle and cfg.grow_demand_k == 4
+            assert cfg.enable_confidence and cfg.enable_prune and cfg.enable_grow
+        else:
+            assert cfg.init_density == 1.0 and not cfg.enable_grow
+        counts.append(len(build_graph(list(layers), density=density, seed=0).synapses))
+    assert max(counts) / min(counts) < 1.08    # matched compute budget
+
+
+def test_digit_w128_kscale_variants():
+    """w128 k-scaling probe: same wide net + budget, larger grow_demand_k."""
+    assert make_config("digits-w128-k16").grow_demand_k == 16
+    assert make_config("digits-w128-k32").grow_demand_k == 32
+    for name in ("digits-w128-k16", "digits-w128-k32"):
+        cfg = make_config(name)
+        assert cfg.init_layers == (64, 128, 10) and cfg.init_density == 0.125
+        assert cfg.phasic_structure and cfg.startle and cfg.enable_grow
+
+
+def test_digit_budget_floor_sweep_variants():
+    """Narrow the w32-sparse winner at fixed density 0.5 to probe the edge floor:
+    fewer hidden neurons -> fewer edges, fan-in into hidden held ~32."""
+    from sprout.network import build_graph
+    arms = [("digits-w8-sparse", 8), ("digits-w12-sparse", 12),
+            ("digits-w16-sparse", 16), ("digits-w24-sparse", 24)]
+    prev = 0
+    for name, w in arms:
+        cfg = make_config(name)
+        assert cfg.init_layers == (64, w, 10) and cfg.init_density == 0.5
+        assert cfg.grow_demand_k == 4 and cfg.phasic_structure and cfg.startle
+        n = len(build_graph([64, w, 10], density=0.5, seed=0).synapses)
+        assert n > prev    # monotonically more edges with width
+        prev = n
+
+
+def test_mnist_width_sweep_matched_edge_budget():
+    """Downsampled-MNIST (196-in) width sweep: dense w16 vs wide sparse arms,
+    all within ~8% of the same ~3296-edge budget."""
+    from sprout.network import build_graph
+    arms = {
+        "mnist-w16-dense":  ((196, 16, 10), 1.0, False),
+        "mnist-w32-sparse": ((196, 32, 10), 0.5, True),
+        "mnist-w64-sparse": ((196, 64, 10), 0.25, True),
+        "mnist-w128-sparse": ((196, 128, 10), 0.125, True),
+    }
+    counts = []
+    for name, (layers, density, sparse) in arms.items():
+        cfg = make_config(name)
+        assert cfg.init_layers == layers and cfg.init_density == density
+        if sparse:
+            assert cfg.phasic_structure and cfg.startle and cfg.grow_demand_k == 4
+        else:
+            assert cfg.init_density == 1.0 and not cfg.enable_grow
+        counts.append(len(build_graph(list(layers), density=density, seed=0).synapses))
+    assert max(counts) / min(counts) < 1.08
+
+
+def test_mnist_widen_budget_variants():
+    """2x-budget wide arms (~6592 edges vs the 3296 matched budget), w64
+    restored to w32's healthy fan-in (98)."""
+    from sprout.network import build_graph
+    for name, layers, density in [("mnist-w64-b2", (196, 64, 10), 0.5),
+                                  ("mnist-w128-b2", (196, 128, 10), 0.25)]:
+        cfg = make_config(name)
+        assert cfg.init_layers == layers and cfg.init_density == density
+        assert cfg.phasic_structure and cfg.startle and cfg.grow_demand_k == 4
+        n = len(build_graph(list(layers), density=density, seed=0).synapses)
+        assert 6000 < n < 7200          # ~2x the 3296 matched budget
+
+
+def test_mnist_depth_sweep_matched_budget():
+    """Depth arms hold the ~3296-edge budget (within ~8%) while adding layers."""
+    from sprout.network import build_graph
+    for name, layers in [("mnist-d2-sparse", (196, 30, 20, 10)),
+                         ("mnist-d3-sparse", (196, 28, 18, 16, 10))]:
+        cfg = make_config(name)
+        assert cfg.init_layers == layers and cfg.init_density == 0.5
+        assert cfg.phasic_structure and cfg.startle and cfg.grow_demand_k == 4
+        n = len(build_graph(list(layers), density=0.5, seed=0).synapses)
+        assert abs(n - 3296) / 3296 < 0.08      # matched budget vs the 1-hidden champ
+
+
+def test_mnist784_depth_variants_matched_budget():
+    """Full-res 784-input 1- vs 2-hidden arms hold a matched ~6.2k-edge budget
+    (within ~8%) with first-layer fan-in 196."""
+    from sprout.network import build_graph
+    counts = []
+    for name, layers in [("mnist784-d1-sparse", (784, 32, 10)),
+                         ("mnist784-d2-sparse", (784, 30, 20, 10))]:
+        cfg = make_config(name)
+        assert cfg.init_layers == layers and cfg.init_density == 0.25
+        assert cfg.phasic_structure and cfg.startle and cfg.grow_demand_k == 4
+        counts.append(len(build_graph(list(layers), density=0.25, seed=0).synapses))
+    assert max(counts) / min(counts) < 1.08

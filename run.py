@@ -32,7 +32,8 @@ from sprout import viz
 PRESETS = {
     "core": dict(),                          # plain sparse backprop (all off)
     "currency-conf": dict(enable_confidence=True),
-    "currency": dict(enable_confidence=True, enable_prune=True, enable_grow=True),
+    "currency": dict(enable_confidence=True, enable_prune=True, enable_grow=True,
+                     grow_demand_k=4),
 }
 
 DEFAULT_PRESET = "currency"

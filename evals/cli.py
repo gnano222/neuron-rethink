@@ -3,8 +3,8 @@
 Run a suite of variants across seeds (in parallel), aggregate with bootstrap
 verdicts vs a baseline, and write a scorecard + diagnostic plots.
 
-    python evaluate.py --variants currency,sleep,phasic --seeds 10 \
-        --dataset spirals --steps 15000 --shift 3000 --baseline currency
+    python evaluate.py --variants phasic-startle-k4,phasic-startle --seeds 10 \
+        --dataset spirals --steps 15000 --shift 3000 --baseline phasic-startle-k4
 """
 
 from __future__ import annotations
@@ -29,10 +29,11 @@ CACHE_DIR = os.path.join("output", "eval", "cache")
 
 def parse_args(argv=None):
     ap = argparse.ArgumentParser(description="SPROUT comparative evaluation")
-    ap.add_argument("--variants", default="currency,sleep",
+    ap.add_argument("--variants", default="phasic-startle-k4,phasic-startle",
                     help="comma-separated variant names")
     ap.add_argument("--seeds", type=int, default=5)
-    ap.add_argument("--dataset", default="spirals", choices=["spirals", "blobs"])
+    ap.add_argument("--dataset", default="spirals",
+                    choices=["spirals", "blobs", "digits", "mnist", "mnist-full"])
     ap.add_argument("--steps", type=int, default=15000)
     ap.add_argument("--shift", type=int, default=0,
                     help="concept-shift (label-swap) steps after the main run")
@@ -48,10 +49,14 @@ def parse_args(argv=None):
     ap.add_argument("--continual-turns", type=float, default=0.6,
                     help="continual: spiral turns (gentler => the 4-arm union "
                          "stays learnable, so consolidation has headroom)")
-    ap.add_argument("--baseline", default="currency")
+    ap.add_argument("--baseline", default="phasic-startle-k4")
     ap.add_argument("--jobs", type=int, default=None,
                     help="parallel workers (default: cpu count)")
     ap.add_argument("--record-every", type=int, default=200)
+    ap.add_argument("--train-eval-cap", type=int, default=None,
+                    help="cap per-snapshot train-metric samples (big datasets)")
+    ap.add_argument("--backend", default="object", choices=["object", "array"],
+                    help="object (reference) or array (vectorized, faster)")
     ap.add_argument("--density", type=float, default=0.4)
     ap.add_argument("--points", type=int, default=600)
     ap.add_argument("--layers", default=None, help="e.g. 2,10,10,8,2")
@@ -79,6 +84,7 @@ def build_spec(args) -> SuiteSpec:
         layers=layers, density=args.density, n_points=args.points,
         regime=args.regime, steps_a=args.steps_a, steps_b=args.steps_b,
         steps_ab=args.steps_ab, continual_turns=args.continual_turns,
+        train_eval_cap=args.train_eval_cap, backend=args.backend,
     )
 
 
