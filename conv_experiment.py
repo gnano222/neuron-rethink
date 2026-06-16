@@ -36,6 +36,11 @@ from sprout.train import Config                        # noqa: E402
 # arm name -> conv front-end spec (head is identical across arms)
 ARMS = {
     "fixed-hand-k6":  dict(k_max=6,  k_init=6,  init="hand",   learn=True,  structure=False, freeze=True,  grow_mode="split"),
+    # tight-budget arms: under scarcity, WHICH filters you keep should matter
+    "fixed-hand-k2":  dict(k_max=2,  k_init=2,  init="hand",   learn=True,  structure=False, freeze=True,  grow_mode="split"),
+    "learned-k2":     dict(k_max=2,  k_init=2,  init="random", learn=True,  structure=False, freeze=False, grow_mode="split"),
+    "fixed-hand-k3":  dict(k_max=3,  k_init=3,  init="hand",   learn=True,  structure=False, freeze=True,  grow_mode="split"),
+    "learned-k3":     dict(k_max=3,  k_init=3,  init="random", learn=True,  structure=False, freeze=False, grow_mode="split"),
     "learned-k6":     dict(k_max=6,  k_init=6,  init="random", learn=True,  structure=False, freeze=False, grow_mode="split"),
     "learned-k12":    dict(k_max=12, k_init=12, init="random", learn=True,  structure=False, freeze=False, grow_mode="split"),
     # E2 self-sizing: start few, let the economy grow/prune filters up to k_max
@@ -65,7 +70,7 @@ def _build(arm, seed, side, conv_eta):
     kh = kw = 3
     if spec["init"] == "hand":
         conv = ConvEconomy(k_max=spec["k_max"], kh=kh, kw=kw,
-                           kernels=filter_bank("hand"), seed=seed)
+                           kernels=filter_bank("hand")[:spec["k_max"]], seed=seed)
     else:
         conv = ConvEconomy(k_max=spec["k_max"], kh=kh, kw=kw,
                            k_init=spec["k_init"], seed=seed)
