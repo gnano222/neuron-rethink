@@ -479,3 +479,20 @@ def test_mnist784_depth_variants_matched_budget():
         assert cfg.phasic_structure and cfg.startle and cfg.grow_demand_k == 4
         counts.append(len(build_graph(list(layers), density=0.25, seed=0).synapses))
     assert max(counts) / min(counts) < 1.08
+
+
+def test_conv_front_end_variants_carry_dataset_and_input_size():
+    """Phase-1 conv arms: same w32-sparse architecture as mnist-w32-sparse, but a
+    216-feature conv-feature input and a per-variant dataset override."""
+    for name, ds in (("mnist-conv-hand", "mnist-conv"),
+                     ("mnist-conv-rand", "mnist-conv-rand")):
+        cfg = make_config(name)
+        assert cfg.init_dataset == ds
+        assert cfg.init_layers == (216, 32, 10) and cfg.init_density == 0.5
+        assert cfg.phasic_structure and cfg.startle and cfg.grow_demand_k == 4
+
+
+def test_non_conv_variants_have_no_dataset_override():
+    # the override defaults to None so every existing arm uses the suite dataset
+    assert make_config("mnist-w32-sparse").init_dataset is None
+    assert make_config("currency").init_dataset is None

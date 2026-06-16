@@ -46,6 +46,8 @@ _BOUNDED_GROW_VARIANTS = {
     "mnist-w32-sparse",
     "mnist-w64-sparse",
     "mnist-w128-sparse",
+    "mnist-conv-hand",
+    "mnist-conv-rand",
     "mnist-w64-b2",
     "mnist-w128-b2",
     "mnist-d2-sparse",
@@ -55,21 +57,24 @@ _BOUNDED_GROW_VARIANTS = {
 }
 
 
-def _dense(layers):
-    """A static fully-connected control arm (every plasticity mechanism off)."""
-    return lambda: Config(eta_base=0.02, init_density=1.0, init_layers=layers)
+def _dense(layers, dataset=None):
+    """A static fully-connected control arm (every plasticity mechanism off).
+    ``dataset`` optionally overrides the suite dataset for this arm."""
+    return lambda: Config(eta_base=0.02, init_density=1.0, init_layers=layers,
+                          init_dataset=dataset)
 
 
-def _sparse(layers, density, k=4):
+def _sparse(layers, density, k=4, dataset=None):
     """A promoted phasic-startle-k4 self-rewiring arm at a given size/density:
     2D confidence + prune + grow + sleep + startle, with ``k`` = grow_demand_k.
     The name must also appear in ``_BOUNDED_GROW_VARIANTS`` or make_config nulls k.
+    ``dataset`` optionally overrides the suite dataset (e.g. conv-feature MNIST).
     """
     return lambda: Config(
         eta_base=0.02, grad_currency=True, enable_confidence=True,
         enable_prune=True, enable_grow=True, gamma_dec=0.001, t_struct=200,
         phasic_structure=True, startle=True, grow_demand_k=k,
-        init_layers=layers, init_density=density)
+        init_layers=layers, init_density=density, init_dataset=dataset)
 
 
 # name -> factory returning a FRESH Config (never share mutable Config instances
@@ -609,6 +614,16 @@ VARIANTS: dict[str, Callable[[], Config]] = {
     "mnist-w32-sparse": _sparse((196, 32, 10), 0.5),
     "mnist-w64-sparse": _sparse((196, 64, 10), 0.25),
     "mnist-w128-sparse": _sparse((196, 128, 10), 0.125),
+    # --- CONV front-end (Phase 1 measurement). Same w32-sparse self-rewiring
+    # architecture as mnist-w32-sparse, but the input is FIXED-conv features (216)
+    # instead of raw pixels (196): 6 fixed 3x3 filters -> ReLU -> 2x2 max-pool ->
+    # flatten (see sprout/conv_features.py). Run in one suite with mnist-w32-sparse
+    # (baseline, raw mnist) to test whether translation-invariant features break
+    # the ~0.93 14x14 ceiling. `-hand` = oriented edges + blobs; `-rand` = random
+    # kernels (the structure-free A/B). See docs/superpowers/specs/
+    # 2026-06-16-conv-weight-sharing-design.md.
+    "mnist-conv-hand": _sparse((216, 32, 10), 0.5, dataset="mnist-conv"),
+    "mnist-conv-rand": _sparse((216, 32, 10), 0.5, dataset="mnist-conv-rand"),
     # WIDEN-THE-BUDGET arms: relax the matched-3296 constraint to a 2x budget
     # (~6592 edges) so the wide arms get healthier fan-in. Does spending more
     # compute on a wider net overtake the lean w32-sparse (3296, fan-in 98)?
