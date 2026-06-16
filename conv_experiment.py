@@ -51,7 +51,39 @@ ARMS = {
 }
 
 
+def _motif_images(seed, n_points, n_test=1000, side=12, n_classes=6, n_stamp=2):
+    """Positive-control task where FILTER QUALITY is the bottleneck: each class is
+    a fixed random 3x3 motif stamped at random positions (translation-invariant).
+    The optimal detectors are MATCHED filters for the motifs -- which a generic
+    edge/blob bank does not contain -- so learned filters should beat fixed here
+    even though they tie on MNIST. Motifs are task-fixed (seed 12345); the data
+    seed only varies images/positions. Standardized per-pixel on train stats."""
+    motifs = np.random.default_rng(12345).normal(size=(n_classes, 3, 3))
+    motifs /= np.linalg.norm(motifs.reshape(n_classes, -1), axis=1)[:, None, None]
+
+    def gen(rng, n):
+        X = np.zeros((n, side, side))
+        y = np.zeros(n, int)
+        for i in range(n):
+            c = i % n_classes
+            for _ in range(n_stamp):
+                r, cc = int(rng.integers(0, side - 2)), int(rng.integers(0, side - 2))
+                X[i, r:r + 3, cc:cc + 3] += 2.0 * motifs[c]
+            y[i] = c
+        return X + 0.3 * rng.normal(size=X.shape), y
+
+    Xtr, ytr = gen(np.random.default_rng(seed), n_points)
+    Xte, yte = gen(np.random.default_rng(seed + 10000), n_test)
+    flat_tr, flat_te = Xtr.reshape(len(Xtr), -1), Xte.reshape(len(Xte), -1)
+    mu, sd = flat_tr.mean(0), flat_tr.std(0) + 1e-8
+    Xtr = ((flat_tr - mu) / sd).reshape(-1, side, side)
+    Xte = ((flat_te - mu) / sd).reshape(-1, side, side)
+    return Xtr, ytr, Xte, yte, side
+
+
 def _images(dataset, seed, n_points):
+    if dataset == "motifs":
+        return _motif_images(seed, n_points)
     Xtr, ytr, Xte, yte = get_dataset(dataset, seed, n_points=n_points)
     side = int(round(np.sqrt(Xtr.shape[1])))
     return (Xtr.reshape(-1, side, side), ytr, Xte.reshape(-1, side, side), yte, side)
@@ -65,7 +97,7 @@ def _head_config():
                   sleep_warmup=2500, sleep_patience=1500)
 
 
-def _build(arm, seed, side, conv_eta):
+def _build(arm, seed, side, conv_eta, n_out=10):
     spec = ARMS[arm]
     kh = kw = 3
     if spec["init"] == "hand":
@@ -75,7 +107,7 @@ def _build(arm, seed, side, conv_eta):
         conv = ConvEconomy(k_max=spec["k_max"], kh=kh, kw=kw,
                            k_init=spec["k_init"], seed=seed)
     feat = conv.feat_dim(side, side)
-    head = build_graph([feat, 32, 10], density=0.5, seed=seed)
+    head = build_graph([feat, 32, n_out], density=0.5, seed=seed)
     init_weights(head, seed=seed)
     model = ConvModel(conv, head, side, side)
     cfg = _head_config()
@@ -88,7 +120,8 @@ def _build(arm, seed, side, conv_eta):
 
 def run_one(arm, seed, args):
     Xtr, ytr, Xte, yte, side = _images(args.dataset, seed, args.points)
-    tr, model = _build(arm, seed, side, args.conv_eta)
+    n_out = int(max(ytr.max(), yte.max())) + 1
+    tr, model = _build(arm, seed, side, args.conv_eta, n_out=n_out)
     tr.X, tr.y = Xtr, ytr
     cap = min(args.train_eval_cap, len(Xtr))
     eval_idx = np.sort(np.random.default_rng(seed + 7).choice(len(Xtr), cap, replace=False))
