@@ -54,6 +54,8 @@ _BOUNDED_GROW_VARIANTS = {
     "mnist-d3-sparse",
     "mnist784-d1-sparse",
     "mnist784-d2-sparse",
+    "mnist-full-conv-hand",
+    "mnist-full-conv-matched",
 }
 
 
@@ -647,6 +649,15 @@ VARIANTS: dict[str, Callable[[], Config]] = {
     #   d2 (784, 30,20, 10) d=0.25 : ~6091 edges, fan-in [196, 8, 5]
     "mnist784-d1-sparse": _sparse((784, 32, 10), 0.25),
     "mnist784-d2-sparse": _sparse((784, 30, 20, 10), 0.25),
+    # --- CONV front-end on FULL-RES 28x28 (the decisive testbed: translation
+    # invariance has far more room on the big image than on 14x14). 6 fixed 3x3
+    # filters -> ReLU -> 2x2 pool -> 13x13=169 per filter -> 1014 features.
+    # `-hand`: architecturally consistent with the raw 784 baseline (d=0.25, but
+    # ~8.2k edges vs raw's ~6.4k). `-matched`: density lowered to 0.19 so its
+    # ~6.2k edges roughly MATCH the raw baseline — isolating the conv-feature
+    # effect from "conv just spends more edges". Baseline: mnist784-d1-sparse.
+    "mnist-full-conv-hand": _sparse((1014, 32, 10), 0.25, dataset="mnist-full-conv"),
+    "mnist-full-conv-matched": _sparse((1014, 32, 10), 0.19, dataset="mnist-full-conv"),
 }
 
 

@@ -496,3 +496,19 @@ def test_non_conv_variants_have_no_dataset_override():
     # the override defaults to None so every existing arm uses the suite dataset
     assert make_config("mnist-w32-sparse").init_dataset is None
     assert make_config("currency").init_dataset is None
+
+
+def test_full_res_conv_variants_dataset_and_matched_budget():
+    """Full-res 28x28 conv arms: 1014-feature input on mnist-full-conv. The
+    `-matched` arm's density is set so its edge budget roughly matches the raw
+    784 baseline (~6.4k), isolating the conv-feature effect from extra edges."""
+    from sprout.network import build_graph
+    for name, density in (("mnist-full-conv-hand", 0.25),
+                          ("mnist-full-conv-matched", 0.19)):
+        cfg = make_config(name)
+        assert cfg.init_dataset == "mnist-full-conv"
+        assert cfg.init_layers == (1014, 32, 10) and cfg.init_density == density
+        assert cfg.phasic_structure and cfg.startle and cfg.grow_demand_k == 4
+    raw = len(build_graph([784, 32, 10], density=0.25, seed=0).synapses)
+    matched = len(build_graph([1014, 32, 10], density=0.19, seed=0).synapses)
+    assert abs(matched - raw) / raw < 0.10        # matched within ~10% of raw
