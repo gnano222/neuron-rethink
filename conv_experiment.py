@@ -35,12 +35,14 @@ from sprout.train import Config                        # noqa: E402
 
 # arm name -> conv front-end spec (head is identical across arms)
 ARMS = {
-    "fixed-hand-k6":  dict(k_max=6,  k_init=6,  init="hand",   learn=True,  structure=False, freeze=True),
-    "learned-k6":     dict(k_max=6,  k_init=6,  init="random", learn=True,  structure=False, freeze=False),
-    "learned-k12":    dict(k_max=12, k_init=12, init="random", learn=True,  structure=False, freeze=False),
+    "fixed-hand-k6":  dict(k_max=6,  k_init=6,  init="hand",   learn=True,  structure=False, freeze=True,  grow_mode="split"),
+    "learned-k6":     dict(k_max=6,  k_init=6,  init="random", learn=True,  structure=False, freeze=False, grow_mode="split"),
+    "learned-k12":    dict(k_max=12, k_init=12, init="random", learn=True,  structure=False, freeze=False, grow_mode="split"),
     # E2 self-sizing: start few, let the economy grow/prune filters up to k_max
-    "selfsize-4to12": dict(k_max=12, k_init=4,  init="random", learn=True,  structure=True,  freeze=False),
-    "selfsize-2to8":  dict(k_max=8,  k_init=2,  init="random", learn=True,  structure=True,  freeze=False),
+    "selfsize-2to12-split": dict(k_max=12, k_init=2, init="random", learn=True, structure=True, freeze=False, grow_mode="split"),
+    "selfsize-2to12-rand":  dict(k_max=12, k_init=2, init="random", learn=True, structure=True, freeze=False, grow_mode="random"),
+    # start ABOVE the useful count to test whether the economy PRUNES redundancy
+    "selfsize-12to12-prune": dict(k_max=12, k_init=12, init="random", learn=True, structure=True, freeze=False, grow_mode="split"),
 }
 
 
@@ -74,7 +76,8 @@ def _build(arm, seed, side, conv_eta):
     cfg = _head_config()
     tr = ConvTrainer(cfg, model, None, None, seed=seed, conv_eta=conv_eta,
                      learn_conv=not spec["freeze"], conv_structure=spec["structure"],
-                     conv_k_max=spec["k_max"], conv_k_min=2, conv_grow_mode="split")
+                     conv_k_max=spec["k_max"], conv_k_min=2,
+                     conv_grow_mode=spec["grow_mode"])
     return tr, model
 
 
@@ -169,6 +172,17 @@ def _write(results, args, dest):
     plt.title(args.name); plt.tight_layout()
     plt.savefig(os.path.join(dest, "acc_curves.png"), dpi=110); plt.close()
 
+    # active-filter-count trajectory (the self-sizing signal)
+    plt.figure(figsize=(7, 4.5))
+    for a in arms:
+        rs = by[a]
+        steps = rs[0]["rec_step"]
+        m = np.mean([r["n_active"] for r in rs], axis=0)
+        plt.plot(steps, m, label=a)
+    plt.xlabel("step"); plt.ylabel("active filters"); plt.legend(); plt.grid(alpha=.3)
+    plt.title(f"{args.name} — filter count"); plt.tight_layout()
+    plt.savefig(os.path.join(dest, "count_curves.png"), dpi=110); plt.close()
+
     # filter visualization for each learned arm (seed-0 final filters)
     for a in arms:
         r0 = next((r for r in by[a] if r["seed"] == 0), by[a][0])
@@ -205,7 +219,7 @@ def _write(results, args, dest):
             f"{rw['verdict']} |")
     lines += ["", "Verdict = 95% seed-bootstrap CI of the final-test-acc difference "
               "vs the baseline (UP/DOWN/~).", "",
-              "![acc](acc_curves.png)", ""]
+              "![acc](acc_curves.png)", "", "![filter count](count_curves.png)", ""]
     for a in arms:
         if os.path.exists(os.path.join(dest, f"filters_{a}.png")):
             lines.append(f"### {a} learned filters\n\n![{a}](filters_{a}.png)\n")
