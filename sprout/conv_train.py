@@ -118,9 +118,56 @@ class ConvTrainer:
         self._maybe_rewire(loss)
         return loss
 
-    # filled in Stage D; here it only advances the settledness detector
+    # -- phasic structure (Stage D) -----------------------------------------
     def _maybe_rewire(self, loss):
-        self.detector.update(loss, self.step_idx)
+        """At a settledness plateau, rewire BOTH economies in one burst (conv
+        filters first so the head can target newborn slots), then require a fresh
+        plateau. Mirrors Trainer._rewire_phasic; the head reuses the exact
+        currency.prune/grow primitives on a batch of CURRENT conv features."""
+        cfg = self.cfg
+        settled = self.detector.update(loss, self.step_idx)
+        if not settled or not (cfg.enable_prune or cfg.enable_grow):
+            return
+        self.events.append({"step": self.step_idx, "type": "sleep"})
+        if self.conv_structure:
+            self._rewire_conv()
+        self._rewire_head()
+        self.detector.reset()
+
+    def _rewire_conv(self):
+        cfg, conv = self.cfg, self.model.conv
+        if cfg.enable_prune:
+            for k in conv.prune(self.conv_prune_floor, lam=cfg.lam_prune,
+                                k_min=self.conv_k_min, grace=cfg.t_grace):
+                self.events.append({"step": self.step_idx, "type": "conv_prune",
+                                    "filter": int(k)})
+        if cfg.enable_grow:
+            for k in conv.grow(mode=self.conv_grow_mode, k_max=self.conv_k_max,
+                               n=self.conv_grow_per_burst):
+                self.events.append({"step": self.step_idx, "type": "conv_grow",
+                                    "filter": int(k)})
+
+    def _rewire_head(self):
+        cfg, head = self.cfg, self.model.head
+        if cfg.enable_prune:
+            cap = (cfg.sleep_max_prune if cfg.sleep_max_prune is not None
+                   else len(head.synapses))
+            pruned = currency.prune_currency(
+                head, cfg.t_grace, cap, cfg.sleep_prune_floor, cfg.lam_prune)
+            for edge in pruned:
+                self.events.append({"step": self.step_idx, "type": "prune",
+                                    "edge": edge})
+        if cfg.enable_grow:
+            b = min(cfg.virt_batch, len(self.X))
+            idx = self.rng.choice(len(self.X), size=b, replace=False)
+            xfeat = np.array([self.model.conv.forward(self.X[j])[0] for j in idx])
+            ghost, ref = currency.batch_edge_scores(
+                head, xfeat, self.y[idx], grow_demand_k=cfg.grow_demand_k)
+            grown = currency.grow_currency(head, ghost, ref, len(ghost),
+                                           cfg.grow_bar_frac)
+            for edge in grown:
+                self.events.append({"step": self.step_idx, "type": "grow",
+                                    "edge": edge})
 
     # -- eval ----------------------------------------------------------------
     def predict(self, X_imgs):

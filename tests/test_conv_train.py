@@ -110,3 +110,48 @@ def test_convtrainer_deterministic():
     a1, t1 = run()
     a2, t2 = run()
     assert a1 == a2 and np.allclose(t1, t2)
+
+
+# -- Stage D: phasic rewire (head + conv filter birth/death) ------------------
+
+def test_phasic_rewire_fires_and_changes_structure():
+    X, y = _synth(120, 0)
+    from sprout.conv import ConvEconomy
+    from sprout.network import build_graph, init_weights
+    conv = ConvEconomy(k_max=8, kh=3, kw=3, k_init=4, seed=0)   # room to grow
+    head = build_graph([conv.feat_dim(8, 8), 12, 2], density=0.5, seed=0)
+    init_weights(head, seed=0)
+    model = ConvModel(conv, head, 8, 8)
+    cfg = Config(eta_base=0.05, enable_confidence=True, enable_prune=True,
+                 enable_grow=True, phasic_structure=True, startle=False,
+                 sleep_warmup=200, sleep_patience=100)
+    tr = ConvTrainer(cfg, model, X, y, seed=0, conv_structure=True,
+                     conv_k_max=8, conv_k_min=2)
+    for _ in range(3000):
+        tr.step()
+    types = {e["type"] for e in tr.events}
+    assert "sleep" in types                       # a plateau rewire fired
+    assert ("conv_grow" in types) or ("conv_prune" in types)
+    assert 2 <= conv.n_active <= 8
+
+
+def test_phasic_rewire_deterministic():
+    def run():
+        X, y = _synth(80, 1)
+        from sprout.conv import ConvEconomy
+        from sprout.network import build_graph, init_weights
+        conv = ConvEconomy(k_max=6, kh=3, kw=3, k_init=3, seed=3)
+        head = build_graph([conv.feat_dim(8, 8), 8, 2], density=0.5, seed=3)
+        init_weights(head, seed=3)
+        model = ConvModel(conv, head, 8, 8)
+        cfg = Config(eta_base=0.05, enable_confidence=True, enable_prune=True,
+                     enable_grow=True, phasic_structure=True, startle=False,
+                     sleep_warmup=150, sleep_patience=80)
+        tr = ConvTrainer(cfg, model, X, y, seed=3, conv_structure=True)
+        for _ in range(1500):
+            tr.step()
+        return conv.n_active, len(head.synapses), conv.theta.copy()
+
+    a = run()
+    b = run()
+    assert a[0] == b[0] and a[1] == b[1] and np.allclose(a[2], b[2])
