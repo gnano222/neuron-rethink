@@ -40,6 +40,10 @@ ARMS = {
     # consolidation arms: learn filters early, wind LR down so they settle late
     "learned-k6-cos": dict(k_max=6,  k_init=6,  init="random", learn=True,  structure=False, freeze=False, grow_mode="split", eta_sched="cosine"),
     "selfsize-2to12-rand-cos": dict(k_max=12, k_init=2, init="random", learn=True, structure=True, freeze=False, grow_mode="random", eta_sched="cosine"),
+    # redundancy pruning: start FULL (12), no growth, trim duplicate filters
+    # (high kernel cosine similarity) so the bank leans out to its natural size.
+    "selfsize-12to12-cos":         dict(k_max=12, k_init=12, init="random", learn=True, structure=True, freeze=False, grow_mode="split", eta_sched="cosine", grow_per_burst=0, redprune=False),
+    "selfsize-12to12-redprune-cos": dict(k_max=12, k_init=12, init="random", learn=True, structure=True, freeze=False, grow_mode="split", eta_sched="cosine", grow_per_burst=0, redprune=True, red_thresh=0.85),
     # tight-budget arms: under scarcity, WHICH filters you keep should matter
     "fixed-hand-k2":  dict(k_max=2,  k_init=2,  init="hand",   learn=True,  structure=False, freeze=True,  grow_mode="split"),
     "learned-k2":     dict(k_max=2,  k_init=2,  init="random", learn=True,  structure=False, freeze=False, grow_mode="split"),
@@ -120,7 +124,10 @@ def _build(arm, seed, side, conv_eta, n_out=10, total_steps=None):
                      conv_k_max=spec["k_max"], conv_k_min=2,
                      conv_grow_mode=spec["grow_mode"],
                      conv_eta_schedule=spec.get("eta_sched", "none"),
-                     total_steps=total_steps)
+                     total_steps=total_steps,
+                     conv_grow_per_burst=spec.get("grow_per_burst", 2),
+                     conv_redundancy_prune=spec.get("redprune", False),
+                     conv_redundancy_threshold=spec.get("red_thresh", 0.9))
     return tr, model
 
 

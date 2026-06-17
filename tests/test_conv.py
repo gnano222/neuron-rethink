@@ -220,3 +220,28 @@ def test_conv_economy_grow_split_clones_highest_demand():
     assert len(born) == 1
     # the clone resembles filter 0 (the highest-demand parent), not filter 1
     assert np.linalg.norm(ce.theta[born[0]] - 0.7) < np.linalg.norm(ce.theta[born[0]] - 0.2)
+
+
+def test_prune_redundant_drops_duplicate_keeps_distinct():
+    ce = ConvEconomy(k_max=4, kh=3, kw=3, k_init=4, seed=0)
+    base = np.array([[1.0, 0, -1], [1, 0, -1], [1, 0, -1]])   # vertical edge
+    ce.theta[0] = base
+    ce.theta[1] = base * 0.9 + 1e-4                            # near-duplicate of 0
+    ce.theta[2] = base.T                                       # horizontal (distinct)
+    ce.theta[3] = np.array([[0, 1.0, 0], [1, -4, 1], [0, 1, 0]])  # blob (distinct)
+    ce.M[:] = 1.0
+    pruned = ce.prune_redundant(threshold=0.9, k_min=1)
+    assert 1 in pruned and 0 not in pruned        # keep the higher-norm duplicate
+    assert 2 not in pruned and 3 not in pruned    # distinct filters survive
+    assert ce.n_active == 3
+
+
+def test_prune_redundant_respects_k_min_and_distinct_bank():
+    ce = ConvEconomy(k_max=3, kh=3, kw=3, k_init=3, seed=1)
+    # three genuinely distinct filters -> nothing pruned
+    ce.theta[0] = np.array([[1.0, 0, -1], [1, 0, -1], [1, 0, -1]])
+    ce.theta[1] = ce.theta[0].T
+    ce.theta[2] = np.array([[0, 1.0, 0], [1, -4, 1], [0, 1, 0]])
+    ce.M[:] = 1.0
+    assert ce.prune_redundant(threshold=0.9, k_min=1) == []
+    assert ce.n_active == 3

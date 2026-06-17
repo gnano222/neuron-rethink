@@ -68,7 +68,8 @@ class ConvTrainer:
                  learn_conv=True, conv_structure=False, conv_k_max=None,
                  conv_grow_mode="split", conv_prune_floor=0.5, conv_k_min=2,
                  conv_grow_per_burst=2, conv_eta_schedule="none",
-                 total_steps=None, freeze_frac=0.6):
+                 total_steps=None, freeze_frac=0.6,
+                 conv_redundancy_prune=False, conv_redundancy_threshold=0.9):
         self.cfg = cfg
         self.model = model
         self.X = np.asarray(X_imgs, dtype=float)
@@ -92,6 +93,8 @@ class ConvTrainer:
         self.conv_prune_floor = conv_prune_floor
         self.conv_k_min = conv_k_min
         self.conv_grow_per_burst = conv_grow_per_burst
+        self.conv_redundancy_prune = conv_redundancy_prune
+        self.conv_redundancy_threshold = conv_redundancy_threshold
         self.events = []
         model.head.activation_top_k = cfg.activation_top_k
         self.detector = SettlednessDetector(
@@ -164,6 +167,11 @@ class ConvTrainer:
                                 k_min=self.conv_k_min, grace=cfg.t_grace):
                 self.events.append({"step": self.step_idx, "type": "conv_prune",
                                     "filter": int(k)})
+            if self.conv_redundancy_prune:
+                for k in conv.prune_redundant(self.conv_redundancy_threshold,
+                                              lam=cfg.lam_prune, k_min=self.conv_k_min):
+                    self.events.append({"step": self.step_idx,
+                                        "type": "conv_redprune", "filter": int(k)})
         if cfg.enable_grow:
             for k in conv.grow(mode=self.conv_grow_mode, k_max=self.conv_k_max,
                                n=self.conv_grow_per_burst):
