@@ -245,3 +245,15 @@ def test_prune_redundant_respects_k_min_and_distinct_bank():
     ce.M[:] = 1.0
     assert ce.prune_redundant(threshold=0.9, k_min=1) == []
     assert ce.n_active == 3
+
+
+def test_prune_redundant_activation_drops_functional_duplicate():
+    ce = ConvEconomy(k_max=3, kh=3, kw=3, k_init=3, seed=0)
+    base = np.array([[1.0, 0, -1], [1, 0, -1], [1, 0, -1]])
+    ce.theta[0] = base; ce.theta[1] = base.copy(); ce.theta[2] = base.T
+    ce.M[:] = 1.0
+    imgs = np.random.default_rng(0).normal(size=(20, 8, 8))
+    pruned = ce.prune_redundant_activation(imgs, threshold=0.95, k_min=1)
+    assert len(pruned) == 1 and pruned[0] in (0, 1)   # one of the identical pair
+    assert 2 not in pruned                            # the distinct one survives
+    assert ce.n_active == 2

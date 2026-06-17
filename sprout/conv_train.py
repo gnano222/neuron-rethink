@@ -69,7 +69,8 @@ class ConvTrainer:
                  conv_grow_mode="split", conv_prune_floor=0.5, conv_k_min=2,
                  conv_grow_per_burst=2, conv_eta_schedule="none",
                  total_steps=None, freeze_frac=0.6,
-                 conv_redundancy_prune=False, conv_redundancy_threshold=0.9):
+                 conv_redundancy_prune=False, conv_redundancy_threshold=0.9,
+                 conv_redundancy_mode="kernel", conv_redundancy_batch=32):
         self.cfg = cfg
         self.model = model
         self.X = np.asarray(X_imgs, dtype=float)
@@ -95,6 +96,8 @@ class ConvTrainer:
         self.conv_grow_per_burst = conv_grow_per_burst
         self.conv_redundancy_prune = conv_redundancy_prune
         self.conv_redundancy_threshold = conv_redundancy_threshold
+        self.conv_redundancy_mode = conv_redundancy_mode
+        self.conv_redundancy_batch = conv_redundancy_batch
         self.events = []
         model.head.activation_top_k = cfg.activation_top_k
         self.detector = SettlednessDetector(
@@ -168,8 +171,16 @@ class ConvTrainer:
                 self.events.append({"step": self.step_idx, "type": "conv_prune",
                                     "filter": int(k)})
             if self.conv_redundancy_prune:
-                for k in conv.prune_redundant(self.conv_redundancy_threshold,
-                                              lam=cfg.lam_prune, k_min=self.conv_k_min):
+                if self.conv_redundancy_mode == "activation":
+                    b = min(self.conv_redundancy_batch, len(self.X))
+                    idx = self.rng.choice(len(self.X), size=b, replace=False)
+                    red = conv.prune_redundant_activation(
+                        self.X[idx], self.conv_redundancy_threshold,
+                        lam=cfg.lam_prune, k_min=self.conv_k_min)
+                else:
+                    red = conv.prune_redundant(self.conv_redundancy_threshold,
+                                               lam=cfg.lam_prune, k_min=self.conv_k_min)
+                for k in red:
                     self.events.append({"step": self.step_idx,
                                         "type": "conv_redprune", "filter": int(k)})
         if cfg.enable_grow:

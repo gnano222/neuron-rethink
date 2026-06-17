@@ -44,6 +44,9 @@ ARMS = {
     # (high kernel cosine similarity) so the bank leans out to its natural size.
     "selfsize-12to12-cos":         dict(k_max=12, k_init=12, init="random", learn=True, structure=True, freeze=False, grow_mode="split", eta_sched="cosine", grow_per_burst=0, redprune=False),
     "selfsize-12to12-redprune-cos": dict(k_max=12, k_init=12, init="random", learn=True, structure=True, freeze=False, grow_mode="split", eta_sched="cosine", grow_per_burst=0, redprune=True, red_thresh=0.85),
+    # FUNCTIONAL redundancy: prune filters whose OUTPUTS are correlated (carry the
+    # same info), not just whose kernels match -- the stronger leaning-out signal.
+    "selfsize-12to12-actprune-cos": dict(k_max=12, k_init=12, init="random", learn=True, structure=True, freeze=False, grow_mode="split", eta_sched="cosine", grow_per_burst=0, redprune=True, red_mode="activation", red_thresh=0.9),
     # tight-budget arms: under scarcity, WHICH filters you keep should matter
     "fixed-hand-k2":  dict(k_max=2,  k_init=2,  init="hand",   learn=True,  structure=False, freeze=True,  grow_mode="split"),
     "learned-k2":     dict(k_max=2,  k_init=2,  init="random", learn=True,  structure=False, freeze=False, grow_mode="split"),
@@ -127,7 +130,8 @@ def _build(arm, seed, side, conv_eta, n_out=10, total_steps=None):
                      total_steps=total_steps,
                      conv_grow_per_burst=spec.get("grow_per_burst", 2),
                      conv_redundancy_prune=spec.get("redprune", False),
-                     conv_redundancy_threshold=spec.get("red_thresh", 0.9))
+                     conv_redundancy_threshold=spec.get("red_thresh", 0.9),
+                     conv_redundancy_mode=spec.get("red_mode", "kernel"))
     return tr, model
 
 

@@ -209,19 +209,17 @@ class ConvEconomy:
             pruned.append(k)
         return pruned
 
-    def prune_redundant(self, threshold=0.9, lam=1.0, k_min=1):
-        """Prune filters that DUPLICATE another (high positive kernel cosine
-        similarity) -- the redundancy the inertness prune misses. For each
-        over-correlated pair, drop the LOWER-utility member and keep the other,
-        most-similar pairs first, never going below ``k_min``. Only positive
-        similarity counts: a sign-flipped kernel detects the opposite polarity
-        after ReLU, so it is genuinely different, not a duplicate."""
-        act = list(np.where(self.active)[0])
-        if len(act) <= k_min:
-            return []
-        flat = self.theta[act].reshape(len(act), -1)
-        unit = flat / (np.linalg.norm(flat, axis=1)[:, None] + _EPS)
-        sim = unit @ unit.T
+    def _deactivate(self, k):
+        self.active[k] = False
+        self.theta[k] = 0.0
+        self.M[k] = 0.0
+        self.Svec[k] = 0.0
+        self.conf[k] = 0.0
+
+    def _prune_by_similarity(self, sim, act, threshold, lam, k_min):
+        """Drop the lower-utility member of each over-similar pair (most-similar
+        first), never below ``k_min``. ``sim`` is the active-filter similarity
+        matrix; ``act`` the active indices in the same order."""
         load, dem = self.loads(), self.demands()
         util = {k: load[k] + lam * dem[k] for k in act}
         pairs = sorted(
@@ -236,14 +234,44 @@ class ConvEconomy:
             if a in dropped or b in dropped:
                 continue
             drop = a if util[a] < util[b] else b
-            self.active[drop] = False
-            self.theta[drop] = 0.0
-            self.M[drop] = 0.0
-            self.Svec[drop] = 0.0
-            self.conf[drop] = 0.0
+            self._deactivate(drop)
             dropped.add(drop)
             pruned.append(drop)
         return pruned
+
+    def filter_activations(self, imgs):
+        """Per-filter pooled activations over a batch: ``(k_max, B*poh*pow)``."""
+        rows = [self.forward(img)[0] for img in imgs]
+        F = np.array(rows)                              # (B, k_max*per)
+        per = F.shape[1] // self.k_max
+        return F.reshape(len(imgs), self.k_max, per).transpose(1, 0, 2).reshape(
+            self.k_max, -1)
+
+    def prune_redundant(self, threshold=0.9, lam=1.0, k_min=1):
+        """Prune filters whose KERNELS duplicate another (high positive cosine
+        similarity). Conservative -- only fires on geometrically near-identical
+        stamps. A sign-flipped kernel detects the opposite polarity after ReLU, so
+        only positive similarity counts (it is not a duplicate)."""
+        act = list(np.where(self.active)[0])
+        if len(act) <= k_min:
+            return []
+        flat = self.theta[act].reshape(len(act), -1)
+        unit = flat / (np.linalg.norm(flat, axis=1)[:, None] + _EPS)
+        return self._prune_by_similarity(unit @ unit.T, act, threshold, lam, k_min)
+
+    def prune_redundant_activation(self, imgs, threshold=0.95, lam=1.0, k_min=1):
+        """Prune filters that are FUNCTIONALLY redundant -- their pooled outputs
+        are highly correlated across a batch (they carry the same information, so
+        the head gains nothing from both), even if their kernels differ. Pearson
+        correlation of the centered per-filter activation patterns."""
+        act = list(np.where(self.active)[0])
+        if len(act) <= k_min:
+            return []
+        A = self.filter_activations(imgs)[act]         # (n_active, B*per)
+        Ac = A - A.mean(axis=1, keepdims=True)
+        sim = (Ac @ Ac.T) / np.outer(np.linalg.norm(Ac, axis=1) + _EPS,
+                                     np.linalg.norm(Ac, axis=1) + _EPS)
+        return self._prune_by_similarity(sim, act, threshold, lam, k_min)
 
     def grow(self, mode="split", k_max=None, n=1):
         cap = self.k_max if k_max is None else k_max
