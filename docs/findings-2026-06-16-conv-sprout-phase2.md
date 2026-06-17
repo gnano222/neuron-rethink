@@ -64,6 +64,41 @@ staying legible?
   (filter–filter correlation) is the natural next step, and a very SPROUT one
   (consolidating duplicate detectors, like sleep consolidation for wires).
 
+## Follow-up: longer budget (60k steps) — the real bottleneck is STABILITY, not discovery
+
+The experiments above used a short 15k-step budget. Re-running the key comparisons
+at 60k steps (where the raw startle-k4 head reaches its 0.93 ceiling) on one
+consistent ruler (`docs/eval-runs/conv-sprout-long-digits`, `…-long-motifs`):
+
+| Task | Arm | final | peak (max) | curve shape |
+|---|---|---|---|---|
+| Digits | fixed-hand-k6 | **0.931** | 0.939 | smooth, monotone, stable |
+| | learned-k6 | 0.889 (DOWN) | 0.928 | peaks ~0.905 then **drifts down** |
+| | selfsize-2→12 | 0.915 (DOWN) | 0.933 | wobbly, ends below peak |
+| Motif | fixed-hand-k6 | 0.425 | 0.453 | steady |
+| | learned-k6 | 0.453 (~) | **0.507** | wobbly, higher peaks |
+| | selfsize-2→12 | 0.414 (~) | **0.522** | very wobbly (one −0.11 crash), highest peak |
+
+Two things change with the real budget:
+
+1. **Fixed conv reaches the 0.93 ceiling** (0.931), confirming the architecture is
+   sound and the 15k numbers were just under-trained.
+2. **Learned/self-sizing filters reach competitive-or-higher PEAKS but do not hold
+   them** — their curves wobble ±2–5pt and end below their peak, with high seed
+   variance. On digits this makes fixed clearly better on final accuracy; on motifs
+   the clear 15k win erodes to a final tie even though the learned PEAKS
+   (0.51–0.52) plainly beat fixed (0.45).
+
+So the limiter is **not filter discovery** — the peaks prove the economy finds good
+(even better) filters. The limiter is **consolidation/stability**: the filters keep
+moving, so the head trains on a shifting representation (a moving target), and the
+self-sizing births/deaths add discrete shocks (the −0.11 motif crash). Fixed filters
+sidestep this entirely by being frozen. SPROUT already solved exactly this for
+*wires* (phasic consolidation + confidence-freezing settled wires); the filter
+economy needs the same — freeze/decay settled filters so the representation settles.
+The per-filter confidence gating is present but evidently too weak to stop late
+drift. **This is the concrete next lever.**
+
 ## Practical recommendation
 
 For MNIST-family data, use the **cheap Phase-1 fixed bank** (+3–4pt, near-zero
