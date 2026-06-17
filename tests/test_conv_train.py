@@ -155,3 +155,26 @@ def test_phasic_rewire_deterministic():
     a = run()
     b = run()
     assert a[0] == b[0] and a[1] == b[1] and np.allclose(a[2], b[2])
+
+
+# -- filter-LR consolidation schedule ----------------------------------------
+
+def test_conv_eta_schedules():
+    model = _model(4, 8, 8, 8, 2, seed=0)
+    cfg = Config(eta_base=0.05, enable_confidence=True)
+    # cosine: full at start, ~half at midpoint, ~0 at the end
+    tr = ConvTrainer(cfg, model, _synth(20, 0)[0], _synth(20, 0)[1], seed=0,
+                     conv_eta=0.02, conv_eta_schedule="cosine", total_steps=1000)
+    tr.step_idx = 0;    assert abs(tr._conv_eta_now() - 0.02) < 1e-9
+    tr.step_idx = 500;  assert abs(tr._conv_eta_now() - 0.01) < 1e-3
+    tr.step_idx = 1000; assert tr._conv_eta_now() < 1e-4
+    # freeze: full until the fraction, then exactly zero
+    tr2 = ConvTrainer(cfg, model, _synth(20, 0)[0], _synth(20, 0)[1], seed=0,
+                      conv_eta=0.02, conv_eta_schedule="freeze", total_steps=1000,
+                      freeze_frac=0.6)
+    tr2.step_idx = 500; assert tr2._conv_eta_now() == 0.02
+    tr2.step_idx = 700; assert tr2._conv_eta_now() == 0.0
+    # none: constant
+    tr3 = ConvTrainer(cfg, model, _synth(20, 0)[0], _synth(20, 0)[1], seed=0,
+                      conv_eta=0.02, total_steps=1000)
+    tr3.step_idx = 999; assert tr3._conv_eta_now() == 0.02

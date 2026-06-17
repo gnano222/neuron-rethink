@@ -10,6 +10,8 @@ See docs/superpowers/specs/2026-06-16-conv-sprout-phase2-design.md.
 """
 from __future__ import annotations
 
+import math
+
 import numpy as np
 
 from sprout import currency, learning
@@ -65,7 +67,8 @@ class ConvTrainer:
     def __init__(self, cfg, model, X_imgs, y, seed=0, conv_eta=None,
                  learn_conv=True, conv_structure=False, conv_k_max=None,
                  conv_grow_mode="split", conv_prune_floor=0.5, conv_k_min=2,
-                 conv_grow_per_burst=2):
+                 conv_grow_per_burst=2, conv_eta_schedule="none",
+                 total_steps=None, freeze_frac=0.6):
         self.cfg = cfg
         self.model = model
         self.X = np.asarray(X_imgs, dtype=float)
@@ -73,6 +76,15 @@ class ConvTrainer:
         self.rng = np.random.default_rng(seed)
         self.step_idx = 0
         self.conv_eta = cfg.eta_base if conv_eta is None else conv_eta
+        # filter-learning-rate CONSOLIDATION: wind filter learning down over
+        # training so filters settle near their peak and the head finishes on a
+        # stationary representation (the stability fix; see findings doc).
+        #   "none"   = constant (the unstable reference)
+        #   "cosine" = base * 0.5*(1+cos(pi*step/total)) -> ~0 by the end
+        #   "freeze" = base until freeze_frac of training, then 0 (learn-then-lock)
+        self.conv_eta_schedule = conv_eta_schedule
+        self.total_steps = total_steps
+        self.freeze_frac = freeze_frac
         self.learn_conv = learn_conv
         self.conv_structure = conv_structure
         self.conv_k_max = model.conv.k_max if conv_k_max is None else conv_k_max
@@ -112,11 +124,22 @@ class ConvTrainer:
         for syn in head.synapses.values():
             syn.age += 1
         if self.learn_conv:
-            conv.gated_update(g, self.conv_eta)
+            conv.gated_update(g, self._conv_eta_now())
 
         self.step_idx += 1
         self._maybe_rewire(loss)
         return loss
+
+    def _conv_eta_now(self):
+        """Effective filter learning rate this step (the consolidation schedule)."""
+        if not self.total_steps or self.conv_eta_schedule == "none":
+            return self.conv_eta
+        frac = min(self.step_idx / self.total_steps, 1.0)
+        if self.conv_eta_schedule == "cosine":
+            return self.conv_eta * 0.5 * (1.0 + math.cos(math.pi * frac))
+        if self.conv_eta_schedule == "freeze":
+            return 0.0 if frac >= self.freeze_frac else self.conv_eta
+        raise ValueError(f"unknown conv_eta_schedule {self.conv_eta_schedule!r}")
 
     # -- phasic structure (Stage D) -----------------------------------------
     def _maybe_rewire(self, loss):

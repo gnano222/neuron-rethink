@@ -33,9 +33,13 @@ from sprout.network import build_graph, init_weights  # noqa: E402
 from sprout.train import Config                        # noqa: E402
 
 
-# arm name -> conv front-end spec (head is identical across arms)
+# arm name -> conv front-end spec (head is identical across arms).
+# eta_sched controls filter-LR CONSOLIDATION: "none" | "cosine" | "freeze".
 ARMS = {
     "fixed-hand-k6":  dict(k_max=6,  k_init=6,  init="hand",   learn=True,  structure=False, freeze=True,  grow_mode="split"),
+    # consolidation arms: learn filters early, wind LR down so they settle late
+    "learned-k6-cos": dict(k_max=6,  k_init=6,  init="random", learn=True,  structure=False, freeze=False, grow_mode="split", eta_sched="cosine"),
+    "selfsize-2to12-rand-cos": dict(k_max=12, k_init=2, init="random", learn=True, structure=True, freeze=False, grow_mode="random", eta_sched="cosine"),
     # tight-budget arms: under scarcity, WHICH filters you keep should matter
     "fixed-hand-k2":  dict(k_max=2,  k_init=2,  init="hand",   learn=True,  structure=False, freeze=True,  grow_mode="split"),
     "learned-k2":     dict(k_max=2,  k_init=2,  init="random", learn=True,  structure=False, freeze=False, grow_mode="split"),
@@ -97,7 +101,7 @@ def _head_config():
                   sleep_warmup=2500, sleep_patience=1500)
 
 
-def _build(arm, seed, side, conv_eta, n_out=10):
+def _build(arm, seed, side, conv_eta, n_out=10, total_steps=None):
     spec = ARMS[arm]
     kh = kw = 3
     if spec["init"] == "hand":
@@ -114,14 +118,17 @@ def _build(arm, seed, side, conv_eta, n_out=10):
     tr = ConvTrainer(cfg, model, None, None, seed=seed, conv_eta=conv_eta,
                      learn_conv=not spec["freeze"], conv_structure=spec["structure"],
                      conv_k_max=spec["k_max"], conv_k_min=2,
-                     conv_grow_mode=spec["grow_mode"])
+                     conv_grow_mode=spec["grow_mode"],
+                     conv_eta_schedule=spec.get("eta_sched", "none"),
+                     total_steps=total_steps)
     return tr, model
 
 
 def run_one(arm, seed, args):
     Xtr, ytr, Xte, yte, side = _images(args.dataset, seed, args.points)
     n_out = int(max(ytr.max(), yte.max())) + 1
-    tr, model = _build(arm, seed, side, args.conv_eta, n_out=n_out)
+    tr, model = _build(arm, seed, side, args.conv_eta, n_out=n_out,
+                       total_steps=args.steps)
     tr.X, tr.y = Xtr, ytr
     cap = min(args.train_eval_cap, len(Xtr))
     eval_idx = np.sort(np.random.default_rng(seed + 7).choice(len(Xtr), cap, replace=False))
