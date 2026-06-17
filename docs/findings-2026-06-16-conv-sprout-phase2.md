@@ -147,6 +147,31 @@ the extra filter-learning compute. The earlier "just use the fixed bank" advice 
 only because un-consolidated filters were unstable; consolidation removes that
 caveat.
 
-Remaining open item: filter **pruning** still detects inertness, not redundancy
-(self-sizing grows but doesn't lean out), so redundancy-aware filter consolidation
-(filter–filter correlation) is the next improvement if a leaner bank is wanted.
+## Redundancy pruning: lets self-sizing trim, but the trim is gentle
+
+The remaining gap was that self-sizing only *grew* — pruning detected inertness, not
+redundancy. Added two redundancy signals that fire at sleep plateaus and drop the
+lower-utility member of any over-correlated pair (start full at 12, no growth):
+
+| Task | signal | filters end | accuracy | vs no-prune control |
+|---|---|---|---|---|
+| Digits | (no prune control) | 12.0 | 0.955 | — |
+| | kernel cosine > 0.85 | 11.4 | 0.956 | held |
+| | **activation corr > 0.9** | **9.6** | 0.954 | held |
+| Motif | (no prune control) | 12.0 | 0.743 | — |
+| | kernel cosine > 0.85 | 10.4 | 0.736 | held |
+| | activation corr > 0.9 | 11.8 | 0.736 | held |
+
+Both signals **work and never cost accuracy** (the pruned filters were genuinely
+redundant), so it's a *free* efficiency trim — on digits the **functional**
+(activation-correlation) signal removes 12→9.6 filters (~20% fewer) at equal
+accuracy, and beats the kernel-shape signal (which is too strict).
+
+But the trim is **gentle, not a collapse to the minimal count** (~6). The honest
+reason: **gradient-trained filters naturally diversify** — they don't converge into
+exact duplicates in either kernel or output space, so true high-correlation
+redundancy is rarer than intuition suggests (the 12-filter net genuinely uses
+~10–12 somewhat-distinct detectors). So self-sizing now does the full loop — *grow*
+toward what's needed and *trim* free redundancy — but the economy simply doesn't
+hoard many duplicates to cut. A more aggressive threshold would trim more at some
+accuracy risk (not pursued here).
