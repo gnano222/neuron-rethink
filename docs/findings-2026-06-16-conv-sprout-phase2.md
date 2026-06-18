@@ -157,10 +157,20 @@ lower-utility member of any over-correlated pair (start full at 12, no growth):
 |---|---|---|---|---|
 | Digits | (no prune control) | 12.0 | 0.955 | — |
 | | kernel cosine > 0.85 | 11.4 | 0.956 | held |
-| | **activation corr > 0.9** | **9.6** | 0.954 | held |
+| | activation corr > 0.9 | 9.6 | 0.954 | held |
+| | **both (kernel ∪ activation)** | **9.6** | 0.954 | held |
 | Motif | (no prune control) | 12.0 | 0.743 | — |
 | | kernel cosine > 0.85 | 10.4 | 0.736 | held |
 | | activation corr > 0.9 | 11.8 | 0.736 | held |
+| | **both (kernel ∪ activation)** | **10.4** | 0.728 | held |
+
+The two signals are **complementary, not nested** (an initial guess that functional
+subsumes kernel held on digits but failed on motifs): functional trims more on
+digits (9.6 vs 11.4), kernel trims more on motifs (10.4 vs 11.8). **"both" is the
+union and robustly gets the better of the two per task** (digits 9.6, motifs 10.4),
+at held accuracy — so it's the sensible default (no need to pick a signal). It does
+not, however, escape the ceiling below: combining trims a bit more reliably but not
+dramatically more.
 
 Both signals **work and never cost accuracy** (the pruned filters were genuinely
 redundant), so it's a *free* efficiency trim — on digits the **functional**
