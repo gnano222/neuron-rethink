@@ -89,6 +89,41 @@ proved a lateral move from one signal; its design notes live in
 > sparse* net whenever the task is hard enough that a small dense net underfits —
 > and that edge grows with data.
 
+## Conv-SPROUT — the economy grows its own convolutions (Phase 2)
+
+Breaking the ~0.93 MNIST ceiling needed a **convolution / weight-sharing** prior —
+so Conv-SPROUT adds one *inside the same gradient-as-currency economy*, rather than
+bolting on a black box. The economic unit moves up one level, from the **wire** to
+the **filter**: a filter's taps are its weight-shared parameters, applying it
+densely across the image is its placements, and a single gradient meter on the
+filter aggregates the gradient over every placement (= the conv weight gradient).
+The same readouts run one level up — 2D confidence, demand-driven pruning,
+plateau-gated growth, `η/(1+c)` gated learning. A learned conv front-end feeds the
+**existing `phasic-startle-k4` head** unchanged ([sprout/conv.py](sprout/conv.py),
+[sprout/conv_train.py](sprout/conv_train.py)).
+
+The **promoted baseline recipe** (the `conv-sprout` arm; defaults in `ConvTrainer`):
+
+1. **Learn** the filters (don't hand-design them).
+2. **Consolidate** — wind the filter learning rate down over training (cosine), so
+   the filters settle and the head finishes on a *stationary* representation. This
+   is the load-bearing fix: without it learned filters drift late and *lose* to a
+   fixed bank; with it they *win*.
+3. **Self-size** — start generous (12 filters) and **trim functional redundancy**
+   (prune a filter whose pooled outputs correlate `> 0.80` with a more-useful one)
+   down to a lean bank (~7).
+
+**Result (MNIST 14×14, 60k steps, 5 seeds —
+[findings](docs/findings-2026-06-16-conv-sprout-phase2.md)):** Conv-SPROUT reaches
+**~0.95**, clearing the old ~0.93 MLP ceiling and beating the fixed hand-filter bank
+(0.931); at *matched* filter count (~7) the self-sized learned bank still wins
+(**0.951 vs 0.931**). On a filter-sensitive control task (matched-filter motifs) the
+gain is **+25–33pt**. Honest caveats: the win needs a real budget (≤15k steps still
+favors the cheap fixed bank), and gradient-trained filters diversify naturally, so
+redundancy trimming is real-but-bounded (~12 → ~7 free; lower cutoffs trade
+accuracy). Run it: `python conv_experiment.py` (defaults to `fixed-hand-k6` vs
+`conv-sprout`).
+
 ## Vectorized backend (the fast path)
 
 The per-synapse Python loop costs `O(edges)`/step. [sprout/fast.py](sprout/fast.py)'s
@@ -165,10 +200,14 @@ sprout/
   learning.py    firing-rate EMA + confidence-gated weight update
   currency.py    gradient meters + confidence/prune/grow readouts
   sleep.py       SettlednessDetector — the loss-plateau gate / phasic trigger
+  conv_features.py fixed filter bank + conv/pool (Phase-1 preprocessing front-end)
+  conv.py        Conv-SPROUT: gradient-checked conv/pool + ConvEconomy (filter-level currency)
+  conv_train.py  ConvModel + ConvTrainer — joint conv+head training (Phase 2)
   viz.py         render_frame (confidence / demand edges) + make_gif
   train.py       Config + Trainer (phasic vs continuous structural plasticity)
 run.py           spirals viz driver / CLI (currency presets)
 run_dataset.py   quick single-run smoke test on any registry dataset
+conv_experiment.py  Conv-SPROUT multi-seed runner (default: fixed-hand-k6 vs conv-sprout)
 validate.py      the 7 "it works" criteria on spirals (+ plots)
 evaluate.py      comparative eval: multi-seed scorecard + diagnostic plots
 evals/           eval harness package (spec, runner, metrics, aggregate, report, cli)
@@ -181,10 +220,12 @@ the same graph as parallel edge arrays.
 
 ## Limitations & next steps
 
-- **The MNIST ceiling is architectural, not compute.** Every MLP lever
-  (width/depth/resolution/budget) is mapped and exhausted; the only untested lever
-  that could break ~0.93 is a **convolution / weight-sharing prior** — a new
-  architecture, not a sweep.
+- **The MNIST ceiling was architectural, and Conv-SPROUT addresses it.** Every MLP
+  lever (width/depth/resolution/budget) is mapped and exhausted; the missing prior
+  was **convolution / weight-sharing**, now added *inside the economy* (see
+  Conv-SPROUT above) — it clears ~0.93 → **~0.95**. Open conv items: deeper
+  (stacked) conv layers, and a redundancy-trim that can lean below ~7 filters
+  without an accuracy cost.
 - **Dead ReLU units** are an absorbing state: a unit whose pre-activation is always
   negative emits zero gradient, so no growth rule can revive it. Currency handles
   it gracefully (never wastes growth there) but does not *solve* it; phasic
