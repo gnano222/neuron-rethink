@@ -174,7 +174,19 @@ def test_conv_eta_schedules():
                       freeze_frac=0.6)
     tr2.step_idx = 500; assert tr2._conv_eta_now() == 0.02
     tr2.step_idx = 700; assert tr2._conv_eta_now() == 0.0
-    # none: constant
+    # none: constant (pinned explicitly now that "cosine" is the promoted default)
     tr3 = ConvTrainer(cfg, model, _synth(20, 0)[0], _synth(20, 0)[1], seed=0,
-                      conv_eta=0.02, total_steps=1000)
+                      conv_eta=0.02, conv_eta_schedule="none", total_steps=1000)
     tr3.step_idx = 999; assert tr3._conv_eta_now() == 0.02
+
+
+def test_promoted_defaults_are_the_conv_sprout_recipe():
+    # the baseline promotion: ConvTrainer defaults = consolidation + functional
+    # redundancy pruning at 0.80 (the validated winning recipe).
+    model = _model(4, 8, 8, 8, 2, seed=0)
+    cfg = Config(eta_base=0.05, enable_confidence=True)
+    tr = ConvTrainer(cfg, model, _synth(10, 0)[0], _synth(10, 0)[1], seed=0)
+    assert tr.conv_eta_schedule == "cosine"
+    assert tr.conv_redundancy_prune is True
+    assert tr.conv_redundancy_mode == "activation"
+    assert abs(tr.conv_redundancy_threshold - 0.80) < 1e-9

@@ -36,6 +36,15 @@ from sprout.train import Config                        # noqa: E402
 # arm name -> conv front-end spec (head is identical across arms).
 # eta_sched controls filter-LR CONSOLIDATION: "none" | "cosine" | "freeze".
 ARMS = {
+    # === PROMOTED BASELINE (the Conv-SPROUT default architecture) =============
+    # Learned weight-shared filters governed by the gradient-as-currency economy:
+    # start generous (12), CONSOLIDATE (cosine filter-LR wind-down so the
+    # representation settles), and TRIM functional redundancy (prune filters whose
+    # outputs correlate > 0.80 with a better one) down to a lean bank (~7). Feeds
+    # the phasic-startle-k4 head. Beats the fixed hand bank and clears the ~0.93
+    # MNIST14 ceiling (~0.95). See docs/findings-2026-06-16-conv-sprout-phase2.md.
+    "conv-sprout":    dict(k_max=12, k_init=12, init="random", learn=True, structure=True,  freeze=False, grow_mode="split", eta_sched="cosine", grow_per_burst=0, redprune=True, red_mode="activation", red_thresh=0.80),
+    # the fixed-filter reference (Phase-1 hand bank, no learning) it is measured against
     "fixed-hand-k6":  dict(k_max=6,  k_init=6,  init="hand",   learn=True,  structure=False, freeze=True,  grow_mode="split"),
     # consolidation arms: learn filters early, wind LR down so they settle late
     "learned-k6-cos": dict(k_max=6,  k_init=6,  init="random", learn=True,  structure=False, freeze=False, grow_mode="split", eta_sched="cosine"),
@@ -295,7 +304,7 @@ def _write(results, args, dest):
 
 def main(argv=None):
     ap = argparse.ArgumentParser()
-    ap.add_argument("--arms", default="fixed-hand-k6,learned-k6,learned-k12")
+    ap.add_argument("--arms", default="fixed-hand-k6,conv-sprout")
     ap.add_argument("--baseline", default="fixed-hand-k6")
     ap.add_argument("--seeds", type=int, default=5)
     ap.add_argument("--steps", type=int, default=15000)

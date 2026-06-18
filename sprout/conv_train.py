@@ -67,10 +67,10 @@ class ConvTrainer:
     def __init__(self, cfg, model, X_imgs, y, seed=0, conv_eta=None,
                  learn_conv=True, conv_structure=False, conv_k_max=None,
                  conv_grow_mode="split", conv_prune_floor=0.5, conv_k_min=2,
-                 conv_grow_per_burst=2, conv_eta_schedule="none",
+                 conv_grow_per_burst=2, conv_eta_schedule="cosine",
                  total_steps=None, freeze_frac=0.6,
-                 conv_redundancy_prune=False, conv_redundancy_threshold=0.9,
-                 conv_redundancy_mode="kernel", conv_redundancy_batch=32):
+                 conv_redundancy_prune=True, conv_redundancy_threshold=0.8,
+                 conv_redundancy_mode="activation", conv_redundancy_batch=32):
         self.cfg = cfg
         self.model = model
         self.X = np.asarray(X_imgs, dtype=float)
@@ -78,10 +78,13 @@ class ConvTrainer:
         self.rng = np.random.default_rng(seed)
         self.step_idx = 0
         self.conv_eta = cfg.eta_base if conv_eta is None else conv_eta
-        # filter-learning-rate CONSOLIDATION: wind filter learning down over
-        # training so filters settle near their peak and the head finishes on a
-        # stationary representation (the stability fix; see findings doc).
-        #   "none"   = constant (the unstable reference)
+        # filter-learning-rate CONSOLIDATION (PROMOTED DEFAULT "cosine"): wind
+        # filter learning down over training so filters settle near their peak and
+        # the head finishes on a stationary representation. This is the stability
+        # fix that flipped the verdict — without it learned filters drift late and
+        # lose to a fixed bank; with it they beat it (see findings doc). Needs
+        # total_steps to apply (else inert).
+        #   "none"   = constant (the unstable reference / A-B baseline)
         #   "cosine" = base * 0.5*(1+cos(pi*step/total)) -> ~0 by the end
         #   "freeze" = base until freeze_frac of training, then 0 (learn-then-lock)
         self.conv_eta_schedule = conv_eta_schedule
