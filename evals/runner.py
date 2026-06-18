@@ -63,6 +63,13 @@ def _build_layers(cfg, spec) -> list:
     return list(spec.layers) if override is None else list(override)
 
 
+def _dataset_name(cfg, spec) -> str:
+    """Dataset for this variant: its own ``init_dataset`` override if set, else the
+    suite-wide ``spec.dataset``. Lets raw and conv-feature arms share one suite."""
+    override = getattr(cfg, "init_dataset", None)
+    return spec.dataset if override is None else override
+
+
 def _train_eval_indices(n, cap, seed):
     """Indices for the per-snapshot TRAIN-metric evaluation. Full set unless a
     cap is given and the train set exceeds it, in which case a deterministic
@@ -191,7 +198,7 @@ def run_one(variant_name, seed, spec):
     """Train one (variant, seed) and return a plain-dict RunResult."""
     cfg = make_config(variant_name)
     X_tr, y_tr, X_te, y_te = get_dataset(
-        spec.dataset, seed, n_points=spec.n_points, turns=spec.turns,
+        _dataset_name(cfg, spec), seed, n_points=spec.n_points, turns=spec.turns,
         noise=spec.noise, test_seed_offset=spec.test_seed_offset)
 
     net = build_graph(_build_layers(cfg, spec), density=_build_density(cfg, spec), seed=seed)

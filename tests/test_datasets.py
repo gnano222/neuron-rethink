@@ -113,3 +113,36 @@ def test_get_dataset_mnist_full_is_784():
         pytest.skip(f"MNIST fetch unavailable: {e}")
     assert Xtr.shape[1] == 784 and len(Xtr) == 200 and len(Xte) == 1000
     assert set(np.unique(yte)).issubset(set(range(10)))
+
+
+# -- conv front-end datasets (Phase 1) ---------------------------------------
+
+def test_mnist_conv_transform_shape():
+    from sprout.datasets import mnist_conv_transform
+    X = np.random.default_rng(0).normal(size=(4, 196))     # 4 fake 14x14, flat
+    F = mnist_conv_transform(X, side=14, bank_kind="hand", pool=2, nonlin="relu")
+    assert F.shape == (4, 216)                              # 6 filters x 6x6
+
+
+def test_mnist_conv_transform_is_deterministic_fixed_bank():
+    from sprout.datasets import mnist_conv_transform
+    X = np.random.default_rng(1).normal(size=(3, 196))
+    a = mnist_conv_transform(X, side=14, bank_kind="random")
+    b = mnist_conv_transform(X, side=14, bank_kind="random")
+    assert np.array_equal(a, b)                             # bank fixed (seed 0)
+
+
+def test_get_dataset_unknown_conv_raises():
+    import pytest
+    with pytest.raises(ValueError):
+        get_dataset("mnist-conv-nope", seed=0)
+
+
+def test_get_dataset_mnist_conv_is_216():
+    pytest = __import__("pytest")
+    try:
+        Xtr, ytr, Xte, yte = get_dataset("mnist-conv", seed=0, n_points=200)
+    except Exception as e:
+        pytest.skip(f"MNIST fetch unavailable: {e}")
+    assert Xtr.shape[1] == 216 and len(Xtr) == 200 and len(Xte) == 1000
+    assert np.allclose(Xtr.mean(axis=0), 0.0, atol=1e-6)    # standardized on train

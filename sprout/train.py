@@ -180,6 +180,12 @@ class Config:
     # while sweeping network size (e.g. a hidden-width sweep). Trainer ignores it.
     init_layers: tuple[int, ...] | None = None
 
+    # Optional per-variant override of the eval *dataset* (sibling to init_layers/
+    # init_density). None => use the suite's --dataset. Lets one suite mix datasets
+    # — e.g. raw vs conv-feature MNIST — so they share one set of bootstrap-CI
+    # verdicts. Trainer ignores it; only the eval runner consults it.
+    init_dataset: str | None = None
+
 
 def _softmax_predict_probs(net, X):
     return np.array([net.forward(x) for x in X])

@@ -260,6 +260,14 @@ def test_run_one_continual_rejects_array_backend():
         runner.run_one_continual("phasic-startle-k4", 0, spec)
 
 
+def test_dataset_name_override():
+    from evals.runner import _dataset_name
+    from sprout.train import Config
+    spec = tiny_spec(dataset="spirals")
+    assert _dataset_name(Config(), spec) == "spirals"            # no override
+    assert _dataset_name(Config(init_dataset="mnist-conv"), spec) == "mnist-conv"
+
+
 def test_run_one_rejects_multiclass_shift():
     """The label-swap shift is binary-only; digits + shift must raise."""
     spec = tiny_spec(variants=("phasic-startle-k4",), seeds=1, dataset="digits",

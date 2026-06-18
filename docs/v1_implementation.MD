@@ -513,8 +513,9 @@ Headlines:
   **higher resolution hurts** at a fixed budget (fan-in coverage drops — a 14×14
   thumbnail the net fully covers beats a 784 image it can only glimpse; hence
   `mnist` defaults to 14×14), and **more budget is a dead end** (the net
-  self-prunes to ~4–5k edges regardless). Only *more data* reliably helps; the one
-  untested lever that could break it is a **convolution / weight-sharing** prior.
+  self-prunes to ~4–5k edges regardless). Only *more data* reliably helps; the
+  missing lever was a **convolution / weight-sharing** prior — now built as
+  **Conv-SPROUT (§17)**, which clears ~0.93 → ~0.95.
 
 The constant-compute sweep arms live in [evals/spec.py](../evals/spec.py)
 (`digits-*`, `mnist-*` = 14×14, `mnist784-*` = full), built from a small
@@ -540,3 +541,67 @@ backend). Single-sample only (the speedup is across *edges*, not minibatching);
 continual + continuous-with-plasticity stay object-only. Specs:
 `docs/superpowers/specs/2026-06-15-vectorized-backend-design.md` and
 `...-backend-harness-wiring-design.md`.
+
+## 17. Conv-SPROUT — weight-sharing inside the economy (Phase 2, baseline)
+
+The §15 finding was that the ~0.93 MNIST14 ceiling is architectural — the missing
+prior is **convolution / weight-sharing**. Conv-SPROUT adds it *inside* the
+gradient-as-currency economy (not as a bolted-on black box), and is the **promoted
+baseline conv architecture**. Full study + per-run scorecards:
+[docs/findings-2026-06-16-conv-sprout-phase2.md](findings-2026-06-16-conv-sprout-phase2.md);
+design spec `docs/superpowers/specs/2026-06-16-conv-sprout-phase2-design.md`.
+
+**The economic unit moves from the wire to the FILTER.** A filter's taps are its
+weight-shared parameters; applying it densely across the image is its placements; a
+single gradient meter on the filter aggregates the gradient over every placement
+(== the conv weight gradient). The same readouts run one level up:
+
+| SPROUT (wire) | Conv-SPROUT (filter k, kernel θ_k) |
+|---|---|
+| weight `w`, meters `M`,`S` | kernel `θ_k`, meter `M_k=EMA‖g_k‖`, `Svec_k` |
+| load `=|w|/w̄` | `load_k = ‖θ_k‖ / mean‖θ‖` |
+| demand `=M/M̄` | `demand_k = M_k / mean M` |
+| 2D confidence, gated `η/(1+c)` | identical per filter (reuses `currency.settledness`) |
+| prune wire if `load+λ·demand<floor` | prune filter likewise (keep ≥ `k_min`) |
+| grow ghost wire at a plateau | birth a filter at a plateau (split highest-demand / random) |
+
+**Architecture.** `image → ConvEconomy(K filters, 3×3, valid) → ReLU → 2×2 maxpool
+→ flatten → existing phasic-startle-k4 head`. Filters live in `k_max` fixed slots
+with an active mask, so birth/death never resize the head (an empty slot emits
+zeros). Joint training: simultaneous wake (both economies meter + gated-update every
+step, bridged by the head's input-layer delta), and one shared settledness plateau
+where both rewire. Additive code only — the validated core (`network`/`currency`/
+`fast`/`validate.py`) is untouched. Two numerical gradient checks pass (conv alone;
+the head→conv bridge). Code: [`sprout/conv.py`](../sprout/conv.py),
+[`sprout/conv_train.py`](../sprout/conv_train.py), runner
+[`conv_experiment.py`](../conv_experiment.py).
+
+**The promoted baseline recipe** (`conv-sprout` arm; `ConvTrainer` defaults):
+
+1. **Learn** the filters (random init, not hand-designed).
+2. **Consolidate** — `conv_eta_schedule="cosine"` winds the filter LR to ~0 over
+   training so filters settle and the head finishes on a *stationary*
+   representation. This is the load-bearing fix: un-consolidated filters drift late
+   and **lose** to a fixed bank; consolidated ones **win** (final-vs-peak drift
+   0.039 → 0.000).
+3. **Self-size** — start generous (`k_init=k_max=12`) and trim **functional
+   redundancy** (`conv_redundancy_mode="activation"`, threshold `0.80`): prune a
+   filter whose pooled outputs correlate above the cutoff with a more-useful one.
+
+**Results (MNIST14, 60k, 5 seeds).** Conv-SPROUT reaches **~0.95**, clearing the old
+~0.93 MLP ceiling and beating the fixed hand-filter bank (0.931); at *matched*
+filter count (~7) the self-sized learned bank still wins **0.951 vs 0.931**. On a
+filter-sensitive control (matched-filter motifs) the gain is **+25–33pt**.
+
+**Honest bounds (all in the findings doc).** (a) The win needs a real budget — at
+≤15k steps nothing has converged and learned merely ties the fixed bank, so for
+short budgets the cheap Phase-1 fixed bank (`sprout/conv_features.py`) is the right
+tool. (b) Filter **pruning is gentle**: gradient-trained filters diversify
+naturally, so there is limited hard redundancy — the activation-correlation cutoff
+is a clean dial (0.9→~10 filters free, **0.8→~7 at −0.4pt**, ≤0.7 over-prunes ~−2pt)
+and pruning trades accuracy for fewer filters rather than improving it. (c) Kernel-
+shape and functional redundancy are **complementary** (kernel catches some motif
+duplicates functional misses, and vice-versa); `mode="both"` is the robust union but
+functional@0.80 is the promoted default. **Not promoted to a SPROUT-wide default:**
+Conv-SPROUT is an opt-in architecture for image tasks; the core spirals/MLP defaults
+and `validate.py` are unchanged. Open: stacked (deep) conv layers.

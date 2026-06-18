@@ -87,6 +87,39 @@ def load_mnist_split(seed: int = 0, n_train: int = 12000, n_test: int = 1000,
     return Xtr, ytr, Xte, yte
 
 
+def mnist_conv_transform(X_flat, side, bank_kind="hand", pool=2, nonlin="relu"):
+    """Flat ``(N, side*side)`` images -> ``(N, n_filters*pooled)`` fixed-conv
+    features. Pure preprocessing (the bank is fixed at seed 0, never trained), so
+    the network/economy are untouched. See sprout/conv_features.py."""
+    from sprout.conv_features import filter_bank, conv_features
+    imgs = np.asarray(X_flat, dtype=float).reshape(-1, side, side)
+    return conv_features(imgs, filter_bank(bank_kind, seed=0), pool=pool, nonlin=nonlin)
+
+
+def load_mnist_conv_split(seed: int = 0, n_train: int = 12000, n_test: int = 1000,
+                          downsample: bool = True, bank_kind: str = "hand",
+                          pool: int = 2, nonlin: str = "relu"):
+    """MNIST passed through a FIXED conv feature front-end, then standardized on
+    TRAIN stats. ``downsample`` 2x2-pools 28->14 first (side=14, else 28). The
+    Phase-1 measurement dataset: does translation-invariant input break the ~0.93
+    14x14 ceiling? See docs/superpowers/specs/2026-06-16-conv-weight-sharing-design.md.
+    """
+    from sklearn.datasets import fetch_openml
+    data = fetch_openml("mnist_784", version=1, as_frame=False,
+                        parser="liac-arff", cache=True)
+    X = np.asarray(data.data, dtype=float)                    # (70000, 784)
+    side = 28
+    if downsample:
+        X = _downsample_2x2(X)                                # (70000, 196)
+        side = 14
+    y = np.asarray(data.target, dtype=int)
+    Xtr, ytr, Xte, yte = _stratified_subsample_split(X, y, n_train, n_test, seed)
+    Ftr = mnist_conv_transform(Xtr, side, bank_kind, pool, nonlin)
+    Fte = mnist_conv_transform(Xte, side, bank_kind, pool, nonlin)
+    Ftr, Fte = _standardize_on_train(Ftr, Fte)
+    return Ftr, ytr, Fte, yte
+
+
 def load_digits_split(seed: int = 0, test_frac: float = 0.2):
     """scikit-learn 8x8 digits: seeded stratified split, standardized on TRAIN
     statistics only (no leakage; the eps guard handles constant corner pixels)."""
@@ -116,6 +149,15 @@ def get_dataset(name, seed, *, n_points=600, turns=1.0, noise=0.10,
     if name == "mnist-full":                            # full 784
         return load_mnist_split(seed=seed, n_train=n_points, n_test=1000,
                                 downsample=False)
+    if name == "mnist-conv":                            # 14x14 -> hand-filter conv
+        return load_mnist_conv_split(seed=seed, n_train=n_points, n_test=1000,
+                                     downsample=True, bank_kind="hand")
+    if name == "mnist-conv-rand":                       # 14x14 -> random-filter conv
+        return load_mnist_conv_split(seed=seed, n_train=n_points, n_test=1000,
+                                     downsample=True, bank_kind="random")
+    if name == "mnist-full-conv":                       # 28x28 -> hand-filter conv
+        return load_mnist_conv_split(seed=seed, n_train=n_points, n_test=1000,
+                                     downsample=False, bank_kind="hand")
     if name == "blobs":
         Xtr, ytr = generate_blobs(n=n_points, seed=seed)
         Xte, yte = generate_blobs(n=n_points, seed=seed + test_seed_offset)
