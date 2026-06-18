@@ -49,6 +49,13 @@ ARMS = {
     "selfsize-12to12-actprune-cos": dict(k_max=12, k_init=12, init="random", learn=True, structure=True, freeze=False, grow_mode="split", eta_sched="cosine", grow_per_burst=0, redprune=True, red_mode="activation", red_thresh=0.9),
     # BOTH signals: prune if kernel-similar (0.85) OR output-correlated (0.9)
     "selfsize-12to12-bothprune-cos": dict(k_max=12, k_init=12, init="random", learn=True, structure=True, freeze=False, grow_mode="split", eta_sched="cosine", grow_per_burst=0, redprune=True, red_mode="both", red_thresh=0.9),
+    # FUNCTIONAL-prune CUTOFF SWEEP: same arm, only the activation-correlation
+    # threshold varies (lower = prune more aggressively). Maps trim vs accuracy.
+    "actsweep-t90": dict(k_max=12, k_init=12, init="random", learn=True, structure=True, freeze=False, grow_mode="split", eta_sched="cosine", grow_per_burst=0, redprune=True, red_mode="activation", red_thresh=0.90),
+    "actsweep-t80": dict(k_max=12, k_init=12, init="random", learn=True, structure=True, freeze=False, grow_mode="split", eta_sched="cosine", grow_per_burst=0, redprune=True, red_mode="activation", red_thresh=0.80),
+    "actsweep-t70": dict(k_max=12, k_init=12, init="random", learn=True, structure=True, freeze=False, grow_mode="split", eta_sched="cosine", grow_per_burst=0, redprune=True, red_mode="activation", red_thresh=0.70),
+    "actsweep-t60": dict(k_max=12, k_init=12, init="random", learn=True, structure=True, freeze=False, grow_mode="split", eta_sched="cosine", grow_per_burst=0, redprune=True, red_mode="activation", red_thresh=0.60),
+    "actsweep-t50": dict(k_max=12, k_init=12, init="random", learn=True, structure=True, freeze=False, grow_mode="split", eta_sched="cosine", grow_per_burst=0, redprune=True, red_mode="activation", red_thresh=0.50),
     # tight-budget arms: under scarcity, WHICH filters you keep should matter
     "fixed-hand-k2":  dict(k_max=2,  k_init=2,  init="hand",   learn=True,  structure=False, freeze=True,  grow_mode="split"),
     "learned-k2":     dict(k_max=2,  k_init=2,  init="random", learn=True,  structure=False, freeze=False, grow_mode="split"),
