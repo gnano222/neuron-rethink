@@ -47,6 +47,8 @@ ARMS = {
     # FUNCTIONAL redundancy: prune filters whose OUTPUTS are correlated (carry the
     # same info), not just whose kernels match -- the stronger leaning-out signal.
     "selfsize-12to12-actprune-cos": dict(k_max=12, k_init=12, init="random", learn=True, structure=True, freeze=False, grow_mode="split", eta_sched="cosine", grow_per_burst=0, redprune=True, red_mode="activation", red_thresh=0.9),
+    # BOTH signals: prune if kernel-similar (0.85) OR output-correlated (0.9)
+    "selfsize-12to12-bothprune-cos": dict(k_max=12, k_init=12, init="random", learn=True, structure=True, freeze=False, grow_mode="split", eta_sched="cosine", grow_per_burst=0, redprune=True, red_mode="both", red_thresh=0.9),
     # tight-budget arms: under scarcity, WHICH filters you keep should matter
     "fixed-hand-k2":  dict(k_max=2,  k_init=2,  init="hand",   learn=True,  structure=False, freeze=True,  grow_mode="split"),
     "learned-k2":     dict(k_max=2,  k_init=2,  init="random", learn=True,  structure=False, freeze=False, grow_mode="split"),

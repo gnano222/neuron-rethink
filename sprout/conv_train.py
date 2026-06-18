@@ -171,15 +171,18 @@ class ConvTrainer:
                 self.events.append({"step": self.step_idx, "type": "conv_prune",
                                     "filter": int(k)})
             if self.conv_redundancy_prune:
-                if self.conv_redundancy_mode == "activation":
+                mode = self.conv_redundancy_mode
+                red = []
+                if mode in ("kernel", "both"):     # geometric duplicates
+                    kt = self.conv_redundancy_threshold if mode == "kernel" else 0.85
+                    red += conv.prune_redundant(kt, lam=cfg.lam_prune,
+                                                k_min=self.conv_k_min)
+                if mode in ("activation", "both"):  # functional (output) duplicates
                     b = min(self.conv_redundancy_batch, len(self.X))
                     idx = self.rng.choice(len(self.X), size=b, replace=False)
-                    red = conv.prune_redundant_activation(
+                    red += conv.prune_redundant_activation(
                         self.X[idx], self.conv_redundancy_threshold,
                         lam=cfg.lam_prune, k_min=self.conv_k_min)
-                else:
-                    red = conv.prune_redundant(self.conv_redundancy_threshold,
-                                               lam=cfg.lam_prune, k_min=self.conv_k_min)
                 for k in red:
                     self.events.append({"step": self.step_idx,
                                         "type": "conv_redprune", "filter": int(k)})
