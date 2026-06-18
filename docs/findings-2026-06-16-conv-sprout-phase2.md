@@ -177,11 +177,31 @@ redundant), so it's a *free* efficiency trim — on digits the **functional**
 (activation-correlation) signal removes 12→9.6 filters (~20% fewer) at equal
 accuracy, and beats the kernel-shape signal (which is too strict).
 
-But the trim is **gentle, not a collapse to the minimal count** (~6). The honest
-reason: **gradient-trained filters naturally diversify** — they don't converge into
-exact duplicates in either kernel or output space, so true high-correlation
-redundancy is rarer than intuition suggests (the 12-filter net genuinely uses
-~10–12 somewhat-distinct detectors). So self-sizing now does the full loop — *grow*
-toward what's needed and *trim* free redundancy — but the economy simply doesn't
-hoard many duplicates to cut. A more aggressive threshold would trim more at some
-accuracy risk (not pursued here).
+At the conservative 0.9 cutoff the trim looked gentle (12→9.6), but a **cutoff sweep
+on the functional signal** (`docs/eval-runs/conv-sprout-actsweep-digits`, digits 60k,
+baseline = the 12-filter no-prune control) shows the cutoff is a clean dial and the
+gentleness was just a too-high threshold:
+
+| activation-corr cutoff | filters end | final acc | vs no-prune |
+|---|---|---|---|
+| none (control) | 12.0 | 0.955 | — |
+| 0.90 | 9.6 | 0.954 | ~ (free) |
+| **0.80** | **6.8** | **0.951** | **−0.4pt (sweet spot)** |
+| 0.70 | 3.8 | 0.937 | −1.8pt |
+| 0.60 | 3.0 | 0.935 | −2.0pt |
+| 0.50 | 3.0 | 0.932 | −2.3pt |
+
+- **The cutoff cleanly trades filters for accuracy** — monotonic and predictable.
+- **0.80 is the sweet spot:** it leans the bank from 12 down to **~7 filters
+  (matching the hand-bank's 6) at essentially no cost** (−0.4pt). So self-sizing
+  *can* find a lean bank after all — the "gentle trim" was an artifact of the 0.9
+  threshold, not a real ceiling.
+- **Below 0.7 it over-prunes** — cutting genuinely-useful filters, ~−2pt for 3–4.
+- **Pruning does not *improve* accuracy** (no regularization bonus here): best is the
+  full 12-filter bank; pruning trades a little accuracy for far fewer filters.
+- **At matched filter count the self-sized learned bank beats fixed:** ~7 learned-
+  and-consolidated filters at 0.80 score **0.951 vs the fixed hand-k6's 0.931** (+2pt).
+
+Recommended redundancy setting: **functional (activation-correlation) at ~0.80** —
+the knee of the curve. (Gradient-trained filters still diversify, so you can't trim
+to the bare minimum without cost, but ~7 is free.)
