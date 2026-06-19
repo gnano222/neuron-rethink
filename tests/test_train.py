@@ -28,6 +28,39 @@ def test_deep_signal_alive_after_init():
     assert np.mean(acts) > 1e-3  # signal survived to depth
 
 
+def test_augment_shift_requires_square_inputs():
+    net = build_graph([6, 4, 2], density=1.0, seed=0)   # 6 inputs: not a square
+    init_weights(net, seed=0)
+    X = np.random.default_rng(0).normal(size=(8, 6))
+    y = np.zeros(8, int)
+    with pytest.raises(ValueError):
+        Trainer(Config(augment_shift_max=1), net, X, y, seed=0)
+
+
+def test_augment_perturbs_input_without_mutating_dataset():
+    net = build_graph([9, 4, 2], density=1.0, seed=0)   # 9 inputs = 3x3 square
+    init_weights(net, seed=0)
+    X = np.random.default_rng(1).normal(size=(5, 9))
+    y = np.zeros(5, int)
+    X_before = X.copy()
+    tr = Trainer(Config(augment_shift_max=1), net, X, y, seed=0)
+    assert tr._aug_side == 3
+    # the augmenter returns a shifted copy and never writes back into the dataset
+    perturbed = tr._augment(X[0])
+    assert perturbed.shape == (9,)
+    assert np.array_equal(tr.X, X_before)               # dataset untouched
+    # over many draws at least one differs from the original (shift actually fires)
+    assert any(not np.array_equal(tr._augment(X[0]), X[0]) for _ in range(50))
+
+
+def test_no_augment_by_default():
+    net = build_graph([9, 4, 2], density=1.0, seed=0)
+    init_weights(net, seed=0)
+    X = np.random.default_rng(2).normal(size=(5, 9))
+    tr = Trainer(Config(), net, X, np.zeros(5, int), seed=0)
+    assert tr._aug_side is None                          # off unless opted in
+
+
 def test_activation_top_k_limits_hidden_layer_firing():
     net = build_graph([2, 6, 6, 2], density=1.0, seed=0)
     init_weights(net, seed=0)

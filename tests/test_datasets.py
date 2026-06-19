@@ -138,6 +138,52 @@ def test_get_dataset_unknown_conv_raises():
         get_dataset("mnist-conv-nope", seed=0)
 
 
+# -- train-shift augmentation (perf lever #2) --------------------------------
+
+def test_shift_zero_fill_moves_content_and_zero_fills():
+    from sprout.datasets import _shift_zero_fill
+    img = np.zeros((14, 14)); img[5, 5] = 3.0
+    s = _shift_zero_fill(img, 1, -2)              # down 1, left 2
+    assert s[6, 3] == 3.0 and s[5, 5] == 0.0
+
+
+def test_shift_zero_fill_does_not_wrap():
+    from sprout.datasets import _shift_zero_fill
+    img = np.zeros((14, 14)); img[7, 13] = 5.0   # bright pixel on the right edge
+    s = _shift_zero_fill(img, 0, 1)              # shift right -> falls off the edge
+    assert s.sum() == 0.0                         # nothing wrapped around
+    assert (s[:, 0] == 0.0).all()                # vacated column is zero
+
+
+def test_augment_shift_shape_and_original_first():
+    from sprout.datasets import augment_shift
+    X = np.random.default_rng(0).normal(size=(5, 196))
+    A = augment_shift(X, side=14, max_shift=2, n_aug=4, seed=0)
+    assert A.shape == (20, 196)                   # 5 images x 4 variants
+    for i in range(5):                            # variant 0 = untouched original
+        assert np.array_equal(A[i * 4], X[i])
+
+
+def test_augment_shift_deterministic():
+    from sprout.datasets import augment_shift
+    X = np.random.default_rng(2).normal(size=(4, 196))
+    a = augment_shift(X, side=14, seed=7)
+    b = augment_shift(X, side=14, seed=7)
+    assert np.array_equal(a, b)
+
+
+def test_get_dataset_mnist_aug_expands_train_clean_test():
+    pytest = __import__("pytest")
+    try:
+        Xtr, ytr, Xte, yte = get_dataset("mnist-aug", seed=0, n_points=200)
+    except Exception as e:
+        pytest.skip(f"MNIST fetch unavailable: {e}")
+    assert Xtr.shape[1] == 196
+    assert len(Xtr) == 200 * 4 and len(ytr) == 200 * 4    # 4x augmented train
+    assert len(Xte) == 1000                                # clean (un-augmented) test
+    assert np.allclose(Xtr.mean(axis=0), 0.0, atol=1e-6)   # standardized on aug-train
+
+
 def test_get_dataset_mnist_conv_is_216():
     pytest = __import__("pytest")
     try:

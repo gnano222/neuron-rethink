@@ -1,0 +1,54 @@
+metric                           mnist-w32-aug    mnist-w32-aug2  mnist-w32-sparse
+----------------------------------------------------------------------------------
+final_test_acc ↑                        0.850▼            0.662▼             0.903
+max_test_acc ↑                          0.859▼            0.699▼             0.916
+final_train_acc ↑                       0.842▼            0.663▼             0.927
+final_test_loss ↓                       0.481▼            1.095▼             0.351
+steps_to_90 ↓                               ∞?                ∞?             14901
+steps_to_95 ↓                               ∞?                ∞?                 ∞
+edge_steps_to_90 ↓                          ∞?                ∞?          38086779
+edge_steps_to_95 ↓                          ∞?                ∞?                 ∞
+auc_test_acc ↑                          0.788▼            0.583▼             0.876
+final_acc_stability ↓                   0.017▼            0.025▼             0.007
+synapse_count_start                      3296≈             3296≈              3296
+synapse_count_peak                       3296≈             3296≈              3296
+synapse_count_end                        1754≈             1723≈              1560
+n_grow_events                             649≈          604.200≈           728.600
+n_prune_events                           2191≈             2177≈              2464
+n_startle_events                            0≈                0≈                 0
+n_arousal_events                            0≈                0≈                 0
+distinct_neurons_grown                 33.200≈           33.800≈            30.600
+turnover ↓                              1.204▲            1.185▲             1.483
+max_grows_into_one_neuron ↓           104.800≈               94≈            99.600
+mean_fan_in                            41.757≈           41.024≈            37.148
+mean_fan_out                            7.692≈            7.557≈             6.843
+effective_density                       0.266≈            0.261≈             0.237
+avg_live_edges                           2362≈             2370≈              2158
+p10_utility ↑                           1.173≈            0.978≈             1.160
+freeloader_frac ↓                       0.006≈            0.061▼             0.002
+mean_survivor_age ↑                     26605≈            27056▲             26060
+median_survivor_age ↑                   30000≈            30000≈             30000
+mean_pruned_lifespan                    11069≈            11324≈              9780
+oscillation_frac ↓                      0.025▲            0.029▲             0.046
+max_regrow ↓                            1.600≈            1.600≈             1.400
+conf_utility_corr ↑                     0.433≈            0.306▼             0.465
+frozen_freeloader_frac ↓                    0≈                0≈                 0
+dead_unit_count ↓                           0≈            0.200≈                 0
+dead_unit_frac ↓                            0≈            0.006≈                 0
+idle_unit_frac ↓                            0≈            0.006≈                 0
+mean_neuron_activation                  0.771≈             5097≈             0.995
+hidden_firing_frac ↓                    0.401▲            0.375▲             0.447
+fwd_active_edge_frac ↓                  0.928▲            0.921▲             0.937
+bwd_active_edge_frac ↓                  0.581≈            0.574≈             0.590
+grad_active_edge_frac ↓                 0.513▲            0.501▲             0.528
+inert_synapse_frac ↓                        0≈                0≈                 0
+used_vs_allocated                       0.532≈            0.523≈             0.473
+n_recycle_events                            0≈                0≈                 0
+recycled_rehired_frac                       —?                —?                 —
+train_wall_time_sec ↓                 170.147▼          160.050≈           160.241
+wall_ms_per_step ↓                      5.671▼            5.335≈             5.341
+edge_steps_per_sec ↑                   416813≈           443997▲            404024
+train_edge_steps ↓                   70859400▼         71089240▼          64738800
+ghost_dense_cost                         6798≈             6829≈              6992
+ghost_pairs_scored                    586.842≈          592.305≈           606.813
+meter_fidelity ↑                        0.772▲            0.621≈             0.640

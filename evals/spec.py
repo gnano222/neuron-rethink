@@ -52,6 +52,8 @@ _BOUNDED_GROW_VARIANTS = {
     "mnist-w128-sparse",
     "mnist-conv-hand",
     "mnist-conv-rand",
+    "mnist-w32-aug",
+    "mnist-w32-aug2",
     "mnist-w64-b2",
     "mnist-w128-b2",
     "mnist-d2-sparse",
@@ -653,6 +655,23 @@ VARIANTS: dict[str, Callable[[], Config]] = {
     # 2026-06-16-conv-weight-sharing-design.md.
     "mnist-conv-hand": _sparse((216, 32, 10), 0.5, dataset="mnist-conv"),
     "mnist-conv-rand": _sparse((216, 32, 10), 0.5, dataset="mnist-conv-rand"),
+    # ON-THE-FLY TRANSLATION AUGMENTATION (perf lever #2): the exact
+    # mnist-w32-sparse architecture, but each step the sampled image is randomly
+    # shifted +-1/+-2 px (zero-filled, Config.augment_shift_max). Matched epochs
+    # (same N samples perturbed in place) — no data-dilution confound. The raw MLP
+    # has no built-in shift invariance, so this is where it should pay most.
+    # Baseline: mnist-w32-sparse. (Static 4x expansion `mnist-aug` under-trained at
+    # fixed steps; see docs/eval-runs + datasets.load_mnist_aug_split caveat.)
+    "mnist-w32-aug": lambda: Config(
+        eta_base=0.02, grad_currency=True, enable_confidence=True,
+        enable_prune=True, enable_grow=True, gamma_dec=0.001, t_struct=200,
+        phasic_structure=True, startle=True, grow_demand_k=4,
+        init_layers=(196, 32, 10), init_density=0.5, augment_shift_max=1),
+    "mnist-w32-aug2": lambda: Config(
+        eta_base=0.02, grad_currency=True, enable_confidence=True,
+        enable_prune=True, enable_grow=True, gamma_dec=0.001, t_struct=200,
+        phasic_structure=True, startle=True, grow_demand_k=4,
+        init_layers=(196, 32, 10), init_density=0.5, augment_shift_max=2),
     # WIDEN-THE-BUDGET arms: relax the matched-3296 constraint to a 2x budget
     # (~6592 edges) so the wide arms get healthier fan-in. Does spending more
     # compute on a wider net overtake the lean w32-sparse (3296, fan-in 98)?

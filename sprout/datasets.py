@@ -63,6 +63,65 @@ def _stratified_subsample_split(X, y, n_train, n_test, seed):
     return X[tr_idx], y[tr_idx], X[te_idx], y[te_idx]
 
 
+def _shift_zero_fill(img, dr, dc):
+    """Translate a 2D image by ``(dr, dc)`` with ZERO fill (no wrap-around).
+    Positive ``dr`` shifts down, positive ``dc`` shifts right; content that falls
+    off an edge is discarded and the vacated region is zero."""
+    h, w = img.shape
+    out = np.zeros_like(img)
+    r0s, r1s, c0s, c1s = max(0, -dr), h - max(0, dr), max(0, -dc), w - max(0, dc)
+    r0d, r1d, c0d, c1d = max(0, dr), h - max(0, -dr), max(0, dc), w - max(0, -dc)
+    out[r0d:r1d, c0d:c1d] = img[r0s:r1s, c0s:c1s]
+    return out
+
+
+def augment_shift(X_flat, side, max_shift=2, n_aug=4, seed=0, include_original=True):
+    """Expand flat ``(N, side*side)`` images ``n_aug``-fold with random zero-filled
+    translations. Each image yields (optionally) the original plus random shifts in
+    ``[-max_shift, max_shift]`` per axis. Returns ``(N*n_aug, side*side)`` with the
+    ``n_aug`` variants of image i kept consecutive (so labels = ``np.repeat(y,
+    n_aug)``). Pure data augmentation — the network/economy are untouched."""
+    rng = np.random.default_rng(seed)
+    imgs = np.asarray(X_flat, dtype=float).reshape(-1, side, side)
+    out = []
+    for img in imgs:
+        variants = [img] if include_original else []
+        while len(variants) < n_aug:
+            dr = int(rng.integers(-max_shift, max_shift + 1))
+            dc = int(rng.integers(-max_shift, max_shift + 1))
+            variants.append(_shift_zero_fill(img, dr, dc))
+        out.extend(v.reshape(-1) for v in variants)
+    return np.array(out)
+
+
+def load_mnist_aug_split(seed: int = 0, n_train: int = 12000, n_test: int = 1000,
+                         downsample: bool = True, max_shift: int = 2, n_aug: int = 4):
+    """MNIST with TRAIN-only random-shift augmentation, standardized on the
+    augmented-train stats; the TEST set is clean (un-augmented). The training set
+    expands ``n_aug``-fold (original + random zero-filled shifts). Pure data: tests
+    whether translation augmentation lifts the MLP, which has no built-in shift
+    invariance. Augmentation happens in pixel space, before standardization.
+
+    CAVEAT: STATIC expansion multiplies the train set ``n_aug``-fold, so at a fixed
+    step budget each sample is seen ``1/n_aug`` as often (measured: severe under-
+    training). Pair it with ``n_aug``x the steps, or prefer the matched-epoch
+    ON-THE-FLY path (``Config.augment_shift_max``), which the eval variants use."""
+    from sklearn.datasets import fetch_openml
+    data = fetch_openml("mnist_784", version=1, as_frame=False,
+                        parser="liac-arff", cache=True)
+    X = np.asarray(data.data, dtype=float)
+    side = 28
+    if downsample:
+        X = _downsample_2x2(X)
+        side = 14
+    y = np.asarray(data.target, dtype=int)
+    Xtr, ytr, Xte, yte = _stratified_subsample_split(X, y, n_train, n_test, seed)
+    Xtr = augment_shift(Xtr, side, max_shift=max_shift, n_aug=n_aug, seed=seed)
+    ytr = np.repeat(ytr, n_aug)
+    Xtr, Xte = _standardize_on_train(Xtr, Xte)
+    return Xtr, ytr, Xte, yte
+
+
 def load_mnist_split(seed: int = 0, n_train: int = 12000, n_test: int = 1000,
                      downsample: bool = True):
     """MNIST (fetched via OpenML, cached): a seeded class-balanced subsample,
@@ -149,6 +208,9 @@ def get_dataset(name, seed, *, n_points=600, turns=1.0, noise=0.10,
     if name == "mnist-full":                            # full 784
         return load_mnist_split(seed=seed, n_train=n_points, n_test=1000,
                                 downsample=False)
+    if name == "mnist-aug":                             # 14x14 + train shift-augment
+        return load_mnist_aug_split(seed=seed, n_train=n_points, n_test=1000,
+                                    downsample=True)
     if name == "mnist-conv":                            # 14x14 -> hand-filter conv
         return load_mnist_conv_split(seed=seed, n_train=n_points, n_test=1000,
                                      downsample=True, bank_kind="hand")

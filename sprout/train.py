@@ -173,6 +173,16 @@ class Config:
     # in an event-driven forward/backward implementation.
     activation_top_k: int | None = None
 
+    # --- on-the-fly input augmentation (perf lever #2) ---
+    # Per training step, randomly translate the (square) input image by up to
+    # +-augment_shift_max px, zero-filled (see datasets._shift_zero_fill). 0 = off
+    # (DEFAULT). Unlike static dataset expansion, this keeps the effective epoch
+    # count matched to the baseline — same N samples, each perturbed in place — so
+    # it tests augmentation WITHOUT the data-dilution confound (a static 4x set at
+    # fixed steps just quarters how often each sample is seen). Requires square
+    # inputs (side = sqrt(num_inputs)); the economy/forward/backward are untouched.
+    augment_shift_max: int = 0
+
     # --- eval-harness build hint (NOT read by Trainer) ---
     # Optional per-variant override of the *initial* graph density used by the
     # eval runner's build_graph. None => use the suite's --density. This lets a
@@ -216,6 +226,15 @@ class Trainer:
         self.step_idx = 0
         # Network.forward owns activations, but Config owns the experiment knob.
         self.net.activation_top_k = cfg.activation_top_k
+        # on-the-fly augmentation: precompute the square image side once.
+        self._aug_side = None
+        if cfg.augment_shift_max > 0:
+            side = int(round(self.X.shape[1] ** 0.5))
+            if side * side != self.X.shape[1]:
+                raise ValueError(
+                    "augment_shift_max requires square image inputs "
+                    f"(got {self.X.shape[1]} features)")
+            self._aug_side = side
         self.history = {
             # logged every step
             "step": [],
@@ -273,6 +292,8 @@ class Trainer:
         net = self.net
         i = self.rng.integers(len(self.X))
         x, y_true = self.X[i], int(self.y[i])
+        if self._aug_side is not None:                   # on-the-fly augmentation
+            x = self._augment(x)
 
         net.forward(x)                                   # §4.1
         self._update_firing_rates()                      # §4.2 (kept for viz)
@@ -302,6 +323,17 @@ class Trainer:
 
         self.step_idx += 1
         return loss
+
+    def _augment(self, x):
+        """Random zero-filled integer shift of a flat square image (±shift_max px),
+        drawn from the trainer rng so a seed reproduces the run. Returns a NEW
+        array — self.X is never mutated."""
+        from sprout.datasets import _shift_zero_fill
+        m = self.cfg.augment_shift_max
+        dr = int(self.rng.integers(-m, m + 1))
+        dc = int(self.rng.integers(-m, m + 1))
+        s = self._aug_side
+        return _shift_zero_fill(np.asarray(x).reshape(s, s), dr, dc).reshape(-1)
 
     # -- §4.2 firing-rate EMA (always on; cheap bookkeeping) ----------------
     def _update_firing_rates(self):
