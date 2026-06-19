@@ -39,6 +39,13 @@ class Config:
     # dropped in a follow-up. See sprout/currency.py.
     grad_currency: bool = True
     beta_g: float = 0.99          # gradient-meter EMA memory (~100 samples)
+    # The weight-update rule (see learning.apply_gated_update). "sgd" (DEFAULT,
+    # pins every existing baseline + validate.py) steps along the instantaneous
+    # gradient. "currency" makes the gradient meters the OPTIMIZER: step along
+    # S/(M+eps) — the consistency coefficient kappa*sign(S) — a self-normalizing,
+    # auto-annealing per-wire adaptive step that reuses the currency with no new
+    # state. Normalized steps are ~unit-scaled, so it wants a smaller eta_base.
+    optimizer: str = "sgd"        # "sgd" | "currency"
     # tug-of-war confidence (opt-in alt rule, confidence_mode="tugofwar"):
     gamma_dec: float = 0.01       # confidence decay (lets confidence fall)
     gamma_up: float = 0.05        # confidence earn rate (calm + consistent)
@@ -329,7 +336,8 @@ class Trainer:
                                            cfg.gamma_dn, cfg.c_max, cfg.m_floor_frac,
                                            meter_beta=(cfg.beta_g if cfg.lazy_meters else None),
                                            meter_step=meter_step)
-        apply_gated_update(net, grad_w, grad_b, cfg.eta_base)       # gated SGD
+        apply_gated_update(net, grad_w, grad_b, cfg.eta_base,       # gated update
+                           optimizer=cfg.optimizer)
         self._increment_ages()
         if self.sleep_detector is not None:                        # settledness
             self.settled = self.sleep_detector.update(loss, self.step_idx)

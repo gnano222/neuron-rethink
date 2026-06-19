@@ -17,6 +17,10 @@ from sprout.train import Config
 _BOUNDED_GROW_VARIANTS = {
     "phasic-startle-k4",
     "phasic-startle-k4-lazy",
+    "opt-currency-e20",
+    "opt-currency-e10",
+    "opt-currency-e05",
+    "opt-currency-e02",
     "eff-density30",
     "eff-density50",
     "eff-w12",
@@ -77,6 +81,19 @@ def _sparse(layers, density, k=4, dataset=None):
         enable_prune=True, enable_grow=True, gamma_dec=0.001, t_struct=200,
         phasic_structure=True, startle=True, grow_demand_k=k,
         init_layers=layers, init_density=density, init_dataset=dataset)
+
+
+def _opt_currency(eta, dataset=None):
+    """The promoted phasic-startle-k4 baseline, but with the CURRENCY-NATIVE
+    optimizer: the weight step is S/(M+eps) (the consistency coefficient), so the
+    gradient meters become the optimizer (see learning.apply_gated_update). The
+    step is ~unit-scaled, so eta sweeps DOWN from the SGD baseline's 0.02. Name
+    must be in ``_BOUNDED_GROW_VARIANTS`` (it sets grow_demand_k=4)."""
+    return lambda: Config(
+        eta_base=eta, grad_currency=True, enable_confidence=True,
+        enable_prune=True, enable_grow=True, gamma_dec=0.001, t_struct=200,
+        phasic_structure=True, startle=True, grow_demand_k=4,
+        optimizer="currency", init_dataset=dataset)
 
 
 # name -> factory returning a FRESH Config (never share mutable Config instances
@@ -163,6 +180,16 @@ VARIANTS: dict[str, Callable[[], Config]] = {
         gamma_dec=0.001, t_struct=200, phasic_structure=True,
         startle=True, grow_demand_k=4, lazy_meters=True,
     ),
+    # === CURRENCY-NATIVE OPTIMIZER (2026-06-19) ==============================
+    # phasic-startle-k4 + optimizer="currency": the step is S/(M+eps), so the two
+    # gradient meters SPROUT already maintains BECOME the optimizer (a self-
+    # normalizing, auto-annealing per-wire adaptive step; no new state). Steps are
+    # ~unit-scaled, so eta sweeps DOWN from the SGD baseline's 0.02 to find the
+    # sweet spot. Measured against baseline phasic-startle-k4.
+    "opt-currency-e20": _opt_currency(0.02),
+    "opt-currency-e10": _opt_currency(0.01),
+    "opt-currency-e05": _opt_currency(0.005),
+    "opt-currency-e02": _opt_currency(0.002),
     # Compute-tuning probes around the promoted baseline. Each is a single knob:
     # initial density, width, sleep prune floor, or enforced activation sparsity.
     "eff-density30": lambda: Config(

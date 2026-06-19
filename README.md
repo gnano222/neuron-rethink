@@ -218,6 +218,24 @@ Pure NumPy. The object path hand-rolls forward/backward over adjacency lists so
 the irregular, mutating sparse graph is handled directly; the `fast` backend runs
 the same graph as parallel edge arrays.
 
+## Research roadmap — performance levers
+
+Ranked ideas for improving **prediction accuracy** while staying faithful to the
+gradient-as-currency architecture (sparse, self-wiring, phasic, legible). Guiding
+principle: the most faithful gains **reuse or extend the currency** rather than
+bolt on something foreign.
+
+| Lever | Idea | Why high-potential | Faithfulness | Status |
+|---|---|---|---|---|
+| **Currency-native optimizer** | step along `S/(M+ε)` — the two meters *become* the optimizer: a self-normalizing, auto-annealing per-wire adaptive step | adaptive per-wire LR is one of ML's most reliable accuracy/convergence wins; **zero new state**; lifts every task | **maximal** (reuses the currency) | **in progress** — `Config.optimizer="currency"`, `opt-currency-*` variants |
+| **Data augmentation** | random small image shifts / jitter | historically the single biggest MNIST lever; synergistic with conv translation-invariance | high (pure data; economy untouched) | planned |
+| **Mini-batch gradients** | average `g` over 16–32 samples instead of batch=1 | less noisy gradients → better convergence **and** cleaner `M`/demand → smarter prune/grow | high (only the gradient estimate changes) | planned |
+| **Stacked / deep conv** | a 2nd `ConvEconomy` on top of the first | compositional features (edges→strokes→parts) — the big swing on images | high (same currency governs both) | planned |
+| **Neuron-level growth** | birth/prune whole *neurons* where demand concentrates, not just edges | raises the capacity ceiling on hard tasks without manual width tuning | high (natural currency extension) | planned |
+
+Lower-tier (cheap, modest): head LR warmup/cosine schedule; label smoothing /
+output temperature.
+
 ## Limitations & next steps
 
 - **The MNIST ceiling was architectural, and Conv-SPROUT addresses it.** Every MLP
