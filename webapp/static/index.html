@@ -51,31 +51,21 @@
       <p class="cap">brighter = stronger pixel after standardization</p>
     </section>
 
-    <!-- 2. filters -->
+    <!-- 2. filters -> feature maps (paired) -->
     <section class="card stage">
-      <h2><span class="num">②</span> learned filters</h2>
-      <p class="desc">The first layer slides each of these tiny 3×3 patterns across
-        the image, looking for a specific stroke shape (an edge, a corner, a curve).
-        SPROUT <em>learned and pruned these itself</em>. The kernels are fixed, but the
-        ones that <strong>fire on your drawing light up</strong> — dim ones barely
-        responded.</p>
-      <div id="filters" class="filter-bank"></div>
-      <p class="cap" id="filterCap">bright cells = strong taps in the learned pattern</p>
+      <h2><span class="num">②</span> filters → feature maps</h2>
+      <p class="desc">Each learned 3×3 <strong>filter</strong> (left) is slid across
+        your image to produce its <strong>feature map</strong> (right) — a picture of
+        <em>where</em> that pattern appears in your digit. Each filter has exactly one
+        map. Brightly-lit pairs fired strongly; SPROUT learned and pruned the filters
+        itself, so only the survivors are shown.</p>
+      <div id="filterPairs" class="pair-list"></div>
+      <p class="cap" id="filterCap"></p>
     </section>
 
-    <!-- 3. feature maps -->
+    <!-- 3. network -->
     <section class="card stage">
-      <h2><span class="num">③</span> feature maps · which fired</h2>
-      <p class="desc">Applying one filter everywhere produces a map of <em>where</em>
-        that pattern appears in your digit. Bright cells = the filter found its shape
-        there. These maps — not the raw pixels — are what the classifier reads.</p>
-      <div id="featureMaps" class="fmap-bank"></div>
-      <p class="cap">one grid per active filter; bright = it responded there</p>
-    </section>
-
-    <!-- 4. network -->
-    <section class="card stage">
-      <h2><span class="num">④</span> head network</h2>
+      <h2><span class="num">③</span> head network</h2>
       <p class="desc">The sparse classifier. It reads the feature maps (left column),
         combines them through hidden neurons (middle), and votes for a digit (right).
         Watch the <strong>active circuit</strong> light up — the specific path your

@@ -55,8 +55,12 @@ button.primary{background:var(--accent);border-color:var(--accent);color:#04101f
 .fmap{display:grid;grid-template-columns:repeat(6,9px);grid-template-rows:repeat(6,9px);
   gap:1px;padding:3px;border-radius:5px;background:#0a0d12;border:1px solid var(--line);}
 .fmap .c{width:9px;height:9px;border-radius:1px;background:#0a0d12;}
-.filter,.fmap{transition:opacity .15s,box-shadow .15s,border-color .15s;}
-.filter.fired,.fmap.fired{border-color:var(--fire);box-shadow:0 0 9px rgba(63,185,80,.55);}
+/* paired filter -> feature map rows */
+.pair-list{display:flex;flex-direction:column;gap:9px;}
+.pair{display:flex;align-items:center;justify-content:center;gap:12px;padding:6px 4px;
+  border-radius:9px;transition:opacity .15s,box-shadow .15s,background .15s;}
+.pair.fired{box-shadow:0 0 11px rgba(63,185,80,.45);background:rgba(63,185,80,.06);}
+.pair .arrow{color:#6e7681;font-size:18px;}
 
 /* network */
 .net-wrap{width:100%;background:#0a0d12;border:1px solid var(--line);border-radius:10px;overflow:hidden;}

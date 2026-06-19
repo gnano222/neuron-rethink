@@ -94,8 +94,7 @@ function render(d) {
   renderPrediction(d);
   renderInput(d.input_14x14);
   const strengths = filterStrengths(d.feature_maps);   // how strongly each filter fired
-  renderFilters(d.filters, strengths);
-  renderFeatureMaps(d.feature_maps, strengths);
+  renderPairs(d.filters, d.feature_maps, strengths);
   renderNetwork(d.graph, d.prediction);
   setModelInfo(d.model_meta);
 }
@@ -124,7 +123,7 @@ function clearInputGrid() {
 function resetAll() {
   document.getElementById("bigDigit").textContent = "–";
   document.getElementById("probs").innerHTML = "";
-  document.getElementById("featureMaps").innerHTML = "";
+  if (restingFilters) renderPairs(restingFilters, [], null);   // kernels, blank maps
   clearInputGrid();
   restNetwork();                 // back to the at-rest view: all wires, nothing fired
   setStatus("draw a single digit (0–9)");
@@ -166,63 +165,62 @@ function renderInput(img) {
   }
 }
 
-function renderFilters(filters, strengths) {
-  const bank = document.getElementById("filters");
-  bank.innerHTML = "";
-  filters.forEach(f => {
-    const el = document.createElement("div");
-    el.className = "filter" + (f.active ? "" : " dim");
-    if (f.active) {
-      const flat = f.kernel.flat();
-      const maxabs = Math.max(1e-9, ...flat.map(Math.abs));
-      flat.forEach(v => {
-        const c = document.createElement("div");
-        c.className = "c";
-        c.style.background = green(Math.abs(v) / maxabs);     // tap strength, one green
-        el.append(c);
-      });
-      if (strengths) {                                        // emphasise filters that fired
-        const t = strengths.get(f.slot) || 0;
-        el.style.opacity = (0.22 + 0.78 * t).toFixed(3);
-        if (t > 0.55) el.classList.add("fired");
-      }
-    } else {
-      for (let i = 0; i < 9; i++) { const c = document.createElement("div"); c.className = "c"; el.append(c); }
-    }
-    bank.append(el);
-  });
-  const n = filters.filter(f => f.active).length;
-  document.getElementById("filterCap").innerHTML = strengths
-    ? `<strong>${n} of ${filters.length}</strong> slots active. Brightly-lit filters fired strongly on this drawing; dim ones barely responded.`
-    : `<strong>${n} of ${filters.length}</strong> slots active — the economy pruned the rest.`;
-}
+// each active filter and the feature map it produces, shown as one pair. `maps`
+// may be empty (at rest) -> the map renders as a blank placeholder.
+function renderPairs(filters, maps, strengths) {
+  const wrap = document.getElementById("filterPairs");
+  wrap.innerHTML = "";
+  const bySlot = new Map((maps || []).map(m => [m.slot, m.map]));
+  let gmax = 1e-9;
+  for (const m of (maps || [])) for (const row of m.map) for (const v of row) gmax = Math.max(gmax, v);
 
-function renderFeatureMaps(maps, strengths) {
-  const bank = document.getElementById("featureMaps");
-  bank.innerHTML = "";
-  let max = 1e-9;
-  for (const m of maps) for (const row of m.map) for (const v of row) max = Math.max(max, v);
-  maps.forEach(m => {
-    const el = document.createElement("div");
-    el.className = "fmap";
-    for (const row of m.map) for (const v of row) {
+  filters.filter(f => f.active).forEach(f => {
+    const pair = document.createElement("div");
+    pair.className = "pair";
+
+    const kf = document.createElement("div");          // the learned 3x3 kernel
+    kf.className = "filter";
+    const flat = f.kernel.flat();
+    const maxabs = Math.max(1e-9, ...flat.map(Math.abs));
+    flat.forEach(v => {
       const c = document.createElement("div");
       c.className = "c";
-      c.style.background = green(v / max);
-      el.append(c);
+      c.style.background = green(Math.abs(v) / maxabs);
+      kf.append(c);
+    });
+
+    const arrow = document.createElement("div");
+    arrow.className = "arrow";
+    arrow.textContent = "→";
+
+    const fm = document.createElement("div");          // its 6x6 feature map (or blank)
+    fm.className = "fmap";
+    const map = bySlot.get(f.slot);
+    for (let i = 0; i < 36; i++) {
+      const c = document.createElement("div");
+      c.className = "c";
+      if (map) c.style.background = green(map[Math.floor(i / 6)][i % 6] / gmax);
+      fm.append(c);
     }
-    if (strengths) {                                          // dim maps that barely fired
-      const t = strengths.get(m.slot) || 0;
-      el.style.opacity = (0.3 + 0.7 * t).toFixed(3);
-      if (t > 0.55) el.classList.add("fired");
+
+    pair.append(kf, arrow, fm);
+    if (strengths) {                                   // emphasise pairs that fired
+      const t = strengths.get(f.slot) || 0;
+      pair.style.opacity = (0.25 + 0.75 * t).toFixed(3);
+      if (t > 0.55) pair.classList.add("fired");
     }
-    bank.append(el);
+    wrap.append(pair);
   });
+
+  const n = filters.filter(f => f.active).length;
+  document.getElementById("filterCap").innerHTML = strengths
+    ? `<strong>${n} of ${filters.length}</strong> filters active. Brighter pairs fired more strongly on this drawing; the rest were pruned.`
+    : `<strong>${n} of ${filters.length}</strong> filters active — the economy pruned the rest. Draw to see which fire.`;
 }
 
 // ---- network: build geometry + edges once, restyle by activation each inference
 const net = document.getElementById("net");
-let layout = null, edgeEls = null, nodeEls = null;
+let layout = null, edgeEls = null, nodeEls = null, restingFilters = null;
 
 function buildNetwork(graph) {
   net.innerHTML = "";
@@ -360,7 +358,8 @@ async function loadResting() {
     const d = await r.json();
     buildNetwork(d.graph);
     restNetwork();
-    renderFilters(d.filters);
+    restingFilters = d.filters;
+    renderPairs(d.filters, [], null);
     setModelInfo(d.model_meta);
   } catch (err) { /* server not up yet */ }
 }
