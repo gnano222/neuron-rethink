@@ -44,6 +44,19 @@ ARMS = {
     # the phasic-startle-k4 head. Beats the fixed hand bank and clears the ~0.93
     # MNIST14 ceiling (~0.95). See docs/findings-2026-06-16-conv-sprout-phase2.md.
     "conv-sprout":    dict(k_max=12, k_init=12, init="random", learn=True, structure=True,  freeze=False, grow_mode="split", eta_sched="cosine", grow_per_burst=0, redprune=True, red_mode="activation", red_thresh=0.80),
+    # === MECHANISM-COHERENCE A/B (2026-06-18) ================================
+    # Two filter-only extras sit on top of the shared gradient currency: cosine
+    # LR CONSOLIDATION and correlation REDUNDANCY prune. Ask, against the
+    # conv-sprout baseline, whether each is load-bearing or can be subsumed by the
+    # gradient-native machinery (currency inertness prune + the confidence brake).
+    #   no-redprune      : drop redundancy prune -> currency inertness prune only
+    #   no-cosine        : drop cosine -> the known-unstable reference (default conf)
+    #   strongconf-nocos : drop cosine, CRANK the gradient-native confidence brake
+    #   currency-only    : drop BOTH extras, lean on currency + strong conf brake
+    "no-redprune":      dict(k_max=12, k_init=12, init="random", learn=True, structure=True, freeze=False, grow_mode="split", eta_sched="cosine", grow_per_burst=0, redprune=False),
+    "no-cosine":        dict(k_max=12, k_init=12, init="random", learn=True, structure=True, freeze=False, grow_mode="split", eta_sched="none",   grow_per_burst=0, redprune=True, red_mode="activation", red_thresh=0.80),
+    "strongconf-nocos": dict(k_max=12, k_init=12, init="random", learn=True, structure=True, freeze=False, grow_mode="split", eta_sched="none",   grow_per_burst=0, redprune=True, red_mode="activation", red_thresh=0.80, conf_gain=4.0, c_max=10.0),
+    "currency-only":    dict(k_max=12, k_init=12, init="random", learn=True, structure=True, freeze=False, grow_mode="split", eta_sched="none",   grow_per_burst=0, redprune=False, conf_gain=4.0, c_max=10.0),
     # the fixed-filter reference (Phase-1 hand bank, no learning) it is measured against
     "fixed-hand-k6":  dict(k_max=6,  k_init=6,  init="hand",   learn=True,  structure=False, freeze=True,  grow_mode="split"),
     # consolidation arms: learn filters early, wind LR down so they settle late
@@ -129,12 +142,14 @@ def _head_config():
 def _build(arm, seed, side, conv_eta, n_out=10, total_steps=None):
     spec = ARMS[arm]
     kh = kw = 3
+    conf_kw = {k: spec[k] for k in ("conf_gain", "c_max", "conf_alpha") if k in spec}
     if spec["init"] == "hand":
         conv = ConvEconomy(k_max=spec["k_max"], kh=kh, kw=kw,
-                           kernels=filter_bank("hand")[:spec["k_max"]], seed=seed)
+                           kernels=filter_bank("hand")[:spec["k_max"]], seed=seed,
+                           **conf_kw)
     else:
         conv = ConvEconomy(k_max=spec["k_max"], kh=kh, kw=kw,
-                           k_init=spec["k_init"], seed=seed)
+                           k_init=spec["k_init"], seed=seed, **conf_kw)
     feat = conv.feat_dim(side, side)
     head = build_graph([feat, 32, n_out], density=0.5, seed=seed)
     init_weights(head, seed=seed)
