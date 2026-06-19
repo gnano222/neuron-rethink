@@ -40,6 +40,7 @@ One registry serves them all ([sprout/datasets.py](sprout/datasets.py),
 | `digits` | scikit-learn 8×8 digits (64-D, 10-class) | small real multiclass |
 | **`mnist`** | **MNIST 2×2-pooled to 14×14 (196-D, 10-class) — the default MNIST** | the main image benchmark |
 | `mnist-full` | full 28×28 MNIST (784-D) | full-resolution control |
+| `fashion` / `fashion-full` | Fashion-MNIST, 14×14 / full 28×28 (10-class) | harder image task *with headroom* (MNIST is saturated) — for evaluating accuracy levers |
 
 **Why 14×14 is the default MNIST:** at a fixed sparse edge budget, a 14×14
 thumbnail the net can *fully cover* beats a 784-pixel image it can only glimpse —
@@ -194,7 +195,8 @@ on it (one source of truth in [sprout/currency.py](sprout/currency.py)).
 ```
 sprout/
   data.py        generate_blobs / generate_spirals (2-D tasks)
-  datasets.py    get_dataset registry: spirals/blobs/digits/mnist/mnist-full
+  datasets.py    get_dataset registry: spirals/blobs/digits/mnist/mnist-full/fashion
+  conv_deep.py   stacked (deep) Conv-SPROUT: multi-channel conv + ConvLayer/DeepConvModel/DeepConvTrainer
   network.py     Neuron, Synapse (+ gradient meters); object forward/backward
   fast.py        ArrayNet / ArrayTrainer — vectorized backend (--backend array)
   learning.py    firing-rate EMA + confidence-gated weight update
@@ -220,21 +222,26 @@ the same graph as parallel edge arrays.
 
 ## Research roadmap — performance levers
 
-Ranked ideas for improving **prediction accuracy** while staying faithful to the
-gradient-as-currency architecture (sparse, self-wiring, phasic, legible). Guiding
-principle: the most faithful gains **reuse or extend the currency** rather than
-bolt on something foreign.
+A 2026-06-19 investigation tested several faithful accuracy levers (TDD +
+gradient-checked, multi-seed, published). The headline: **learned weight-shared
+filters are the lever**; the others did not help — and most "failed" only because
+**MNIST is saturated** (~0.94–0.95, no headroom). On the harder **Fashion-MNIST**,
+learned conv beats both a raw MLP and a *fixed* conv bank by ~+5pt, while
+depth/width/augmentation/optimizer add nothing. Full write-up:
+[docs/findings-2026-06-19-performance-levers.md](docs/findings-2026-06-19-performance-levers.md).
 
-| Lever | Idea | Why high-potential | Faithfulness | Status |
-|---|---|---|---|---|
-| **Currency-native optimizer** | step along `S/(M+ε)` — the two meters *become* the optimizer: a self-normalizing, auto-annealing per-wire adaptive step | adaptive per-wire LR is one of ML's most reliable accuracy/convergence wins; **zero new state**; lifts every task | **maximal** (reuses the currency) | **in progress** — `Config.optimizer="currency"`, `opt-currency-*` variants |
-| **Data augmentation** | random small image shifts / jitter | historically the single biggest MNIST lever; synergistic with conv translation-invariance | high (pure data; economy untouched) | planned |
-| **Mini-batch gradients** | average `g` over 16–32 samples instead of batch=1 | less noisy gradients → better convergence **and** cleaner `M`/demand → smarter prune/grow | high (only the gradient estimate changes) | planned |
-| **Stacked / deep conv** | a 2nd `ConvEconomy` on top of the first | compositional features (edges→strokes→parts) — the big swing on images | high (same currency governs both) | planned |
-| **Neuron-level growth** | birth/prune whole *neurons* where demand concentrates, not just edges | raises the capacity ceiling on hard tasks without manual width tuning | high (natural currency extension) | planned |
+| Lever | Idea | Status / result |
+|---|---|---|
+| **Learned conv (Conv-SPROUT)** | learn weight-shared filters inside the economy | ✅ **the lever** — +4.6–5pt vs raw MLP / fixed conv on Fashion-MNIST |
+| Currency-native optimizer | step along `S/(M+ε)` — the meters *become* the optimizer | ✗ regressed — normalized steps flatten the load distribution confidence/prune need (`Config.optimizer="currency"`, pinned) |
+| Data augmentation | random small image shifts (`Config.augment_shift_max`) | ✗ regressed on (centered, saturated) MNIST — no positional variance, model not overfitting |
+| Stacked / deep conv | a 2nd conv layer ([sprout/conv_deep.py](sprout/conv_deep.py), gradient-checked) | ✗ no help — pooling starves the head of features; built + reusable, just not the lever here |
+| Wide conv | more first-layer filters | ≈ ties — capacity isn't the bottleneck |
+| Mini-batch gradients | average `g` over 16–32 samples | planned (untested) |
+| Neuron-level growth | birth/prune whole *neurons*, not just edges | planned (untested) |
 
-Lower-tier (cheap, modest): head LR warmup/cosine schedule; label smoothing /
-output temperature.
+Key methodological lesson: **evaluate accuracy levers on a task with headroom**
+(Fashion-MNIST), not a saturated one (MNIST).
 
 ## Limitations & next steps
 
