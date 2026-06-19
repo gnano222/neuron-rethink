@@ -87,15 +87,31 @@ function lerp(a, b, t) {
   return `rgb(${c[0]},${c[1]},${c[2]})`;
 }
 const clamp01 = t => Math.max(0, Math.min(1, t));
+const green = t => lerp("#0e2a17", "#56f06f", clamp01(t));   // one fire-green ramp, used everywhere
 
 // ---------------------------------------------------------------- render
 function render(d) {
   renderPrediction(d);
   renderInput(d.input_14x14);
-  renderFilters(d.filters);
-  renderFeatureMaps(d.feature_maps);
+  const strengths = filterStrengths(d.feature_maps);   // how strongly each filter fired
+  renderFilters(d.filters, strengths);
+  renderFeatureMaps(d.feature_maps, strengths);
   renderNetwork(d.graph, d.prediction);
   setModelInfo(d.model_meta);
+}
+
+// per-filter response on this drawing = total pooled activation, normalised to [0,1]
+function filterStrengths(maps) {
+  const s = new Map();
+  let mx = 1e-9;
+  for (const m of maps) {
+    let t = 0;
+    for (const row of m.map) for (const v of row) t += v;
+    s.set(m.slot, t);
+    mx = Math.max(mx, t);
+  }
+  for (const [k, v] of s) s.set(k, v / mx);
+  return s;
 }
 
 function clearInputGrid() {
@@ -150,7 +166,7 @@ function renderInput(img) {
   }
 }
 
-function renderFilters(filters) {
+function renderFilters(filters, strengths) {
   const bank = document.getElementById("filters");
   bank.innerHTML = "";
   filters.forEach(f => {
@@ -162,23 +178,26 @@ function renderFilters(filters) {
       flat.forEach(v => {
         const c = document.createElement("div");
         c.className = "c";
-        const t = Math.abs(v) / maxabs;
-        c.style.background = v >= 0 ? lerp("#0a0d12", "#f0883e", t)
-                                    : lerp("#0a0d12", "#388bfd", t);
+        c.style.background = green(Math.abs(v) / maxabs);     // tap strength, one green
         el.append(c);
       });
+      if (strengths) {                                        // emphasise filters that fired
+        const t = strengths.get(f.slot) || 0;
+        el.style.opacity = (0.22 + 0.78 * t).toFixed(3);
+        if (t > 0.55) el.classList.add("fired");
+      }
     } else {
       for (let i = 0; i < 9; i++) { const c = document.createElement("div"); c.className = "c"; el.append(c); }
     }
     bank.append(el);
   });
   const n = filters.filter(f => f.active).length;
-  document.getElementById("filterCap").innerHTML =
-    `<strong>${n} of ${filters.length}</strong> slots active — the economy pruned the rest. ` +
-    `orange = positive tap, blue = negative.`;
+  document.getElementById("filterCap").innerHTML = strengths
+    ? `<strong>${n} of ${filters.length}</strong> slots active. Brightly-lit filters fired strongly on this drawing; dim ones barely responded.`
+    : `<strong>${n} of ${filters.length}</strong> slots active — the economy pruned the rest.`;
 }
 
-function renderFeatureMaps(maps) {
+function renderFeatureMaps(maps, strengths) {
   const bank = document.getElementById("featureMaps");
   bank.innerHTML = "";
   let max = 1e-9;
@@ -189,8 +208,13 @@ function renderFeatureMaps(maps) {
     for (const row of m.map) for (const v of row) {
       const c = document.createElement("div");
       c.className = "c";
-      c.style.background = lerp("#0a0d12", "#3fb950", clamp01(v / max));
+      c.style.background = green(v / max);
       el.append(c);
+    }
+    if (strengths) {                                          // dim maps that barely fired
+      const t = strengths.get(m.slot) || 0;
+      el.style.opacity = (0.3 + 0.7 * t).toFixed(3);
+      if (t > 0.55) el.classList.add("fired");
     }
     bank.append(el);
   });
@@ -284,41 +308,37 @@ function renderNetwork(graph, prediction) {
   graph.neurons.forEach(n => {
     const cir = nodeEls.get(n.id);
     const m = maxByLayer[n.layer] || 1;
-    cir.setAttribute("fill", n.act > 1e-9
-      ? lerp("#1f6feb", "#9fd1ff", clamp01(n.act / m)) : "#262c36");
+    cir.setAttribute("fill", n.act > 1e-9 ? green(n.act / m) : "#262c36");
   });
 
-  // wire encoding = SIGNAL STRENGTH this drawing: flow = pre-activation x weight.
-  // Strong wires are thick + bright; weak ones fade; sign sets the hue
-  // (excitatory green, inhibitory orange) so the active circuit is readable.
+  // wire encoding = SIGNAL STRENGTH this drawing: |flow| = |pre-activation x weight|.
+  // Strong wires are thick + bright green; weak ones fade; inactive ones recede.
   let maxFlow = 1e-9;
   const flow = edgeEls.map(ln => {
     const a = act.get(+ln.dataset.pre), b = act.get(+ln.dataset.post);
-    const f = (a > 1e-9 && b > 1e-9) ? a * ln._sw : 0;
-    if (Math.abs(f) > maxFlow) maxFlow = Math.abs(f);
+    const f = (a > 1e-9 && b > 1e-9) ? Math.abs(a * ln._sw) : 0;
+    if (f > maxFlow) maxFlow = f;
     return f;
   });
   edgeEls.forEach((ln, i) => {
-    const t = Math.abs(flow[i]) / maxFlow;       // 0..1 relative strength
-    if (flow[i] !== 0) {
-      ln.setAttribute("stroke", flow[i] > 0
-        ? lerp("#16361d", "#56e06a", t)          // excitatory: green
-        : lerp("#3a2410", "#f0a050", t));         // inhibitory: orange
+    const t = flow[i] / maxFlow;                  // 0..1 relative strength
+    if (flow[i] > 0) {
+      ln.setAttribute("stroke", green(t));
       ln.setAttribute("stroke-opacity", 0.10 + 0.88 * t);
       ln.setAttribute("stroke-width", 0.09 + 0.95 * t);
     } else {
       ln.setAttribute("stroke", "#262c36");
-      ln.setAttribute("stroke-opacity", 0.03);   // inactive wires recede
+      ln.setAttribute("stroke-opacity", 0.03);    // inactive wires recede
       ln.setAttribute("stroke-width", 0.08);
     }
   });
 
-  // ring the predicted digit
+  // ring the predicted digit (white = the answer, stands out from the green)
   const outLayer = graph.n_layers - 1;
   graph.neurons.filter(n => n.layer === outLayer).forEach((n, i) => {
     const cir = nodeEls.get(n.id);
     if (i === prediction) {
-      cir.setAttribute("stroke", "#58a6ff"); cir.setAttribute("stroke-width", 0.7);
+      cir.setAttribute("stroke", "#ffffff"); cir.setAttribute("stroke-width", 0.7);
     } else {
       cir.setAttribute("stroke", "#0a0d12"); cir.setAttribute("stroke-width", 0.15);
     }

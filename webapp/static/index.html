@@ -56,10 +56,11 @@
       <h2><span class="num">②</span> learned filters</h2>
       <p class="desc">The first layer slides each of these tiny 3×3 patterns across
         the image, looking for a specific stroke shape (an edge, a corner, a curve).
-        SPROUT <em>learned and pruned these itself</em> — they don't change with your
-        drawing, they're what the model knows.</p>
+        SPROUT <em>learned and pruned these itself</em>. The kernels are fixed, but the
+        ones that <strong>fire on your drawing light up</strong> — dim ones barely
+        responded.</p>
       <div id="filters" class="filter-bank"></div>
-      <p class="cap" id="filterCap">orange = positive tap, blue = negative</p>
+      <p class="cap" id="filterCap">bright cells = strong taps in the learned pattern</p>
     </section>
 
     <!-- 3. feature maps -->
@@ -92,14 +93,13 @@
     <section class="card legend">
       <h2>legend</h2>
       <ul>
-        <li><span class="sw node-on"></span> neuron fired (brightness = activation)</li>
+        <li><span class="sw node-on"></span> neuron fired (brighter = stronger)</li>
         <li><span class="sw node-off"></span> neuron silent</li>
-        <li><span class="sw edge-exc"></span> excitatory wire — pushes its target toward firing</li>
-        <li><span class="sw edge-inh"></span> inhibitory wire — pushes its target away</li>
+        <li><span class="sw edge-fire"></span> wire carrying signal (thicker &amp; brighter = stronger)</li>
         <li><span class="sw edge-rest"></span> wire at rest (thickness = weight)</li>
       </ul>
-      <p class="cap">a wire's <strong>thickness &amp; brightness</strong> shows how
-        strongly it fired on the current drawing; faint wires barely carried signal.</p>
+      <p class="cap">across every section, <strong>green = active</strong>: the
+        brighter something glows, the more it fired on your drawing.</p>
       <p class="cap" id="modelInfo"></p>
     </section>
   </main>
