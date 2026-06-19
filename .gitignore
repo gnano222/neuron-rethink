@@ -222,3 +222,5 @@ output/
 
 # Duplicate of the tracked .claude/skills skill; local agent-runtime copy
 .agents/
+
+.superpowers/
