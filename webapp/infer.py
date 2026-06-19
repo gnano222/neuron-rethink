@@ -10,11 +10,46 @@ from __future__ import annotations
 import numpy as np
 
 
-def _filters_payload(conv):
-    """The learned kernels (model-constant, drawing-independent)."""
+def _filters_payload(conv, contrib=None):
+    """The learned kernels (model-constant). ``contrib`` (slot -> float) attaches
+    each active filter's contribution to the current prediction, when available."""
     return [{"slot": s, "active": bool(conv.active[s]),
-             "kernel": conv.theta[s].tolist() if conv.active[s] else None}
+             "kernel": conv.theta[s].tolist() if conv.active[s] else None,
+             "contribution": (contrib.get(s) if (contrib and conv.active[s]) else None)}
             for s in range(conv.k_max)]
+
+
+def _logit(head, nid):
+    """Pre-softmax score of output neuron ``nid`` from the head's current hidden
+    activations (softmax would saturate to ~1.0 on a confident digit and hide all
+    contribution, so we attribute in logit space)."""
+    z = head.neurons[nid].bias
+    for pre in head.incoming[nid]:
+        z += head.synapses[(pre, nid)].weight * head.neurons[pre].activation
+    return z
+
+
+def _filter_contributions(model, feat, pred):
+    """How much each filter drives THIS prediction, by occlusion: zero the filter's
+    features, re-run the head, and measure the drop in the predicted digit's logit.
+    Positive = the filter supports the prediction; ~0 = irrelevant; negative = it
+    argues against. Cheap (one head forward per active filter). The head must hold
+    the full forward on entry (for the baseline); it is restored on exit."""
+    head, conv = model.head, model.conv
+    per = ((model.h - conv.kh + 1) // conv.pool) * ((model.w - conv.kw + 1) // conv.pool)
+    pred_nid = head.layers[-1][pred]
+    base = _logit(head, pred_nid)
+    feat = np.asarray(feat, dtype=float)
+    contrib = {}
+    for slot in range(conv.k_max):
+        if not conv.active[slot]:
+            continue
+        occluded = feat.copy()
+        occluded[slot * per:(slot + 1) * per] = 0.0
+        model.head.forward(occluded)
+        contrib[slot] = float(base - _logit(head, pred_nid))
+    model.head.forward(feat)                          # restore true activations
+    return contrib
 
 
 def _graph_payload(head, *, resting=False):
@@ -51,12 +86,16 @@ def run_inference(model, image14) -> dict:
 
     feature_maps = [{"slot": s, "map": fmaps[s].tolist()}
                     for s in range(conv.k_max) if conv.active[s]]
+    graph = _graph_payload(head)                 # snapshot activations before occlusion
+
+    pred = int(np.argmax(probs))
+    contrib = _filter_contributions(model, feat, pred)
 
     return {
-        "prediction": int(np.argmax(probs)),
+        "prediction": pred,
         "probs": [float(p) for p in probs],
         "input_14x14": img.tolist(),
-        "filters": _filters_payload(conv),
+        "filters": _filters_payload(conv, contrib),
         "feature_maps": feature_maps,
-        "graph": _graph_payload(head),
+        "graph": graph,
     }

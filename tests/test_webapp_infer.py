@@ -56,3 +56,26 @@ def test_payload_filters_and_feature_maps():
     # each feature map is 6x6 for a 14x14 input (valid 3x3 -> 12, pool 2 -> 6)
     assert np.array(out["feature_maps"][0]["map"]).shape == (6, 6)
     assert np.array(out["filters"][0]["kernel"]).shape == (3, 3)
+
+
+def test_active_filters_carry_a_finite_contribution():
+    m = _model()
+    out = run_inference(m, np.random.default_rng(5).normal(size=(14, 14)))
+    active = [f for f in out["filters"] if f["active"]]
+    assert active and all(isinstance(f["contribution"], float) for f in active)
+    assert all(np.isfinite(f["contribution"]) for f in active)
+    assert any(abs(f["contribution"]) > 0 for f in active)   # some filter matters
+
+
+def test_resting_filters_have_no_contribution():
+    m = _model()
+    out = resting_payload(m)
+    assert all(f["contribution"] is None for f in out["filters"])
+
+
+def test_inference_is_idempotent_after_occlusion():
+    m = _model()
+    img = np.random.default_rng(7).normal(size=(14, 14))
+    a, b = run_inference(m, img), run_inference(m, img)
+    assert a["prediction"] == b["prediction"]
+    assert np.allclose(a["probs"], b["probs"])              # occlusion side-effects restored

@@ -55,10 +55,11 @@
     <section class="card stage">
       <h2><span class="num">②</span> filters → feature maps</h2>
       <p class="desc">Each learned 3×3 <strong>filter</strong> (left) is slid across
-        your image to produce its <strong>feature map</strong> (right) — a picture of
-        <em>where</em> that pattern appears in your digit. Each filter has exactly one
-        map. Brightly-lit pairs fired strongly; SPROUT learned and pruned the filters
-        itself, so only the survivors are shown.</p>
+        your image to produce its <strong>feature map</strong> (right) — where that
+        pattern appears in your digit. Pairs are <strong>ordered by how much each
+        filter drives the predicted digit</strong> (found by removing it and seeing how
+        far confidence drops); the bar shows that contribution. Only the filters SPROUT
+        kept appear.</p>
       <div id="filterPairs" class="pair-list"></div>
       <p class="cap" id="filterCap"></p>
     </section>

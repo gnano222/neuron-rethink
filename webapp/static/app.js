@@ -93,24 +93,9 @@ const green = t => lerp("#0e2a17", "#56f06f", clamp01(t));   // one fire-green r
 function render(d) {
   renderPrediction(d);
   renderInput(d.input_14x14);
-  const strengths = filterStrengths(d.feature_maps);   // how strongly each filter fired
-  renderPairs(d.filters, d.feature_maps, strengths);
+  renderPairs(d.filters, d.feature_maps);
   renderNetwork(d.graph, d.prediction);
   setModelInfo(d.model_meta);
-}
-
-// per-filter response on this drawing = total pooled activation, normalised to [0,1]
-function filterStrengths(maps) {
-  const s = new Map();
-  let mx = 1e-9;
-  for (const m of maps) {
-    let t = 0;
-    for (const row of m.map) for (const v of row) t += v;
-    s.set(m.slot, t);
-    mx = Math.max(mx, t);
-  }
-  for (const [k, v] of s) s.set(k, v / mx);
-  return s;
 }
 
 function clearInputGrid() {
@@ -123,7 +108,7 @@ function clearInputGrid() {
 function resetAll() {
   document.getElementById("bigDigit").textContent = "–";
   document.getElementById("probs").innerHTML = "";
-  if (restingFilters) renderPairs(restingFilters, [], null);   // kernels, blank maps
+  if (restingFilters) renderPairs(restingFilters, []);   // kernels, blank maps
   clearInputGrid();
   restNetwork();                 // back to the at-rest view: all wires, nothing fired
   setStatus("draw a single digit (0–9)");
@@ -165,16 +150,25 @@ function renderInput(img) {
   }
 }
 
-// each active filter and the feature map it produces, shown as one pair. `maps`
-// may be empty (at rest) -> the map renders as a blank placeholder.
-function renderPairs(filters, maps, strengths) {
+// each active filter and the feature map it produces, as one cell, in a 2-up grid.
+// When a prediction exists, cells are SORTED by how much the filter drives the
+// predicted digit (occlusion), with a contribution bar; `maps` is empty at rest.
+function renderPairs(filters, maps) {
   const wrap = document.getElementById("filterPairs");
   wrap.innerHTML = "";
   const bySlot = new Map((maps || []).map(m => [m.slot, m.map]));
   let gmax = 1e-9;
   for (const m of (maps || [])) for (const row of m.map) for (const v of row) gmax = Math.max(gmax, v);
 
-  filters.filter(f => f.active).forEach(f => {
+  let active = filters.filter(f => f.active);
+  const live = active.some(f => f.contribution != null);
+  let maxC = 1e-9;
+  if (live) {
+    for (const f of active) maxC = Math.max(maxC, f.contribution || 0);
+    active = active.slice().sort((a, b) => (b.contribution || 0) - (a.contribution || 0));
+  }
+
+  active.forEach(f => {
     const pair = document.createElement("div");
     pair.className = "pair";
 
@@ -203,19 +197,31 @@ function renderPairs(filters, maps, strengths) {
       fm.append(c);
     }
 
-    pair.append(kf, arrow, fm);
-    if (strengths) {                                   // emphasise pairs that fired
-      const t = strengths.get(f.slot) || 0;
-      pair.style.opacity = (0.25 + 0.75 * t).toFixed(3);
-      if (t > 0.55) pair.classList.add("fired");
+    const row = document.createElement("div");
+    row.className = "pair-row";
+    row.append(kf, arrow, fm);
+    pair.append(row);
+
+    if (live) {                                        // contribution to the prediction
+      const t = clamp01((f.contribution || 0) / maxC);
+      pair.style.opacity = (0.28 + 0.72 * t).toFixed(3);
+      if (t > 0.7) pair.classList.add("fired");
+      const bar = document.createElement("div");
+      bar.className = "contrib";
+      const fill = document.createElement("div");
+      fill.className = "fill";
+      fill.style.width = (t * 100).toFixed(0) + "%";
+      bar.append(fill);
+      pair.append(bar);
+      pair.title = `removing this filter changes the predicted digit's score by ${f.contribution.toFixed(2)}`;
     }
     wrap.append(pair);
   });
 
-  const n = filters.filter(f => f.active).length;
-  document.getElementById("filterCap").innerHTML = strengths
-    ? `<strong>${n} of ${filters.length}</strong> filters active. Brighter pairs fired more strongly on this drawing; the rest were pruned.`
-    : `<strong>${n} of ${filters.length}</strong> filters active — the economy pruned the rest. Draw to see which fire.`;
+  const n = active.length;
+  document.getElementById("filterCap").innerHTML = live
+    ? `<strong>${n} of ${filters.length}</strong> filters active, ordered by how much each drives the predicted digit (top-left matters most). The bar is its contribution.`
+    : `<strong>${n} of ${filters.length}</strong> filters active — the economy pruned the rest. Draw to see which drive the prediction.`;
 }
 
 // ---- network: build geometry + edges once, restyle by activation each inference
@@ -359,7 +365,7 @@ async function loadResting() {
     buildNetwork(d.graph);
     restNetwork();
     restingFilters = d.filters;
-    renderPairs(d.filters, [], null);
+    renderPairs(d.filters, []);
     setModelInfo(d.model_meta);
   } catch (err) { /* server not up yet */ }
 }
