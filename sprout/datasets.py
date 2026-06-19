@@ -146,6 +146,25 @@ def load_mnist_split(seed: int = 0, n_train: int = 12000, n_test: int = 1000,
     return Xtr, ytr, Xte, yte
 
 
+def load_fashion_split(seed: int = 0, n_train: int = 12000, n_test: int = 1000,
+                       downsample: bool = True):
+    """Fashion-MNIST (OpenML, cached): same 28x28 / 10-class / 784-D structure as
+    MNIST but MUCH harder (texture + shape, ~0.88 ceiling for small models), so it
+    has the headroom MNIST lacks for testing accuracy levers (conv / depth /
+    width). ``downsample=True`` 2x2-pools to 14x14 (196-D); ``False`` keeps 784.
+    Seeded class-balanced subsample, standardized on TRAIN stats."""
+    from sklearn.datasets import fetch_openml
+    data = fetch_openml("Fashion-MNIST", version=1, as_frame=False,
+                        parser="liac-arff", cache=True)
+    X = np.asarray(data.data, dtype=float)                    # (70000, 784)
+    if downsample:
+        X = _downsample_2x2(X)                                # (70000, 196)
+    y = np.asarray(data.target, dtype=int)                    # labels 0..9
+    Xtr, ytr, Xte, yte = _stratified_subsample_split(X, y, n_train, n_test, seed)
+    Xtr, Xte = _standardize_on_train(Xtr, Xte)
+    return Xtr, ytr, Xte, yte
+
+
 def mnist_conv_transform(X_flat, side, bank_kind="hand", pool=2, nonlin="relu"):
     """Flat ``(N, side*side)`` images -> ``(N, n_filters*pooled)`` fixed-conv
     features. Pure preprocessing (the bank is fixed at seed 0, never trained), so
@@ -208,6 +227,12 @@ def get_dataset(name, seed, *, n_points=600, turns=1.0, noise=0.10,
     if name == "mnist-full":                            # full 784
         return load_mnist_split(seed=seed, n_train=n_points, n_test=1000,
                                 downsample=False)
+    if name == "fashion":                               # Fashion-MNIST 14x14
+        return load_fashion_split(seed=seed, n_train=n_points, n_test=1000,
+                                  downsample=True)
+    if name == "fashion-full":                          # Fashion-MNIST full 784
+        return load_fashion_split(seed=seed, n_train=n_points, n_test=1000,
+                                  downsample=False)
     if name == "mnist-aug":                             # 14x14 + train shift-augment
         return load_mnist_aug_split(seed=seed, n_train=n_points, n_test=1000,
                                     downsample=True)

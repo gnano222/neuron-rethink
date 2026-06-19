@@ -115,6 +115,28 @@ def test_get_dataset_mnist_full_is_784():
     assert set(np.unique(yte)).issubset(set(range(10)))
 
 
+# -- Fashion-MNIST (harder substrate with headroom) --------------------------
+
+def test_get_dataset_fashion_is_14x14():
+    pytest = __import__("pytest")
+    try:
+        Xtr, ytr, Xte, yte = get_dataset("fashion", seed=0, n_points=200)
+    except Exception as e:
+        pytest.skip(f"Fashion-MNIST fetch unavailable: {e}")
+    assert Xtr.shape[1] == 196 and len(Xtr) == 200 and len(Xte) == 1000
+    assert set(np.unique(yte)).issubset(set(range(10)))
+    assert np.allclose(Xtr.mean(axis=0), 0.0, atol=1e-6)
+
+
+def test_get_dataset_fashion_full_is_784():
+    pytest = __import__("pytest")
+    try:
+        Xtr, ytr, Xte, yte = get_dataset("fashion-full", seed=0, n_points=200)
+    except Exception as e:
+        pytest.skip(f"Fashion-MNIST fetch unavailable: {e}")
+    assert Xtr.shape[1] == 784 and len(Xtr) == 200 and len(Xte) == 1000
+
+
 # -- conv front-end datasets (Phase 1) ---------------------------------------
 
 def test_mnist_conv_transform_shape():

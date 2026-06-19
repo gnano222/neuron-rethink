@@ -33,6 +33,7 @@ from sprout.train import Config                        # noqa: E402
 # arm -> conv channel widths per layer (c_in chains automatically). depth-2 shares
 # depth-1's first layer (k=8) and adds a 16-filter multi-channel layer on top.
 ARMS = {
+    "depth0": dict(channels=[]),          # NO conv: raw sparse MLP on pixels (floor)
     "depth1": dict(channels=[8]),
     "depth2": dict(channels=[8, 16]),
     "depth1-wide": dict(channels=[16]),   # capacity control: more L1 filters, no depth
@@ -77,14 +78,28 @@ def _build(arm, seed, side, conv_eta, total_steps, n_out=10):
 def run_one(arm, seed, args):
     Xtr, ytr, Xte, yte = get_dataset(args.dataset, seed, n_points=args.points)
     side = int(round(np.sqrt(Xtr.shape[1])))
-    Xtr = Xtr.reshape(-1, side, side)
-    Xte = Xte.reshape(-1, side, side)
     n_out = int(max(ytr.max(), yte.max())) + 1
-    tr, model = _build(arm, seed, side, args.conv_eta, args.steps, n_out=n_out)
-    tr.X, tr.y = Xtr, ytr
     cap = min(args.train_eval_cap, len(Xtr))
     eval_idx = np.sort(np.random.default_rng(seed + 7).choice(len(Xtr), cap, replace=False))
-    Xtr_eval, ytr_eval = Xtr[eval_idx], ytr[eval_idx]
+
+    if not ARMS[arm]["channels"]:                         # depth0: raw MLP, no conv
+        from sprout.train import Trainer, accuracy as net_acc
+        head = build_graph([side * side, 32, n_out], density=0.5, seed=seed)
+        init_weights(head, seed=seed)
+        tr = Trainer(_head_config(), head, Xtr, ytr, seed=seed)
+        acc = lambda X, y: net_acc(head, X, y)            # noqa: E731
+        Xtr_e, Xte_e = Xtr, Xte
+        feat_dim, conv_params = side * side, 0
+        get_syn = lambda: len(head.synapses)              # noqa: E731
+    else:                                                 # conv stack
+        Xtr_e = Xtr.reshape(-1, side, side)
+        Xte_e = Xte.reshape(-1, side, side)
+        tr, model = _build(arm, seed, side, args.conv_eta, args.steps, n_out=n_out)
+        tr.X, tr.y = Xtr_e, ytr
+        acc = tr.accuracy
+        feat_dim, conv_params = model.feat_dim(), _conv_params(model.layers)
+        get_syn = lambda: len(model.head.synapses)        # noqa: E731
+    Xtr_eval, ytr_eval = Xtr_e[eval_idx], ytr[eval_idx]
 
     rec_step, test_acc, train_acc, head_syn = [], [], [], []
     t0 = time.perf_counter()
@@ -92,9 +107,9 @@ def run_one(arm, seed, args):
         tr.step()
         if s % args.record_every == 0 or s == args.steps - 1:
             rec_step.append(s)
-            test_acc.append(tr.accuracy(Xte, yte))
-            train_acc.append(tr.accuracy(Xtr_eval, ytr_eval))
-            head_syn.append(len(model.head.synapses))
+            test_acc.append(acc(Xte_e, yte))
+            train_acc.append(acc(Xtr_eval, ytr_eval))
+            head_syn.append(get_syn())
     wall = time.perf_counter() - t0
 
     return {
@@ -102,9 +117,9 @@ def run_one(arm, seed, args):
         "test_acc": test_acc, "train_acc": train_acc, "head_syn": head_syn,
         "final_test_acc": test_acc[-1], "max_test_acc": float(np.max(test_acc)),
         "final_train_acc": train_acc[-1],
-        "feat_dim": model.feat_dim(), "conv_params": _conv_params(model.layers),
-        "head_syn_end": len(model.head.synapses),
-        "n_sleep": sum(1 for e in tr.events if e["type"] == "sleep"),
+        "feat_dim": feat_dim, "conv_params": conv_params,
+        "head_syn_end": get_syn(),
+        "n_sleep": sum(1 for e in tr.events if e.get("type") == "sleep"),
         "wall_time": wall,
     }
 

@@ -34,6 +34,7 @@ def parse_args(argv=None):
     ap.add_argument("--seeds", type=int, default=5)
     ap.add_argument("--dataset", default="spirals",
                     choices=["spirals", "blobs", "digits", "mnist", "mnist-full",
+                             "fashion", "fashion-full",
                              "mnist-conv", "mnist-conv-rand", "mnist-full-conv"])
     ap.add_argument("--steps", type=int, default=15000)
     ap.add_argument("--shift", type=int, default=0,
