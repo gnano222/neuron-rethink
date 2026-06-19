@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <title>SPROUT · draw a digit</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header>
+    <h1>SPROUT</h1>
+    <p class="sub">draw a digit — watch the sparse network think</p>
+  </header>
+
+  <main>
+    <!-- canvas -->
+    <section class="card">
+      <canvas id="pad" width="288" height="288" aria-label="drawing canvas"></canvas>
+      <div class="controls">
+        <button id="clear">Clear</button>
+        <button id="predict" class="primary">Predict</button>
+      </div>
+      <p class="hint" id="status">draw a single digit (0–9)</p>
+    </section>
+
+    <!-- prediction -->
+    <section class="card">
+      <div class="pred-row">
+        <div class="big-digit" id="bigDigit">–</div>
+        <div class="probs" id="probs"></div>
+      </div>
+    </section>
+
+    <div class="flow">↓ &nbsp;how the network saw it&nbsp; ↓</div>
+
+    <!-- 1. input -->
+    <section class="card stage">
+      <h2><span class="num">①</span> input · 14×14</h2>
+      <canvas id="inputGrid" width="168" height="168"></canvas>
+      <p class="cap">what the model actually receives — 2×2-pooled and standardized like its MNIST training data</p>
+    </section>
+
+    <!-- 2. filters -->
+    <section class="card stage">
+      <h2><span class="num">②</span> learned filters</h2>
+      <div id="filters" class="filter-bank"></div>
+      <p class="cap" id="filterCap">3×3 features the economy <em>learned</em> (orange&nbsp;= positive tap, blue&nbsp;= negative)</p>
+    </section>
+
+    <!-- 3. feature maps -->
+    <section class="card stage">
+      <h2><span class="num">③</span> feature maps · which fired</h2>
+      <div id="featureMaps" class="fmap-bank"></div>
+      <p class="cap">each filter swept across the image; bright&nbsp;= it responded there</p>
+    </section>
+
+    <!-- 4. network -->
+    <section class="card stage">
+      <h2><span class="num">④</span> head network</h2>
+      <div class="net-wrap">
+        <svg id="net" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet"></svg>
+      </div>
+      <div class="net-cols">
+        <span>432 features</span><span>32 hidden</span><span>10 digits</span>
+      </div>
+      <p class="cap">features → hidden → digits. Lit nodes fired on this drawing; line colour = confidence (blue&nbsp;plastic → red&nbsp;frozen).</p>
+    </section>
+
+    <!-- legend -->
+    <section class="card legend">
+      <h2>legend</h2>
+      <ul>
+        <li><span class="sw node-on"></span> neuron fired (brightness = activation)</li>
+        <li><span class="sw node-off"></span> neuron silent</li>
+        <li><span class="sw edge-plastic"></span> wire still learning (low confidence)</li>
+        <li><span class="sw edge-frozen"></span> wire frozen (high confidence)</li>
+      </ul>
+      <p class="cap" id="modelInfo"></p>
+    </section>
+  </main>
+
+  <footer><a href="https://github.com" id="repoLink">Conv-SPROUT · gradient-as-currency</a></footer>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
