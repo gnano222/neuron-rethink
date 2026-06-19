@@ -16,6 +16,8 @@ h2 .num{color:var(--accent);margin-right:4px;}
   padding:14px;margin:0 0 12px;}
 .stage{display:flex;flex-direction:column;}
 .cap{color:var(--mut);font-size:11.5px;line-height:1.5;margin:10px 0 0;}
+.desc{color:#adbac7;font-size:13px;line-height:1.55;margin:0 0 12px;}
+.desc strong{color:var(--ink);} .desc em{color:var(--accent);font-style:normal;}
 .flow{text-align:center;color:#6e7681;font-size:12px;margin:2px 0 12px;letter-spacing:.05em;}
 
 /* canvas */
@@ -66,9 +68,10 @@ button.primary{background:var(--accent);border-color:var(--accent);color:#04101f
 .legend li{display:flex;align-items:center;gap:10px;font-size:12.5px;color:var(--ink);}
 .sw{width:16px;height:16px;border-radius:50%;flex:0 0 auto;}
 .sw.node-on{background:var(--accent);box-shadow:0 0 7px var(--accent);}
-.sw.node-off{background:#30363d;}
-.sw.edge-plastic{height:4px;border-radius:2px;background:var(--neg);}
-.sw.edge-frozen{height:4px;border-radius:2px;background:var(--frozen);}
+.sw.node-off{background:#262c36;}
+.sw.edge-exc{height:5px;border-radius:2px;background:var(--fire);}
+.sw.edge-inh{height:5px;border-radius:2px;background:var(--pos);}
+.sw.edge-rest{height:3px;border-radius:2px;background:#3a4250;}
 
 footer{text-align:center;margin-top:8px;}
 footer a{color:#6e7681;font-size:11px;text-decoration:none;}

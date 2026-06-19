@@ -3,7 +3,7 @@ import numpy as np
 from sprout.conv import ConvEconomy
 from sprout.conv_train import ConvModel
 from sprout.network import build_graph, init_weights
-from webapp.infer import run_inference
+from webapp.infer import resting_payload, run_inference
 
 
 def _model(side=14, k_max=4, n_out=10, seed=3):
@@ -35,6 +35,17 @@ def test_payload_graph_mirrors_head():
     feat = m.conv.forward(np.zeros((14, 14)))[0]
     layer0 = [n for n in g["neurons"] if n["layer"] == 0]
     assert len(layer0) == len(feat)
+
+
+def test_resting_payload_has_topology_with_zero_activation():
+    m = _model()
+    out = resting_payload(m)
+    assert len(out["graph"]["neurons"]) == len(m.head.neurons)
+    assert len(out["graph"]["synapses"]) == len(m.head.synapses)
+    assert all(n["act"] == 0.0 for n in out["graph"]["neurons"])     # nothing fired
+    assert len(out["filters"]) == m.conv.k_max                       # filters still shown
+    # synapse weights are real (so the rest view can size wires by |weight|)
+    assert any(s["w"] != 0.0 for s in out["graph"]["synapses"])
 
 
 def test_payload_filters_and_feature_maps():

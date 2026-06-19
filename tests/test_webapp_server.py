@@ -48,6 +48,16 @@ def test_infer_returns_valid_payload(tmp_path, monkeypatch):
     assert "n_active_filters" in d["model_meta"]
 
 
+def test_graph_returns_resting_topology(tmp_path, monkeypatch):
+    client = _client(tmp_path, monkeypatch)
+    r = client.get("/graph")
+    assert r.status_code == 200
+    d = r.json()
+    assert d["graph"]["neurons"] and d["graph"]["synapses"]
+    assert all(n["act"] == 0.0 for n in d["graph"]["neurons"])
+    assert "n_active_filters" in d["model_meta"]
+
+
 def test_infer_rejects_non_square(tmp_path, monkeypatch):
     client = _client(tmp_path, monkeypatch)
     r = client.post("/infer", json={"pixels": [[0.0, 0.0, 0.0]], "size": 3})

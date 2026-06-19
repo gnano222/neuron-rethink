@@ -43,7 +43,7 @@ pad.addEventListener("touchstart", start, { passive: false });
 pad.addEventListener("touchmove", move, { passive: false });
 pad.addEventListener("touchend", end);
 
-document.getElementById("clear").onclick = () => { clearPad(); resetViz(); };
+document.getElementById("clear").onclick = () => { clearPad(); resetAll(); };
 document.getElementById("predict").onclick = () => infer();
 
 let timer = null;
@@ -87,7 +87,6 @@ function lerp(a, b, t) {
   return `rgb(${c[0]},${c[1]},${c[2]})`;
 }
 const clamp01 = t => Math.max(0, Math.min(1, t));
-const confColor = c => lerp("#388bfd", "#f85149", clamp01(c / 3));    // plastic→frozen
 
 // ---------------------------------------------------------------- render
 function render(d) {
@@ -96,14 +95,22 @@ function render(d) {
   renderFilters(d.filters);
   renderFeatureMaps(d.feature_maps);
   renderNetwork(d.graph, d.prediction);
-  const m = d.model_meta || {};
-  document.getElementById("modelInfo").textContent =
-    `model: ${m.n_active_filters} active filters · test acc ${(m.test_acc*100||0).toFixed(1)}%`;
+  setModelInfo(d.model_meta);
 }
 
-function resetViz() {
+function clearInputGrid() {
+  const cv = document.getElementById("inputGrid");
+  const g = cv.getContext("2d");
+  g.fillStyle = "#000";
+  g.fillRect(0, 0, cv.width, cv.height);
+}
+
+function resetAll() {
   document.getElementById("bigDigit").textContent = "–";
   document.getElementById("probs").innerHTML = "";
+  document.getElementById("featureMaps").innerHTML = "";
+  clearInputGrid();
+  restNetwork();                 // back to the at-rest view: all wires, nothing fired
   setStatus("draw a single digit (0–9)");
 }
 
@@ -217,7 +224,7 @@ function buildNetwork(graph) {
     ln.setAttribute("x1", a.x); ln.setAttribute("y1", a.y);
     ln.setAttribute("x2", b.x); ln.setAttribute("y2", b.y);
     ln.dataset.pre = s.pre; ln.dataset.post = s.post;
-    ln._w = Math.abs(s.w); ln._color = confColor(s.conf);
+    ln._w = Math.abs(s.w); ln._sw = s.w;     // |weight| for rest, signed for flow
     efrag.append(ln);
     return ln;
   });
@@ -248,10 +255,26 @@ function buildNetwork(graph) {
   });
 }
 
+// at-rest view: every neuron silent, every wire shown uniformly (thickness =
+// weight), no activation highlighting — a clean look at the full topology.
+function restNetwork() {
+  if (!nodeEls) return;
+  nodeEls.forEach(cir => {
+    cir.setAttribute("fill", "#262c36");
+    cir.setAttribute("stroke", "#0a0d12");
+    cir.setAttribute("stroke-width", 0.15);
+  });
+  edgeEls.forEach(ln => {
+    ln.setAttribute("stroke", "#3a4250");
+    ln.setAttribute("stroke-opacity", 0.32);
+    ln.setAttribute("stroke-width", 0.1 + Math.min(0.3, ln._w * 0.3));
+  });
+}
+
 function renderNetwork(graph, prediction) {
   if (!nodeEls || nodeEls.size !== graph.neurons.length) buildNetwork(graph);
 
-  // per-layer max activation, for brightness normalisation
+  // per-layer max activation, for node brightness normalisation
   const act = new Map(), maxByLayer = {};
   graph.neurons.forEach(n => {
     act.set(n.id, n.act);
@@ -261,23 +284,32 @@ function renderNetwork(graph, prediction) {
   graph.neurons.forEach(n => {
     const cir = nodeEls.get(n.id);
     const m = maxByLayer[n.layer] || 1;
-    if (n.act > 1e-9) {
-      cir.setAttribute("fill", lerp("#1f6feb", "#9fd1ff", clamp01(n.act / m)));
-    } else {
-      cir.setAttribute("fill", "#262c36");
-    }
+    cir.setAttribute("fill", n.act > 1e-9
+      ? lerp("#1f6feb", "#9fd1ff", clamp01(n.act / m)) : "#262c36");
   });
 
-  edgeEls.forEach(ln => {
-    const live = act.get(+ln.dataset.pre) > 1e-9 && act.get(+ln.dataset.post) > 1e-9;
-    if (live) {
-      ln.setAttribute("stroke", ln._color);
-      ln.setAttribute("stroke-opacity", 0.85);
-      ln.setAttribute("stroke-width", 0.12 + Math.min(0.5, ln._w * 0.5));
+  // wire encoding = SIGNAL STRENGTH this drawing: flow = pre-activation x weight.
+  // Strong wires are thick + bright; weak ones fade; sign sets the hue
+  // (excitatory green, inhibitory orange) so the active circuit is readable.
+  let maxFlow = 1e-9;
+  const flow = edgeEls.map(ln => {
+    const a = act.get(+ln.dataset.pre), b = act.get(+ln.dataset.post);
+    const f = (a > 1e-9 && b > 1e-9) ? a * ln._sw : 0;
+    if (Math.abs(f) > maxFlow) maxFlow = Math.abs(f);
+    return f;
+  });
+  edgeEls.forEach((ln, i) => {
+    const t = Math.abs(flow[i]) / maxFlow;       // 0..1 relative strength
+    if (flow[i] !== 0) {
+      ln.setAttribute("stroke", flow[i] > 0
+        ? lerp("#16361d", "#56e06a", t)          // excitatory: green
+        : lerp("#3a2410", "#f0a050", t));         // inhibitory: orange
+      ln.setAttribute("stroke-opacity", 0.10 + 0.88 * t);
+      ln.setAttribute("stroke-width", 0.09 + 0.95 * t);
     } else {
-      ln.setAttribute("stroke", "#30363d");
-      ln.setAttribute("stroke-opacity", 0.05);
-      ln.setAttribute("stroke-width", 0.1);
+      ln.setAttribute("stroke", "#262c36");
+      ln.setAttribute("stroke-opacity", 0.03);   // inactive wires recede
+      ln.setAttribute("stroke-width", 0.08);
     }
   });
 
@@ -293,8 +325,23 @@ function renderNetwork(graph, prediction) {
   });
 }
 
-// fetch model meta on load (so the legend shows accuracy before first draw)
-fetch("/meta").then(r => r.ok ? r.json() : null).then(m => {
-  if (m) document.getElementById("modelInfo").textContent =
+function setModelInfo(m) {
+  if (!m) return;
+  document.getElementById("modelInfo").textContent =
     `model: ${m.n_active_filters} active filters · test acc ${(m.test_acc*100).toFixed(1)}%`;
-}).catch(() => {});
+}
+
+// on load: render the learned filters + the full network at rest, so the page
+// shows the topology before any drawing (and Clear returns to exactly this).
+async function loadResting() {
+  try {
+    const r = await fetch("/graph");
+    if (!r.ok) return;
+    const d = await r.json();
+    buildNetwork(d.graph);
+    restNetwork();
+    renderFilters(d.filters);
+    setModelInfo(d.model_meta);
+  } catch (err) { /* server not up yet */ }
+}
+loadResting();

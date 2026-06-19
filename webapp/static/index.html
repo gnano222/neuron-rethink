@@ -15,6 +15,9 @@
   <main>
     <!-- canvas -->
     <section class="card">
+      <p class="desc">Draw a single digit (0–9). Your strokes are the raw input;
+        every section below shows one stage of how the network turns these pixels
+        into a decision. It re-runs as you draw.</p>
       <canvas id="pad" width="288" height="288" aria-label="drawing canvas"></canvas>
       <div class="controls">
         <button id="clear">Clear</button>
@@ -24,7 +27,11 @@
     </section>
 
     <!-- prediction -->
-    <section class="card">
+    <section class="card stage">
+      <h2>prediction</h2>
+      <p class="desc">The network's answer. The tall bar is its pick; the shorter
+        bars show how much probability it gave every other digit — short bars
+        everywhere means it was confident, several tall bars means it hesitated.</p>
       <div class="pred-row">
         <div class="big-digit" id="bigDigit">–</div>
         <div class="probs" id="probs"></div>
@@ -36,34 +43,49 @@
     <!-- 1. input -->
     <section class="card stage">
       <h2><span class="num">①</span> input · 14×14</h2>
+      <p class="desc">SPROUT never sees your full drawing. It's cropped, centered,
+        shrunk to a 14×14 thumbnail and normalized to look like the MNIST digits it
+        trained on. <strong>This</strong> is the actual input — if it looks wrong
+        here, the model will struggle.</p>
       <canvas id="inputGrid" width="168" height="168"></canvas>
-      <p class="cap">what the model actually receives — 2×2-pooled and standardized like its MNIST training data</p>
+      <p class="cap">brighter = stronger pixel after standardization</p>
     </section>
 
     <!-- 2. filters -->
     <section class="card stage">
       <h2><span class="num">②</span> learned filters</h2>
+      <p class="desc">The first layer slides each of these tiny 3×3 patterns across
+        the image, looking for a specific stroke shape (an edge, a corner, a curve).
+        SPROUT <em>learned and pruned these itself</em> — they don't change with your
+        drawing, they're what the model knows.</p>
       <div id="filters" class="filter-bank"></div>
-      <p class="cap" id="filterCap">3×3 features the economy <em>learned</em> (orange&nbsp;= positive tap, blue&nbsp;= negative)</p>
+      <p class="cap" id="filterCap">orange = positive tap, blue = negative</p>
     </section>
 
     <!-- 3. feature maps -->
     <section class="card stage">
       <h2><span class="num">③</span> feature maps · which fired</h2>
+      <p class="desc">Applying one filter everywhere produces a map of <em>where</em>
+        that pattern appears in your digit. Bright cells = the filter found its shape
+        there. These maps — not the raw pixels — are what the classifier reads.</p>
       <div id="featureMaps" class="fmap-bank"></div>
-      <p class="cap">each filter swept across the image; bright&nbsp;= it responded there</p>
+      <p class="cap">one grid per active filter; bright = it responded there</p>
     </section>
 
     <!-- 4. network -->
     <section class="card stage">
       <h2><span class="num">④</span> head network</h2>
+      <p class="desc">The sparse classifier. It reads the feature maps (left column),
+        combines them through hidden neurons (middle), and votes for a digit (right).
+        Watch the <strong>active circuit</strong> light up — the specific path your
+        drawing took through the network.</p>
       <div class="net-wrap">
         <svg id="net" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet"></svg>
       </div>
       <div class="net-cols">
         <span>432 features</span><span>32 hidden</span><span>10 digits</span>
       </div>
-      <p class="cap">features → hidden → digits. Lit nodes fired on this drawing; line colour = confidence (blue&nbsp;plastic → red&nbsp;frozen).</p>
+      <p class="cap">thicker, brighter wire = stronger signal flowing through it on this drawing</p>
     </section>
 
     <!-- legend -->
@@ -72,14 +94,17 @@
       <ul>
         <li><span class="sw node-on"></span> neuron fired (brightness = activation)</li>
         <li><span class="sw node-off"></span> neuron silent</li>
-        <li><span class="sw edge-plastic"></span> wire still learning (low confidence)</li>
-        <li><span class="sw edge-frozen"></span> wire frozen (high confidence)</li>
+        <li><span class="sw edge-exc"></span> excitatory wire — pushes its target toward firing</li>
+        <li><span class="sw edge-inh"></span> inhibitory wire — pushes its target away</li>
+        <li><span class="sw edge-rest"></span> wire at rest (thickness = weight)</li>
       </ul>
+      <p class="cap">a wire's <strong>thickness &amp; brightness</strong> shows how
+        strongly it fired on the current drawing; faint wires barely carried signal.</p>
       <p class="cap" id="modelInfo"></p>
     </section>
   </main>
 
-  <footer><a href="https://github.com" id="repoLink">Conv-SPROUT · gradient-as-currency</a></footer>
+  <footer><span>Conv-SPROUT · gradient-as-currency</span></footer>
 
   <script src="/static/app.js"></script>
 </body>

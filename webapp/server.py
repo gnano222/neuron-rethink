@@ -17,7 +17,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from webapp.infer import run_inference
+from webapp.infer import resting_payload, run_inference
 from webapp.preprocess import to_model_input
 from webapp.serialize import load_model
 
@@ -60,6 +60,16 @@ def index():
 def meta():
     _, _, m = get_model()
     return m
+
+
+@app.get("/graph")
+def graph():
+    """Resting view: filters + full head topology with no activation."""
+    model, _, m = get_model()
+    payload = resting_payload(model)
+    payload["model_meta"] = {"n_active_filters": int(model.conv.n_active),
+                             "test_acc": m.get("test_acc")}
+    return payload
 
 
 @app.post("/infer")
