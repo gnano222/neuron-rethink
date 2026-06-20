@@ -20,6 +20,7 @@ from pydantic import BaseModel
 from webapp.infer import resting_payload, run_inference
 from webapp.preprocess import to_model_input
 from webapp.serialize import load_model
+from webapp.session import SESSION
 
 _HERE = os.path.dirname(__file__)
 _STATIC = os.path.join(_HERE, "static")
@@ -83,6 +84,58 @@ def infer(req: InferRequest):
     payload["model_meta"] = {"n_active_filters": int(model.conv.n_active),
                              "test_acc": m.get("test_acc")}
     return JSONResponse(payload)
+
+
+# --- live SPROUT training (the dot-classification educational UI) -----------
+
+class StartReq(BaseModel):
+    points: list[list[float]]          # [[x, y], ...] in [-1, 1]^2
+    labels: list[int]                  # 0 / 1 per point
+    size: str = "medium"               # small | medium | large
+    density: float = 0.4
+    seed: int = 0
+    grid_res: int = 36
+
+
+class StepReq(BaseModel):
+    n: int = 20
+    grid_res: int = 36
+
+
+@app.post("/train/start")
+def train_start(req: StartReq):
+    try:
+        SESSION.start(req.points, req.labels, size=req.size,
+                      density=req.density, seed=req.seed)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    return SESSION.snapshot(req.grid_res)
+
+
+@app.post("/train/step")
+def train_step(req: StepReq):
+    try:
+        SESSION.step(req.n)
+        return SESSION.snapshot(req.grid_res)
+    except RuntimeError as e:
+        raise HTTPException(409, str(e))
+
+
+@app.post("/train/restart")
+def train_restart(req: StepReq):
+    try:
+        SESSION.restart()
+        return SESSION.snapshot(req.grid_res)
+    except RuntimeError as e:
+        raise HTTPException(409, str(e))
+
+
+@app.get("/train/snapshot")
+def train_snapshot(grid_res: int = 36):
+    try:
+        return SESSION.snapshot(grid_res)
+    except RuntimeError as e:
+        raise HTTPException(409, str(e))
 
 
 app.mount("/static", StaticFiles(directory=_STATIC), name="static")

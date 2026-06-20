@@ -1,49 +1,60 @@
-# SPROUT draw-a-digit explorer
+# SPROUT interactive explorer
 
-A mobile-friendly web UI: draw a digit, the trained **Conv-SPROUT** model (14×14)
-infers it via the **real** forward pass, and a vertical pipeline shows what
-happened — the learned filters, which feature maps fired, and the full sparse head
-network with the neurons that activated.
+An educational web UI for the SPROUT architecture. The main page is a **live
+network trainer**: draw a 2-class dot dataset, hit Run, and watch a sparse
+gradient-as-currency network wire itself to separate the classes — neurons,
+synapses, confidences, prune/grow bursts and the decision boundary all update
+live. Pause, step, restart, change the dataset or network size at any time.
 
 Design: [`docs/superpowers/specs/2026-06-19-sprout-draw-digit-explorer-design.md`](../docs/superpowers/specs/2026-06-19-sprout-draw-digit-explorer-design.md)
+(the original draw-a-digit explorer; the live trainer reuses the same server).
 
 ## Run it
 
 ```bash
-# deps (beyond the project's numpy / scikit-learn / pillow):
-.venv/bin/pip install fastapi "uvicorn[standard]" httpx
-
-# launch (serves on 0.0.0.0:8000 by default)
-.venv/bin/python -m webapp.server
+.venv/bin/pip install fastapi "uvicorn[standard]" httpx     # one-time
+.venv/bin/python -m webapp.server                          # serves 0.0.0.0:8000
 ```
 
-Then open **http://localhost:8000** on the same machine, or
-**http://<this-machine-ip>:8000** from your phone on the same LAN / Tailscale.
+Open **http://localhost:8000** (or `http://<machine-ip>:8000` from a phone on the
+same LAN / Tailscale). Override host/port with `HOST` / `PORT`.
 
-Override host/port with the `HOST` / `PORT` env vars.
+## The model
 
-## Retrain the model
+The live trainer uses the **promoted plain SPROUT architecture** — no convolution:
+sparse self-rewiring `Network` with 2D confidence, phasic prune/grow at settledness
+plateaus, the startle alarm, and the bounded grow scan (`phasic-startle-k4`, the
+`evals.spec._sparse` config). Network size (Small/Medium/Large topology) is
+selectable in the UI. Training runs **per request**: the browser POSTs `/train/step`
+repeatedly and renders each snapshot, so the polling loop is the training cadence
+(pause = stop polling).
 
-The committed `webapp/model/conv_sprout.pkl` (≈93% MNIST-14 test accuracy,
-self-sized to ~10 filters) is produced by:
+## Endpoints
 
-```bash
-.venv/bin/python -m webapp.train_export --steps 20000 --n-train 12000
-```
-
-This reproduces the promoted `conv-sprout` arm and bundles the model with the input
-**scaler** (the per-pixel train mean/std a drawing must be standardized by) and meta.
-
-## How it fits together
-
-| Module | Role |
+| Endpoint | Role |
 |---|---|
-| `serialize.py` | save/load the `ConvModel` + `Scaler` + meta |
-| `preprocess.py` | drawing canvas → standardized 14×14 (crop, center-of-mass, resize, 2×2 pool, z-score) — matches MNIST's own normalization |
-| `infer.py` | run the real `ConvModel.forward`, package prediction + filters + feature maps + the full head graph (per-neuron activation, per-synapse weight/confidence) |
-| `server.py` | FastAPI: `GET /` (frontend), `GET /meta`, `POST /infer` |
-| `static/` | the pipeline UI (canvas, prediction, filters, feature maps, network graph) |
-| `train_export.py` | train Conv-SPROUT on MNIST-14 and export the artifact |
+| `GET /` | the live-trainer UI |
+| `POST /train/start` | build a net on the posted dots+labels, return first snapshot |
+| `POST /train/step` | advance N steps, return snapshot (graph + decision boundary + metrics + events) |
+| `POST /train/restart` | re-wire the same dots with a fresh seed |
+| `GET /train/snapshot` | current snapshot without stepping |
 
-The forward pass lives entirely in the gradient-checked `sprout` package — the web
-layer only reads its state, so the visualization is faithful by construction.
+## Modules
+
+| File | Role |
+|---|---|
+| `session.py` | the live `TrainingSession` (start/step/restart, thread-locked) |
+| `snapshot.py` | serialize a `Network` graph + decision-boundary grid to JSON |
+| `server.py` | FastAPI app (training + the retained conv endpoints) |
+| `static/` | the trainer UI (dot canvas, controls, evolving SVG graph) |
+
+## Retained: the convolutional digit explorer
+
+The original Conv-SPROUT draw-a-digit work is **kept, not deleted** — the conv model
+and its server endpoints remain available:
+
+- `serialize.py`, `preprocess.py`, `infer.py`, `train_export.py`, `model/conv_sprout.pkl`
+- `POST /infer`, `GET /graph`, `GET /meta` (the conv digit pipeline)
+- `sprout/conv*.py` (the convolutional core)
+
+Retrain the conv model with `python -m webapp.train_export`.

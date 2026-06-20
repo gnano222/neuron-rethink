@@ -3,100 +3,93 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-  <title>SPROUT · draw a digit</title>
+  <title>SPROUT · live network trainer</title>
   <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
   <header>
     <h1>SPROUT</h1>
-    <p class="sub">draw a digit — watch the sparse network think</p>
+    <p class="sub">draw two classes of dots, then watch a sparse network wire itself to separate them</p>
   </header>
 
   <main>
-    <!-- canvas -->
-    <section class="card">
-      <p class="desc">Draw a single digit (0–9). Your strokes are the raw input;
-        every section below shows one stage of how the network turns these pixels
-        into a decision. It re-runs as you draw.</p>
-      <canvas id="pad" width="288" height="288" aria-label="drawing canvas"></canvas>
-      <div class="controls">
+    <!-- 1. dataset -->
+    <section class="card stage">
+      <h2><span class="num">①</span> draw a dataset</h2>
+      <p class="desc">Tap (or drag) to place dots of two classes. SPROUT will learn a
+        boundary between them — the shaded background is the model's current guess for
+        every point on the plane.</p>
+
+      <div class="classpick">
+        <button id="classA" class="chip on" data-c="0"><span class="dot dotA"></span>Class A</button>
+        <button id="classB" class="chip" data-c="1"><span class="dot dotB"></span>Class B</button>
+      </div>
+
+      <div class="board-wrap">
+        <canvas id="board" width="320" height="320"></canvas>
+      </div>
+
+      <div class="row">
         <button id="clear">Clear</button>
-        <button id="predict" class="primary">Predict</button>
+        <button class="preset" data-preset="blobs">Blobs</button>
+        <button class="preset" data-preset="xor">XOR</button>
+        <button class="preset" data-preset="circles">Circles</button>
+        <button class="preset" data-preset="spiral">Spiral</button>
       </div>
-      <p class="hint" id="status">draw a single digit (0–9)</p>
-    </section>
 
-    <!-- prediction -->
-    <section class="card stage">
-      <h2>prediction</h2>
-      <p class="desc">The network's answer. The tall bar is its pick; the shorter
-        bars show how much probability it gave every other digit — short bars
-        everywhere means it was confident, several tall bars means it hesitated.</p>
-      <div class="pred-row">
-        <div class="big-digit" id="bigDigit">–</div>
-        <div class="probs" id="probs"></div>
+      <div class="row sizes">
+        <span class="label">network size</span>
+        <button class="size" data-size="small">Small</button>
+        <button class="size on" data-size="medium">Medium</button>
+        <button class="size" data-size="large">Large</button>
       </div>
     </section>
 
-    <div class="flow">↓ &nbsp;how the network saw it&nbsp; ↓</div>
-
-    <!-- 1. input -->
+    <!-- 2. train -->
     <section class="card stage">
-      <h2><span class="num">①</span> input · 14×14</h2>
-      <p class="desc">SPROUT never sees your full drawing. It's cropped, centered,
-        shrunk to a 14×14 thumbnail and normalized to look like the MNIST digits it
-        trained on. <strong>This</strong> is the actual input — if it looks wrong
-        here, the model will struggle.</p>
-      <canvas id="inputGrid" width="168" height="168"></canvas>
-      <p class="cap">brighter = stronger pixel after standardization</p>
-    </section>
-
-    <!-- 2. filters -> feature maps (paired) -->
-    <section class="card stage">
-      <h2><span class="num">②</span> filters → feature maps</h2>
-      <p class="desc">Each learned 3×3 <strong>filter</strong> (left) is slid across
-        your image to produce its <strong>feature map</strong> (right) — where that
-        pattern appears in your digit. Pairs are <strong>ordered by how much each
-        filter drives the predicted digit</strong> (found by removing it and seeing how
-        far confidence drops); the bar shows that contribution. Only the filters SPROUT
-        kept appear.</p>
-      <div id="filterPairs" class="pair-list"></div>
-      <p class="cap" id="filterCap"></p>
+      <h2><span class="num">②</span> train</h2>
+      <div class="row controls">
+        <button id="run" class="primary">▶ Run</button>
+        <button id="step">Step</button>
+        <button id="restart">⟲ Restart</button>
+      </div>
+      <div class="row speedrow">
+        <span class="label">speed</span>
+        <input id="speed" type="range" min="1" max="120" value="30">
+        <span id="speedVal" class="label">30 steps/frame</span>
+      </div>
+      <div class="metrics">
+        <div class="metric"><span class="mv" id="mStep">0</span><span class="ml">step</span></div>
+        <div class="metric"><span class="mv" id="mAcc">–</span><span class="ml">accuracy</span></div>
+        <div class="metric"><span class="mv" id="mLoss">–</span><span class="ml">loss</span></div>
+        <div class="metric"><span class="mv" id="mSyn">–</span><span class="ml">wires</span></div>
+        <div class="metric"><span class="mv" id="mPhase">–</span><span class="ml">phase</span></div>
+      </div>
     </section>
 
     <!-- 3. network -->
     <section class="card stage">
-      <h2><span class="num">③</span> head network</h2>
-      <p class="desc">The sparse classifier. It reads the feature maps (left column),
-        combines them through hidden neurons (middle), and votes for a digit (right).
-        Watch the <strong>active circuit</strong> light up — the specific path your
-        drawing took through the network.</p>
-      <div class="net-wrap">
-        <svg id="net" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet"></svg>
-      </div>
-      <div class="net-cols">
-        <span>432 features</span><span>32 hidden</span><span>10 digits</span>
-      </div>
-      <p class="cap">thicker, brighter wire = stronger signal flowing through it on this drawing</p>
+      <h2><span class="num">③</span> the network, evolving</h2>
+      <p class="desc">Inputs (x, y) on the left → hidden neurons → the two class
+        outputs on the right. Watch wires <strong>grow</strong> where the loss demands
+        them and get <strong>pruned</strong> when they don't earn their keep.</p>
+      <div class="net-wrap"><svg id="net" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet"></svg></div>
+      <ul class="legend">
+        <li><span class="sw node-on"></span> neuron — brightness = how often it fires</li>
+        <li><span class="sw edge-plastic"></span> wire still learning (low confidence)</li>
+        <li><span class="sw edge-frozen"></span> wire settled (high confidence)</li>
+        <li><span class="sw edge-thick"></span> thicker = larger weight</li>
+      </ul>
     </section>
 
-    <!-- legend -->
-    <section class="card legend">
-      <h2>legend</h2>
-      <ul>
-        <li><span class="sw node-on"></span> neuron fired (brighter = stronger)</li>
-        <li><span class="sw node-off"></span> neuron silent</li>
-        <li><span class="sw edge-fire"></span> wire carrying signal (thicker &amp; brighter = stronger)</li>
-        <li><span class="sw edge-rest"></span> wire at rest (thickness = weight)</li>
-      </ul>
-      <p class="cap">across every section, <strong>green = active</strong>: the
-        brighter something glows, the more it fired on your drawing.</p>
-      <p class="cap" id="modelInfo"></p>
+    <!-- 4. log -->
+    <section class="card stage">
+      <h2><span class="num">④</span> what the network is doing</h2>
+      <div id="log" class="log"></div>
     </section>
   </main>
 
-  <footer><span>Conv-SPROUT · gradient-as-currency</span></footer>
-
+  <footer><span>SPROUT · gradient-as-currency · phasic self-wiring</span></footer>
   <script src="/static/app.js"></script>
 </body>
 </html>
